@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { obterEpocaAtiva, obterClubeIdAtual } from "@/lib/epoca-context";
 import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
 import { atletaSchema } from "@/lib/schemas/atleta";
+import { agregarEstatisticas, type EstatisticasAgregadas } from "@/lib/estatisticas";
 import { Prisma, type Atleta } from "@prisma/client";
 
 const PATH = "/plantel";
@@ -16,19 +17,7 @@ const INCLUDE_RELACOES = {
 
 type AtletaComRelacoes = Prisma.AtletaGetPayload<{ include: typeof INCLUDE_RELACOES }>;
 
-export interface EstatisticasAgregadas {
-  jogosConvocado: number;
-  jogosUtilizados: number;
-  titularidades: number;
-  totalGolos: number;
-  totalAssistencias: number;
-  totalMinutos: number | null;
-  totalDefesas: number | null;
-  totalGolosSofridos: number | null;
-  sessoesTotais: number;
-  presencas: number;
-  taxaPresenca: number;
-}
+export type { EstatisticasAgregadas };
 
 export async function listarAtletas(
   escalaoId?: string,
@@ -184,40 +173,13 @@ export async function obterEstatisticasAtleta(
     }),
   ]);
 
-  const jogosUtilizados = estatisticas.filter(
-    (e) => e.utilizacao !== "NAO_UTILIZADO",
-  ).length;
-  const titularidades = estatisticas.filter((e) => e.utilizacao === "TITULAR").length;
-  const totalGolos = estatisticas.reduce((acc, e) => acc + e.golos, 0);
-  const totalAssistencias = estatisticas.reduce((acc, e) => acc + e.assistencias, 0);
-
-  const minutosRegistados = estatisticas
-    .map((e) => e.minutos)
-    .filter((m): m is number => m != null);
-  const totalMinutos = minutosRegistados.length
-    ? minutosRegistados.reduce((acc, m) => acc + m, 0)
-    : null;
-
-  const totalDefesas = eGR
-    ? estatisticas.reduce((acc, e) => acc + (e.defesas ?? 0), 0)
-    : null;
-  const totalGolosSofridos = eGR
-    ? estatisticas.reduce((acc, e) => acc + (e.golosSofridosGR ?? 0), 0)
-    : null;
-
-  const taxaPresenca = sessoesTotais > 0 ? presencas / sessoesTotais : 0;
-
-  return ok({
-    jogosConvocado,
-    jogosUtilizados,
-    titularidades,
-    totalGolos,
-    totalAssistencias,
-    totalMinutos,
-    totalDefesas,
-    totalGolosSofridos,
-    sessoesTotais,
-    presencas,
-    taxaPresenca,
-  });
+  return ok(
+    agregarEstatisticas({
+      eGR,
+      jogosConvocado,
+      sessoesTotais,
+      presencas,
+      estatisticas,
+    }),
+  );
 }

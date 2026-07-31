@@ -22,6 +22,9 @@ export const estatisticaSchema = z.object({
   defesas: z.number().int().min(0).nullable().optional(),
   golosSofridosGR: z.number().int().min(0).nullable().optional(),
   faltasCometidas: z.number().int().min(0).nullable().optional(),
+  valoresMetricas: z
+    .array(z.object({ metricaId: z.string().cuid(), valor: z.number().int() }))
+    .optional(),
 });
 
 export const guardarEstatisticasSchema = z.array(estatisticaSchema);

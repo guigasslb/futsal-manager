@@ -21,7 +21,7 @@ const INCLUDE_DETALHE = {
       atleta: { select: { id: true, nome: true, numero: true, posicao: true } },
     },
   },
-  estatisticas: true,
+  estatisticas: { include: { valoresMetricas: true } },
 } as const;
 
 export type JogoLista = Prisma.JogoGetPayload<{ include: typeof INCLUDE_LISTA }>;
@@ -202,33 +202,48 @@ export async function guardarEstatisticas(
 
   const validos = parsed.data.filter((e) => idsConvocados.has(e.atletaId));
 
-  await prisma.$transaction(
-    validos.map((e) =>
-      prisma.estatisticaAtleta.upsert({
+  // Métricas ativas do clube (para validar os metricaId recebidos)
+  const metricasAtivas = await prisma.metricaConfig.findMany({
+    where: { clubeId },
+    select: { id: true },
+  });
+  const idsMetricasValidas = new Set(metricasAtivas.map((m) => m.id));
+
+  await prisma.$transaction(async (tx) => {
+    for (const e of validos) {
+      const dados = {
+        utilizacao: e.utilizacao,
+        minutos: e.minutos ?? null,
+        golos: e.golos,
+        assistencias: e.assistencias,
+        defesas: e.defesas ?? null,
+        golosSofridosGR: e.golosSofridosGR ?? null,
+        faltasCometidas: e.faltasCometidas ?? null,
+      };
+      const estat = await tx.estatisticaAtleta.upsert({
         where: { jogoId_atletaId: { jogoId, atletaId: e.atletaId } },
-        create: {
-          jogoId,
-          atletaId: e.atletaId,
-          utilizacao: e.utilizacao,
-          minutos: e.minutos ?? null,
-          golos: e.golos,
-          assistencias: e.assistencias,
-          defesas: e.defesas ?? null,
-          golosSofridosGR: e.golosSofridosGR ?? null,
-          faltasCometidas: e.faltasCometidas ?? null,
-        },
-        update: {
-          utilizacao: e.utilizacao,
-          minutos: e.minutos ?? null,
-          golos: e.golos,
-          assistencias: e.assistencias,
-          defesas: e.defesas ?? null,
-          golosSofridosGR: e.golosSofridosGR ?? null,
-          faltasCometidas: e.faltasCometidas ?? null,
-        },
-      }),
-    ),
-  );
+        create: { jogoId, atletaId: e.atletaId, ...dados },
+        update: dados,
+      });
+
+      // Valores de métricas configuráveis (upsert por métrica)
+      const valores = (e.valoresMetricas ?? []).filter((v) =>
+        idsMetricasValidas.has(v.metricaId),
+      );
+      for (const v of valores) {
+        await tx.valorMetrica.upsert({
+          where: {
+            metricaId_estatisticaId: {
+              metricaId: v.metricaId,
+              estatisticaId: estat.id,
+            },
+          },
+          create: { metricaId: v.metricaId, estatisticaId: estat.id, valor: v.valor },
+          update: { valor: v.valor },
+        });
+      }
+    }
+  });
   revalidatePath(`${PATH}/${jogoId}`);
   return ok(undefined);
 }

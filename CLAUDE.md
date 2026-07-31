@@ -39,8 +39,16 @@ Next.js 15 (App Router) · React 19 · TypeScript strict · Prisma + PostgreSQL 
 - [x] **13. Dashboard** — próximo treino/jogo, ações rápidas, resumo da época.
 - [x] **14. Estados e polish** — not-found, redirects para /dashboard, estados vazios.
 
+### Conformidade adicional com a spec
+- [x] Métricas configuráveis capturadas por jogo (ValorMetrica, input adapta ao tipo).
+- [x] Confirmação ao remover convocado com estatísticas (secção 22.4).
+- [x] Pesquisa por nome no plantel e exercícios.
+- [x] Toggle lista/calendário mensal nos treinos.
+- [x] Aviso de número duplicado no plantel (secção 22.8).
+- [x] Testes Vitest: schemas Zod, DiagramaCampo e agregações (secção 15) — 33 testes.
+
 ## Comandos
 
-`npm run dev` · `npm run typecheck` · `npm run lint` · `npm run db:migrate` · `npm run db:seed` · `npm run db:studio`
+`npm run dev` · `npm run typecheck` · `npm run lint` · `npm run test` · `npm run db:migrate` · `npm run db:seed` · `npm run db:studio`
 
 Definição de pronto de cada funcionalidade: secção 24.

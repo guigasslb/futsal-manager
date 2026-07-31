@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { Plus, Dumbbell, MapPin, Users } from "lucide-react";
+import { Plus, Dumbbell, MapPin, Users, List, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { listarSessoes } from "@/lib/actions/treinos";
 import { listarEscaloes } from "@/lib/actions/escaloes";
 import { EstadoErro, EstadoVazio } from "@/components/layout/EstadosUI";
+import { CalendarioTreinos } from "@/components/treinos/CalendarioTreinos";
 
 function formatarDataHora(data: Date): string {
   return new Date(data).toLocaleString("pt-PT", {
@@ -20,9 +21,10 @@ const PRESENTES = new Set(["PRESENTE", "ATRASADO"]);
 export default async function TreinosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ escalaoId?: string }>;
+  searchParams: Promise<{ escalaoId?: string; vista?: string; mes?: string }>;
 }) {
-  const { escalaoId } = await searchParams;
+  const { escalaoId, vista, mes } = await searchParams;
+  const ehCalendario = vista === "calendario";
 
   const [resEscaloes, resSessoes] = await Promise.all([
     listarEscaloes(),
@@ -34,6 +36,19 @@ export default async function TreinosPage({
 
   const escaloes = resEscaloes.dados;
   const sessoes = resSessoes.dados;
+
+  // Mês a mostrar no calendário (default: mês atual)
+  const agora = new Date();
+  let anoCal = agora.getFullYear();
+  let mesCal = agora.getMonth();
+  if (mes && /^\d{4}-\d{2}$/.test(mes)) {
+    const [a, m] = mes.split("-").map(Number);
+    anoCal = a;
+    mesCal = m - 1;
+  }
+  const qsEscalao = escalaoId ? `escalaoId=${escalaoId}&` : "";
+  const hrefLista = `/treinos?${qsEscalao}vista=lista`;
+  const hrefCalendario = `/treinos?${qsEscalao}vista=calendario`;
 
   return (
     <div className="space-y-6">
@@ -75,6 +90,28 @@ export default async function TreinosPage({
         </div>
       )}
 
+      {/* Toggle lista / calendário */}
+      <div className="flex gap-1 rounded-md border border-cinza-200 p-1 w-fit">
+        <Link
+          href={hrefLista}
+          className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-corpo-sec font-medium transition-colors ${
+            !ehCalendario ? "bg-azul-700 text-white" : "text-cinza-600 hover:bg-cinza-50"
+          }`}
+        >
+          <List className="h-4 w-4" />
+          Lista
+        </Link>
+        <Link
+          href={hrefCalendario}
+          className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-corpo-sec font-medium transition-colors ${
+            ehCalendario ? "bg-azul-700 text-white" : "text-cinza-600 hover:bg-cinza-50"
+          }`}
+        >
+          <CalendarDays className="h-4 w-4" />
+          Calendário
+        </Link>
+      </div>
+
       {sessoes.length === 0 ? (
         <EstadoVazio
           titulo="Sem sessões nesta época"
@@ -87,6 +124,17 @@ export default async function TreinosPage({
               </Link>
             </Button>
           }
+        />
+      ) : ehCalendario ? (
+        <CalendarioTreinos
+          sessoes={sessoes.map((s) => ({
+            id: s.id,
+            data: s.data,
+            escalaoNome: s.escalao.nome,
+          }))}
+          ano={anoCal}
+          mes={mesCal}
+          hrefBase={hrefCalendario}
         />
       ) : (
         <ul className="space-y-3">

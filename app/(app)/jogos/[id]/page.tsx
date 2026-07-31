@@ -4,6 +4,8 @@ import { ChevronLeft, Pencil, Home, Plane } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { obterJogo } from "@/lib/actions/jogos";
 import { listarAtletas } from "@/lib/actions/atletas";
+import { listarMetricas } from "@/lib/actions/metricas";
+import { prisma } from "@/lib/db";
 import { JogoDetalhe } from "@/components/jogos/JogoDetalhe";
 import { ApagarJogoButton } from "@/components/jogos/ApagarJogoButton";
 import { LABEL_CASA_FORA } from "@/lib/schemas/jogo";
@@ -26,8 +28,23 @@ export default async function DetalheJogoPage({
   if (!res.sucesso) notFound();
 
   const j = res.dados;
-  const resAtletas = await listarAtletas(j.escalaoId);
+  const [resAtletas, resMetricas] = await Promise.all([
+    listarAtletas(j.escalaoId),
+    listarMetricas(true),
+  ]);
   const atletas = resAtletas.sucesso ? resAtletas.dados : [];
+  const metricasAtivas = resMetricas.sucesso ? resMetricas.dados : [];
+
+  // Métricas a mostrar: ativas + as que já têm valores neste jogo (histórico, secção 22.1)
+  const idsComValor = new Set(
+    j.estatisticas.flatMap((e) => e.valoresMetricas.map((v) => v.metricaId)),
+  );
+  const idsAtivas = new Set(metricasAtivas.map((m) => m.id));
+  const idsHistoricasEmFalta = [...idsComValor].filter((id) => !idsAtivas.has(id));
+  const metricasHistoricas = idsHistoricasEmFalta.length
+    ? await prisma.metricaConfig.findMany({ where: { id: { in: idsHistoricasEmFalta } } })
+    : [];
+  const metricas = [...metricasAtivas, ...metricasHistoricas];
 
   const convocadosIniciais = j.convocatorias
     .filter((c) => c.convocado)
@@ -45,6 +62,9 @@ export default async function DetalheJogoPage({
         defesas: e.defesas,
         golosSofridosGR: e.golosSofridosGR,
         faltasCometidas: e.faltasCometidas,
+        valoresMetricas: Object.fromEntries(
+          e.valoresMetricas.map((v) => [v.metricaId, v.valor]),
+        ),
       },
     ]),
   );
@@ -108,6 +128,12 @@ export default async function DetalheJogoPage({
           nome: a.nome,
           numero: a.numero,
           posicao: a.posicao,
+        }))}
+        metricas={metricas.map((m) => ({
+          id: m.id,
+          nome: m.nome,
+          tipo: m.tipo,
+          ativa: m.ativa,
         }))}
         convocadosIniciais={convocadosIniciais}
         estatisticasIniciais={estatisticasIniciais}

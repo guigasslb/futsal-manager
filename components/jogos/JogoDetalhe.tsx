@@ -15,14 +15,26 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   definirConvocatoria,
   guardarEstatisticas,
   guardarRelatorio,
 } from "@/lib/actions/jogos";
 import { LABEL_UTILIZACAO } from "@/lib/schemas/jogo";
-import type { Posicao, Utilizacao } from "@prisma/client";
+import type { Posicao, TipoMetrica, Utilizacao } from "@prisma/client";
 
 type Atleta = { id: string; nome: string; numero: number | null; posicao: Posicao | null };
+
+type Metrica = { id: string; nome: string; tipo: TipoMetrica; ativa: boolean };
 
 type EstatLinha = {
   atletaId: string;
@@ -33,17 +45,20 @@ type EstatLinha = {
   defesas: number | null;
   golosSofridosGR: number | null;
   faltasCometidas: number | null;
+  valoresMetricas: Record<string, number>;
 };
 
 export function JogoDetalhe({
   jogoId,
   atletas,
+  metricas,
   convocadosIniciais,
   estatisticasIniciais,
   relatorioInicial,
 }: {
   jogoId: string;
   atletas: Atleta[];
+  metricas: Metrica[];
   convocadosIniciais: string[];
   estatisticasIniciais: Record<string, EstatLinha>;
   relatorioInicial: string;
@@ -55,6 +70,7 @@ export function JogoDetalhe({
     estatisticasIniciais,
   );
   const [relatorio, setRelatorio] = useState(relatorioInicial);
+  const [confirmarRemocao, setConfirmarRemocao] = useState<string[] | null>(null);
 
   const [pendingConv, startConv] = useTransition();
   const [pendingEstat, startEstat] = useTransition();
@@ -62,6 +78,9 @@ export function JogoDetalhe({
 
   const atletaPorId = new Map(atletas.map((a) => [a.id, a]));
   const convocadosLista = atletas.filter((a) => convocados.has(a.id));
+
+  // Atletas que tinham estatísticas gravadas (chaves de estatisticasIniciais)
+  const comEstatisticas = new Set(Object.keys(estatisticasIniciais));
 
   function alternarConvocado(id: string) {
     setConvocados((prev) => {
@@ -72,12 +91,28 @@ export function JogoDetalhe({
     });
   }
 
-  function guardarConvocatoria() {
+  function gravarConvocatoria() {
     startConv(async () => {
       const res = await definirConvocatoria(jogoId, [...convocados]);
-      if (res.sucesso) toast.success("Convocatória guardada");
-      else toast.error(res.erro);
+      if (res.sucesso) {
+        toast.success("Convocatória guardada");
+        setConfirmarRemocao(null);
+      } else {
+        toast.error(res.erro);
+      }
     });
+  }
+
+  function guardarConvocatoria() {
+    // Convocados originais que foram removidos E têm estatísticas registadas (secção 22.4)
+    const removidosComStats = convocadosIniciais.filter(
+      (id) => !convocados.has(id) && comEstatisticas.has(id),
+    );
+    if (removidosComStats.length > 0) {
+      setConfirmarRemocao(removidosComStats);
+      return;
+    }
+    gravarConvocatoria();
   }
 
   function estatDe(id: string): EstatLinha {
@@ -91,8 +126,19 @@ export function JogoDetalhe({
         defesas: null,
         golosSofridosGR: null,
         faltasCometidas: null,
+        valoresMetricas: {},
       }
     );
+  }
+
+  function atualizarMetrica(atletaId: string, metricaId: string, valor: number | null) {
+    setEstatisticas((prev) => {
+      const atual = estatDe(atletaId);
+      const valores = { ...atual.valoresMetricas };
+      if (valor == null) delete valores[metricaId];
+      else valores[metricaId] = valor;
+      return { ...prev, [atletaId]: { ...atual, valoresMetricas: valores, atletaId } };
+    });
   }
 
   function atualizarEstat(id: string, patch: Partial<EstatLinha>) {
@@ -103,7 +149,16 @@ export function JogoDetalhe({
   }
 
   function guardarEstat() {
-    const payload = convocadosLista.map((a) => estatDe(a.id));
+    const payload = convocadosLista.map((a) => {
+      const e = estatDe(a.id);
+      return {
+        ...e,
+        valoresMetricas: Object.entries(e.valoresMetricas).map(([metricaId, valor]) => ({
+          metricaId,
+          valor,
+        })),
+      };
+    });
     startEstat(async () => {
       const res = await guardarEstatisticas(jogoId, payload);
       if (res.sucesso) toast.success("Estatísticas guardadas");
@@ -251,6 +306,20 @@ export function JogoDetalhe({
                         </>
                       )}
                     </div>
+
+                    {/* Métricas configuráveis */}
+                    {metricas.length > 0 && (
+                      <div className="mt-2 grid grid-cols-2 gap-2 border-t border-cinza-100 pt-2 sm:grid-cols-4">
+                        {metricas.map((m) => (
+                          <CampoMetrica
+                            key={m.id}
+                            metrica={m}
+                            valor={e.valoresMetricas[m.id] ?? null}
+                            onChange={(n) => atualizarMetrica(a.id, m.id, n)}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -281,6 +350,37 @@ export function JogoDetalhe({
           </Button>
         </div>
       </TabsContent>
+
+      {/* Confirmação de remoção com estatísticas (secção 22.4) */}
+      <AlertDialog
+        open={confirmarRemocao !== null}
+        onOpenChange={(aberto) => !aberto && setConfirmarRemocao(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover da convocatória?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmarRemocao && confirmarRemocao.length === 1
+                ? "Este atleta tem estatísticas registadas neste jogo que serão apagadas:"
+                : "Estes atletas têm estatísticas registadas neste jogo que serão apagadas:"}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <ul className="list-disc pl-5 text-corpo-sec text-cinza-900">
+            {confirmarRemocao?.map((id) => (
+              <li key={id}>{atletaPorId.get(id)?.nome ?? "Atleta"}</li>
+            ))}
+          </ul>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={gravarConvocatoria}
+              className="bg-vermelho-600 hover:bg-vermelho-600/90 text-white"
+            >
+              Remover e apagar estatísticas
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Tabs>
   );
 }
@@ -297,6 +397,85 @@ function CampoNum({
   return (
     <div className="space-y-1">
       <label className="text-legenda text-cinza-500">{label}</label>
+      <Input
+        type="number"
+        min={0}
+        value={valor ?? ""}
+        onChange={(e) => {
+          const v = e.target.value.trim();
+          onChange(v === "" ? null : Number(v));
+        }}
+        className="h-9"
+      />
+    </div>
+  );
+}
+
+function CampoMetrica({
+  metrica,
+  valor,
+  onChange,
+}: {
+  metrica: Metrica;
+  valor: number | null;
+  onChange: (n: number | null) => void;
+}) {
+  const label = (
+    <label className="text-legenda text-cinza-500">
+      {metrica.nome}
+      {!metrica.ativa && <span className="ml-1 text-cinza-400">(inativa)</span>}
+    </label>
+  );
+
+  // BOOLEANO: sim/não → 1/0
+  if (metrica.tipo === "BOOLEANO") {
+    return (
+      <div className="space-y-1">
+        {label}
+        <Select
+          value={valor == null ? "" : String(valor)}
+          onValueChange={(v) => onChange(v === "" ? null : Number(v))}
+        >
+          <SelectTrigger className="h-9">
+            <SelectValue placeholder="—" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="1">Sim</SelectItem>
+            <SelectItem value="0">Não</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
+
+  // ESCALA: 1 a 5
+  if (metrica.tipo === "ESCALA") {
+    return (
+      <div className="space-y-1">
+        {label}
+        <Select
+          value={valor == null ? "" : String(valor)}
+          onValueChange={(v) => onChange(v === "" ? null : Number(v))}
+        >
+          <SelectTrigger className="h-9">
+            <SelectValue placeholder="—" />
+          </SelectTrigger>
+          <SelectContent>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <SelectItem key={n} value={String(n)}>
+                {n}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
+
+  // NUMERO
+  return (
+    <div className="space-y-1">
+      {label}
       <Input
         type="number"
         min={0}

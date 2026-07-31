@@ -1,18 +1,19 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { listarAtletas } from "@/lib/actions/atletas";
 import { listarEscaloes } from "@/lib/actions/escaloes";
 import { EstadoErro, EstadoVazio } from "@/components/layout/EstadosUI";
+import { CampoPesquisa } from "@/components/layout/CampoPesquisa";
 import { AvatarAtleta } from "@/components/plantel/AvatarAtleta";
 import { ABREV_POSICAO } from "@/lib/schemas/atleta";
 
 export default async function PlantelPage({
   searchParams,
 }: {
-  searchParams: Promise<{ escalaoId?: string }>;
+  searchParams: Promise<{ escalaoId?: string; q?: string }>;
 }) {
-  const { escalaoId } = await searchParams;
+  const { escalaoId, q } = await searchParams;
 
   const [resEscaloes, resAtletas] = await Promise.all([
     listarEscaloes(),
@@ -23,8 +24,22 @@ export default async function PlantelPage({
   if (!resAtletas.sucesso) return <EstadoErro mensagem={resAtletas.erro} />;
 
   const escaloes = resEscaloes.dados;
-  const atletas = resAtletas.dados;
+  const termo = (q ?? "").trim().toLowerCase();
+  const atletas = termo
+    ? resAtletas.dados.filter((a) => a.nome.toLowerCase().includes(termo))
+    : resAtletas.dados;
   const tabTodos = !escalaoId;
+
+  // Números duplicados entre atletas ativos do mesmo escalão (secção 22.8)
+  const contagemNumeros = new Map<string, number>();
+  for (const a of resAtletas.dados) {
+    if (a.numero == null) continue;
+    const chave = `${a.escalaoId}:${a.numero}`;
+    contagemNumeros.set(chave, (contagemNumeros.get(chave) ?? 0) + 1);
+  }
+  const numeroDuplicado = (escalaoIdA: string, numero: number | null) =>
+    numero != null && (contagemNumeros.get(`${escalaoIdA}:${numero}`) ?? 0) > 1;
+  const haDuplicados = [...contagemNumeros.values()].some((n) => n > 1);
 
   return (
     <div className="space-y-6">
@@ -69,6 +84,8 @@ export default async function PlantelPage({
         </div>
       )}
 
+      <CampoPesquisa placeholder="Pesquisar atleta por nome…" />
+
       {atletas.length === 0 ? (
         <EstadoVazio
           titulo="Ainda não há atletas neste escalão"
@@ -84,8 +101,16 @@ export default async function PlantelPage({
         />
       ) : (
         <>
+          {haDuplicados && (
+            <p className="flex items-center gap-1.5 rounded-md bg-ambar-500/10 px-3 py-2 text-corpo-sec text-ambar-500">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+              Há atletas do mesmo escalão com o mesmo número (assinalados a laranja).
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-            {atletas.map((a) => (
+            {atletas.map((a) => {
+              const dup = numeroDuplicado(a.escalaoId, a.numero);
+              return (
               <Link
                 key={a.id}
                 href={`/plantel/${a.id}`}
@@ -95,14 +120,19 @@ export default async function PlantelPage({
                 <div className="w-full">
                   <p className="truncate text-corpo font-semibold text-cinza-900">{a.nome}</p>
                   <p className="text-legenda text-cinza-600">
-                    {a.numero != null ? `#${a.numero}` : ""}
+                    {a.numero != null && (
+                      <span className={dup ? "font-semibold text-ambar-500" : ""}>
+                        #{a.numero}
+                      </span>
+                    )}
                     {a.numero != null && a.posicao ? " · " : ""}
                     {a.posicao ? ABREV_POSICAO[a.posicao] : ""}
                     {a.numero == null && !a.posicao ? "—" : ""}
                   </p>
                 </div>
               </Link>
-            ))}
+              );
+            })}
           </div>
           <p className="text-corpo-sec text-cinza-600">
             {atletas.length} {atletas.length === 1 ? "atleta" : "atletas"}

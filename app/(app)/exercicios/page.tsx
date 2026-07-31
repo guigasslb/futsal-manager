@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { listarExercicios } from "@/lib/actions/exercicios";
 import { EstadoErro, EstadoVazio } from "@/components/layout/EstadosUI";
+import { CampoPesquisa } from "@/components/layout/CampoPesquisa";
 import { LABEL_CATEGORIA, CATEGORIAS, diagramaSchema } from "@/lib/schemas/exercicio";
 import { MiniaturaCampo } from "@/components/campo/MiniaturaCampo";
 import type { CategoriaExercicio } from "@prisma/client";
@@ -11,9 +12,9 @@ import type { CategoriaExercicio } from "@prisma/client";
 export default async function ExerciciosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ categoria?: string }>;
+  searchParams: Promise<{ categoria?: string; q?: string }>;
 }) {
-  const { categoria: categoriaParam } = await searchParams;
+  const { categoria: categoriaParam, q } = await searchParams;
   const categoria = CATEGORIAS.includes(categoriaParam as CategoriaExercicio)
     ? (categoriaParam as CategoriaExercicio)
     : undefined;
@@ -21,7 +22,10 @@ export default async function ExerciciosPage({
   const res = await listarExercicios(categoria);
   if (!res.sucesso) return <EstadoErro mensagem={res.erro} />;
 
-  const exercicios = res.dados;
+  const termo = (q ?? "").trim().toLowerCase();
+  const exercicios = termo
+    ? res.dados.filter((e) => e.nome.toLowerCase().includes(termo))
+    : res.dados;
 
   return (
     <div className="space-y-6">
@@ -61,6 +65,8 @@ export default async function ExerciciosPage({
           </Link>
         ))}
       </div>
+
+      <CampoPesquisa placeholder="Pesquisar exercício por nome…" />
 
       {exercicios.length === 0 ? (
         <EstadoVazio
