@@ -8,5 +8,6 @@ build
 *.log
 .DS_Store
 next-env.d.ts
+tsconfig.tsbuildinfo
 /prisma/*.db
 .vercel
