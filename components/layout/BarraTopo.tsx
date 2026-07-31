@@ -37,19 +37,26 @@ interface Props {
   nomeUtilizador: string;
   epocas: Epoca[];
   epocaAtivaId: string | null;
+  nomeClube?: string;
+  logoClube?: string | null;
 }
 
-export function BarraTopo({ nomeUtilizador, epocas, epocaAtivaId }: Props) {
+export function BarraTopo({ nomeUtilizador, epocas, epocaAtivaId, nomeClube, logoClube }: Props) {
   const [pending, startTransition] = useTransition();
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-cinza-200 bg-white px-4 gap-3">
-      {/* Logo */}
+      {/* Logo / identidade do clube */}
       <Link
         href="/dashboard"
-        className="flex items-center gap-2 font-bold text-azul-700 text-[15px] shrink-0"
+        className="flex items-center gap-2 font-bold text-[15px] shrink-0"
+        style={{ color: "var(--cor-primaria, #1A2FD4)" }}
       >
-        FutsalManager
+        {logoClube ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logoClube} alt={nomeClube ?? "Clube"} className="h-8 w-8 rounded object-contain" />
+        ) : null}
+        {nomeClube ?? "FutsalManager"}
       </Link>
 
       {/* Seletor de época + menu do utilizador */}

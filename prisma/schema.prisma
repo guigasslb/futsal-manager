@@ -21,9 +21,13 @@ model Clube {
   corPrimaria   String   @default("#1A2FD4")
   corSecundaria String   @default("#FFD700")
   logoUrl       String?
+  morada        String?
+  email         String?
+  telefone      String?
   criadoEm      DateTime @default(now())
 
-  utilizadores Utilizador[]
+  membros      MembroClube[]
+  perfis       Perfil[]
   epocas       Epoca[]
   escaloes     Escalao[]
   exercicios   Exercicio[]
@@ -31,21 +35,80 @@ model Clube {
   habilidades  Habilidade[]
 }
 
+// O utilizador existe independentemente de qualquer clube (modo individual + portabilidade).
 model Utilizador {
   id           String   @id @default(cuid())
   nome         String
   email        String   @unique
   passwordHash String
-  clubeId      String
-  clube        Clube    @relation(fields: [clubeId], references: [id])
+  telefone     String?
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
+  membros           MembroClube[]
   sessoesCriadas    Sessao[]    @relation("SessaoCriador")
   jogosCriados      Jogo[]      @relation("JogoCriador")
   exerciciosCriados Exercicio[] @relation("ExercicioCriador")
+}
+
+// Adesão utilizador↔clube. REGRA (lógica): no máximo UMA adesão ATIVA por utilizador.
+model MembroClube {
+  id           String       @id @default(cuid())
+  utilizadorId String
+  utilizador   Utilizador   @relation(fields: [utilizadorId], references: [id], onDelete: Cascade)
+  clubeId      String
+  clube        Clube        @relation(fields: [clubeId], references: [id], onDelete: Cascade)
+  perfilId     String
+  perfil       Perfil       @relation(fields: [perfilId], references: [id])
+  estado       EstadoMembro @default(ATIVO)
+  dataEntrada  DateTime     @default(now())
+  dataSaida    DateTime?
+
+  atribuicoes AtribuicaoEscalao[]
+
+  @@unique([utilizadorId, clubeId])
+  @@index([clubeId])
+  @@index([utilizadorId])
+}
+
+enum EstadoMembro {
+  ATIVO
+  INATIVO
+  CONVIDADO
+}
+
+// Perfil = pacote configurável de capacidades + âmbito. Por clube, com modelos de arranque editáveis.
+model Perfil {
+  id          String       @id @default(cuid())
+  clubeId     String
+  clube       Clube        @relation(fields: [clubeId], references: [id], onDelete: Cascade)
+  nome        String
+  descricao   String?
+  ambito      AmbitoPerfil @default(PROPRIOS_ESCALOES)
+  capacidades String[] // chaves de capacidade (ver secção 6 da bíblia)
+  sistema     Boolean      @default(false)
+  criadoEm    DateTime     @default(now())
+
+  membros MembroClube[]
 
   @@index([clubeId])
+}
+
+enum AmbitoPerfil {
+  TODO_CLUBE
+  PROPRIOS_ESCALOES
+}
+
+// Escalões que um membro gere (quando o perfil tem âmbito PROPRIOS_ESCALOES).
+model AtribuicaoEscalao {
+  id            String      @id @default(cuid())
+  membroClubeId String
+  membroClube   MembroClube @relation(fields: [membroClubeId], references: [id], onDelete: Cascade)
+  escalaoId     String
+  escalao       Escalao     @relation(fields: [escalaoId], references: [id], onDelete: Cascade)
+
+  @@unique([membroClubeId, escalaoId])
+  @@index([escalaoId])
 }
 
 // ─────────────────────────────────────────────
@@ -75,18 +138,20 @@ model Epoca {
 // ─────────────────────────────────────────────
 
 model Escalao {
-  id       String   @id @default(cuid())
-  nome     String
-  idadeMin Int?
-  idadeMax Int?
-  ordem    Int      @default(0)
-  clubeId  String
-  clube    Clube    @relation(fields: [clubeId], references: [id])
-  criadoEm DateTime @default(now())
+  id                       String   @id @default(cuid())
+  nome                     String
+  idadeMin                 Int?
+  idadeMax                 Int?
+  ordem                    Int      @default(0)
+  visivelOutrosTreinadores Boolean  @default(true)
+  clubeId                  String
+  clube                    Clube    @relation(fields: [clubeId], references: [id])
+  criadoEm                 DateTime @default(now())
 
-  atletas Atleta[]
-  sessoes Sessao[]
-  jogos   Jogo[]
+  atletas     Atleta[]
+  sessoes     Sessao[]
+  jogos       Jogo[]
+  atribuicoes AtribuicaoEscalao[]
 
   @@index([clubeId])
 }
@@ -99,6 +164,7 @@ model Atleta {
   numero         Int?
   observacoes    String?   @db.Text
   ativo          Boolean   @default(true)
+  dataIngresso   DateTime? // para a taxa de presença (secção 10); fallback = criadoEm
 
   // Um atleta pertence a um escalão NUMA época.
   // Se transitar de escalão/época, cria-se novo registo (histórico preservado).
@@ -110,14 +176,34 @@ model Atleta {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  presencas     Presenca[]
-  convocatorias Convocatoria[]
-  estatisticas  EstatisticaAtleta[]
-  progressos    ProgressoHabilidade[]
+  presencas      Presenca[]
+  convocatorias  Convocatoria[]
+  estatisticas   EstatisticaAtleta[]
+  progressos     ProgressoHabilidade[]
+  consentimentos Consentimento[]
 
   @@index([escalaoId])
   @@index([epocaId])
   @@index([epocaId, escalaoId, ativo])
+}
+
+// RGPD — consentimento parental para dados de menores (secção 5.5 da bíblia).
+model Consentimento {
+  id                  String            @id @default(cuid())
+  atletaId            String
+  atleta              Atleta            @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  tipo                TipoConsentimento
+  concedido           Boolean           @default(false)
+  encarregadoEducacao String?
+  dataConsentimento   DateTime?
+
+  @@unique([atletaId, tipo])
+  @@index([atletaId])
+}
+
+enum TipoConsentimento {
+  DADOS
+  IMAGEM
 }
 
 enum Posicao {
@@ -139,11 +225,15 @@ model Exercicio {
   objetivo     String?             @db.Text
   duracaoMin   Int?
   categoria    CategoriaExercicio?
-  diagrama     Json? // DiagramaCampo (ver secção 13)
+  diagrama     Json? // DiagramaCampo (ver secção 11 da bíblia)
   clubeId      String
   clube        Clube               @relation(fields: [clubeId], references: [id])
-  criadorId    String
+  criadorId    String // autor (quem o criou)
   criador      Utilizador          @relation("ExercicioCriador", fields: [criadorId], references: [id])
+  // Propriedade determinada pela licença (secção 4.2). Transitório: em Fase 1 os exercícios
+  // existentes continuam ligados a clubeId; a portabilidade completa consolida-se em fase posterior.
+  proprietario PropriedadeConteudo @default(CLUBE)
+  origemSeed   Boolean             @default(false)
   criadoEm     DateTime            @default(now())
   atualizadoEm DateTime            @updatedAt
 
@@ -152,6 +242,12 @@ model Exercicio {
   // Exercícios não são filtrados por época — a biblioteca é reutilizável entre épocas.
   @@index([clubeId])
   @@index([clubeId, categoria])
+}
+
+// De quem é o conteúdo metodológico criado (ver secção 4.2 da bíblia).
+enum PropriedadeConteudo {
+  CLUBE
+  TREINADOR
 }
 
 enum CategoriaExercicio {

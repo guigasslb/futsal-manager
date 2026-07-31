@@ -6,26 +6,26 @@ import type { Epoca } from "@prisma/client";
 export const COOKIE_EPOCA = "epoca_ativa";
 
 /**
- * Obtém o clube do utilizador autenticado.
- * Todas as queries DEVEM filtrar por este clube (secção 23.5).
- * Devolve null se não houver sessão.
+ * Clube do utilizador autenticado, resolvido pela adesão ATIVA (secção 4.3/5.4).
+ * Mantém a assinatura usada pelas actions existentes (compatibilidade).
+ * Devolve null se não houver sessão ou adesão ativa (modo individual sem clube).
  */
 export async function obterClubeIdAtual(): Promise<string | null> {
   const session = await auth();
   if (!session?.user?.id) return null;
 
-  const utilizador = await prisma.utilizador.findUnique({
-    where: { id: session.user.id },
+  const membro = await prisma.membroClube.findFirst({
+    where: { utilizadorId: session.user.id, estado: "ATIVO" },
     select: { clubeId: true },
   });
-  return utilizador?.clubeId ?? null;
+  return membro?.clubeId ?? null;
 }
 
 /**
- * Resolve a época ativa (secção 4.2):
+ * Resolve a época ativa (secção 5.4):
  *  1. Cookie `epoca_ativa` (validado contra o clube do utilizador).
  *  2. Época marcada como `ativa: true` na BD.
- * Devolve null se não houver época ativa definida (secção 22.9).
+ * Devolve null se não houver época ativa definida.
  */
 export async function obterEpocaAtiva(): Promise<Epoca | null> {
   const clubeId = await obterClubeIdAtual();
