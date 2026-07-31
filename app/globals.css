@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Variáveis semânticas (HSL) usadas pelos componentes shadcn/ui,
+  mapeadas à paleta do sistema de design (secção 19.2).
+  Sem dark mode no MVP (secção 19.1).
+*/
+@layer base {
+  :root {
+    --background: 228 60% 98%; /* cinza-50 aproximado */
+    --foreground: 228 22% 13%; /* cinza-900 */
+
+    --card: 0 0% 100%; /* branco */
+    --card-foreground: 228 22% 13%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 228 22% 13%;
+
+    --primary: 230 79% 47%; /* azul-700 #1A2FD4 */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 228 40% 96%; /* azul-50 */
+    --secondary-foreground: 228 22% 13%;
+
+    --muted: 228 40% 96%;
+    --muted-foreground: 228 15% 47%; /* cinza-600 */
+
+    --accent: 231 100% 95%; /* azul-100 */
+    --accent-foreground: 230 79% 30%;
+
+    --destructive: 0 62% 53%; /* vermelho-600 */
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 228 27% 91%; /* cinza-200 */
+    --input: 228 27% 91%;
+    --ring: 230 79% 47%; /* azul-700 */
+
+    --radius: 8px;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-cinza-50 text-cinza-900;
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  h1 {
+    @apply text-[24px] font-bold text-cinza-900;
+  }
+  h2 {
+    @apply text-[18px] font-semibold text-cinza-900;
+  }
+  h3 {
+    @apply text-[15px] font-semibold text-cinza-900;
+  }
+}
+
+/* Números de estatísticas com variante tabular (secção 19.3) */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

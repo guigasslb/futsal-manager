@@ -1,0 +1,390 @@
+// prisma/schema.prisma
+// FutsalManager — Modelo de dados do MVP (secção 5.2 da especificação v4.0)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────────────────────────
+// CLUBE E UTILIZADORES
+// ─────────────────────────────────────────────
+
+model Clube {
+  id            String   @id @default(cuid())
+  nome          String
+  corPrimaria   String   @default("#1A2FD4")
+  corSecundaria String   @default("#FFD700")
+  logoUrl       String?
+  criadoEm      DateTime @default(now())
+
+  utilizadores Utilizador[]
+  epocas       Epoca[]
+  escaloes     Escalao[]
+  exercicios   Exercicio[]
+  metricas     MetricaConfig[]
+  habilidades  Habilidade[]
+}
+
+model Utilizador {
+  id           String   @id @default(cuid())
+  nome         String
+  email        String   @unique
+  passwordHash String
+  clubeId      String
+  clube        Clube    @relation(fields: [clubeId], references: [id])
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  sessoesCriadas    Sessao[]    @relation("SessaoCriador")
+  jogosCriados      Jogo[]      @relation("JogoCriador")
+  exerciciosCriados Exercicio[] @relation("ExercicioCriador")
+
+  @@index([clubeId])
+}
+
+// ─────────────────────────────────────────────
+// ÉPOCA
+// ─────────────────────────────────────────────
+
+model Epoca {
+  id         String   @id @default(cuid())
+  nome       String // ex: "2025/26"
+  dataInicio DateTime
+  dataFim    DateTime
+  ativa      Boolean  @default(false) // época default ao entrar
+  clubeId    String
+  clube      Clube    @relation(fields: [clubeId], references: [id])
+  criadoEm   DateTime @default(now())
+
+  atletas    Atleta[]
+  sessoes    Sessao[]
+  jogos      Jogo[]
+  progressos ProgressoHabilidade[]
+
+  @@index([clubeId])
+}
+
+// ─────────────────────────────────────────────
+// ESCALÕES E ATLETAS
+// ─────────────────────────────────────────────
+
+model Escalao {
+  id       String   @id @default(cuid())
+  nome     String
+  idadeMin Int?
+  idadeMax Int?
+  ordem    Int      @default(0)
+  clubeId  String
+  clube    Clube    @relation(fields: [clubeId], references: [id])
+  criadoEm DateTime @default(now())
+
+  atletas Atleta[]
+  sessoes Sessao[]
+  jogos   Jogo[]
+
+  @@index([clubeId])
+}
+
+model Atleta {
+  id             String   @id @default(cuid())
+  nome           String
+  dataNascimento DateTime?
+  posicao        Posicao?
+  numero         Int?
+  observacoes    String?   @db.Text
+  ativo          Boolean   @default(true)
+
+  // Um atleta pertence a um escalão NUMA época.
+  // Se transitar de escalão/época, cria-se novo registo (histórico preservado).
+  escalaoId String
+  escalao   Escalao @relation(fields: [escalaoId], references: [id])
+  epocaId   String
+  epoca     Epoca   @relation(fields: [epocaId], references: [id])
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  presencas     Presenca[]
+  convocatorias Convocatoria[]
+  estatisticas  EstatisticaAtleta[]
+  progressos    ProgressoHabilidade[]
+
+  @@index([escalaoId])
+  @@index([epocaId])
+  @@index([epocaId, escalaoId, ativo])
+}
+
+enum Posicao {
+  GUARDA_REDES
+  FIXO
+  ALA
+  PIVO
+  UNIVERSAL
+}
+
+// ─────────────────────────────────────────────
+// EXERCÍCIOS
+// ─────────────────────────────────────────────
+
+model Exercicio {
+  id           String              @id @default(cuid())
+  nome         String
+  descricao    String?             @db.Text
+  objetivo     String?             @db.Text
+  duracaoMin   Int?
+  categoria    CategoriaExercicio?
+  diagrama     Json? // DiagramaCampo (ver secção 13)
+  clubeId      String
+  clube        Clube               @relation(fields: [clubeId], references: [id])
+  criadorId    String
+  criador      Utilizador          @relation("ExercicioCriador", fields: [criadorId], references: [id])
+  criadoEm     DateTime            @default(now())
+  atualizadoEm DateTime            @updatedAt
+
+  sessoes SessaoExercicio[]
+
+  // Exercícios não são filtrados por época — a biblioteca é reutilizável entre épocas.
+  @@index([clubeId])
+  @@index([clubeId, categoria])
+}
+
+enum CategoriaExercicio {
+  ATIVACAO
+  TECNICA_INDIVIDUAL
+  FINALIZACAO
+  POSSE_BOLA
+  TRANSICOES
+  SITUACOES_JOGO
+  JOGO_REDUZIDO
+  BOLAS_PARADAS
+  FISICO
+  OUTRO
+}
+
+// ─────────────────────────────────────────────
+// SESSÕES DE TREINO
+// ─────────────────────────────────────────────
+
+model Sessao {
+  id           String     @id @default(cuid())
+  data         DateTime
+  duracaoMin   Int?
+  objetivo     String?    @db.Text
+  local        String?
+  notas        String?    @db.Text
+  escalaoId    String
+  escalao      Escalao    @relation(fields: [escalaoId], references: [id])
+  epocaId      String
+  epoca        Epoca      @relation(fields: [epocaId], references: [id])
+  criadorId    String
+  criador      Utilizador @relation("SessaoCriador", fields: [criadorId], references: [id])
+  criadoEm     DateTime   @default(now())
+  atualizadoEm DateTime   @updatedAt
+
+  exercicios SessaoExercicio[]
+  presencas  Presenca[]
+
+  @@index([epocaId, escalaoId, data])
+}
+
+model SessaoExercicio {
+  id          String    @id @default(cuid())
+  sessaoId    String
+  sessao      Sessao    @relation(fields: [sessaoId], references: [id], onDelete: Cascade)
+  exercicioId String
+  exercicio   Exercicio @relation(fields: [exercicioId], references: [id])
+  ordem       Int       @default(0)
+  duracaoMin  Int?
+  notas       String?   @db.Text
+
+  @@unique([sessaoId, ordem])
+  @@index([sessaoId])
+}
+
+model Presenca {
+  id           String         @id @default(cuid())
+  sessaoId     String
+  sessao       Sessao         @relation(fields: [sessaoId], references: [id], onDelete: Cascade)
+  atletaId     String
+  atleta       Atleta         @relation(fields: [atletaId], references: [id])
+  estado       EstadoPresenca @default(PRESENTE)
+  justificacao String?
+
+  @@unique([sessaoId, atletaId])
+  @@index([atletaId])
+}
+
+enum EstadoPresenca {
+  PRESENTE
+  FALTA
+  FALTA_JUSTIFICADA
+  LESIONADO
+  ATRASADO
+}
+
+// ─────────────────────────────────────────────
+// JOGOS E ESTATÍSTICAS
+// ─────────────────────────────────────────────
+
+model Jogo {
+  id            String     @id @default(cuid())
+  data          DateTime
+  adversario    String
+  casaFora      CasaFora   @default(CASA)
+  competicao    String?
+  golosMarcados Int? // total da equipa (preenchido pós-jogo)
+  golosSofridos Int?
+  local         String?
+  relatorio     String?    @db.Text
+  escalaoId     String
+  escalao       Escalao    @relation(fields: [escalaoId], references: [id])
+  epocaId       String
+  epoca         Epoca      @relation(fields: [epocaId], references: [id])
+  criadorId     String
+  criador       Utilizador @relation("JogoCriador", fields: [criadorId], references: [id])
+  criadoEm      DateTime   @default(now())
+  atualizadoEm  DateTime   @updatedAt
+
+  convocatorias Convocatoria[]
+  estatisticas  EstatisticaAtleta[]
+
+  @@index([epocaId, escalaoId, data])
+}
+
+enum CasaFora {
+  CASA
+  FORA
+}
+
+model Convocatoria {
+  id        String  @id @default(cuid())
+  jogoId    String
+  jogo      Jogo    @relation(fields: [jogoId], references: [id], onDelete: Cascade)
+  atletaId  String
+  atleta    Atleta  @relation(fields: [atletaId], references: [id])
+  convocado Boolean @default(true)
+
+  @@unique([jogoId, atletaId])
+  @@index([atletaId])
+}
+
+model EstatisticaAtleta {
+  id       String @id @default(cuid())
+  jogoId   String
+  jogo     Jogo   @relation(fields: [jogoId], references: [id], onDelete: Cascade)
+  atletaId String
+  atleta   Atleta @relation(fields: [atletaId], references: [id])
+
+  // Utilização (adaptado às rotações do futsal)
+  utilizacao Utilizacao @default(NAO_UTILIZADO)
+  minutos    Int? // aproximado, opcional (null = não registado)
+
+  // Métricas de jogador de campo
+  golos        Int @default(0)
+  assistencias Int @default(0)
+
+  // Métricas de guarda-redes (só relevantes se posição = GR; null caso contrário)
+  defesas         Int?
+  golosSofridosGR Int? // golos sofridos com este GR em campo
+  faltasCometidas Int? // opcional, útil em futsal (acumulação de faltas)
+
+  // Métricas configuráveis
+  valoresMetricas ValorMetrica[]
+
+  @@unique([jogoId, atletaId])
+  @@index([atletaId])
+}
+
+enum Utilizacao {
+  TITULAR
+  UTILIZADO // entrou durante o jogo
+  NAO_UTILIZADO // convocado mas não jogou
+}
+
+// ─────────────────────────────────────────────
+// MÉTRICAS CONFIGURÁVEIS
+// ─────────────────────────────────────────────
+
+model MetricaConfig {
+  id      String      @id @default(cuid())
+  nome    String
+  tipo    TipoMetrica @default(NUMERO)
+  ativa   Boolean     @default(true)
+  ordem   Int         @default(0)
+  clubeId String
+  clube   Clube       @relation(fields: [clubeId], references: [id])
+
+  valores ValorMetrica[]
+
+  @@index([clubeId])
+}
+
+enum TipoMetrica {
+  NUMERO
+  BOOLEANO
+  ESCALA // 1 a 5
+}
+
+model ValorMetrica {
+  id            String            @id @default(cuid())
+  metricaId     String
+  metrica       MetricaConfig     @relation(fields: [metricaId], references: [id], onDelete: Cascade)
+  estatisticaId String
+  estatistica   EstatisticaAtleta @relation(fields: [estatisticaId], references: [id], onDelete: Cascade)
+  valor         Int
+
+  @@unique([metricaId, estatisticaId])
+}
+
+// ─────────────────────────────────────────────
+// CADERNETA DE HABILIDADES
+// ─────────────────────────────────────────────
+
+model Habilidade {
+  id        String          @id @default(cuid())
+  nome      String // ex: "Vírgula", "Flip-flap", "Elástico"
+  descricao String?         @db.Text
+  nivel     NivelHabilidade @default(BASICO)
+  ordem     Int             @default(0)
+  clubeId   String
+  clube     Clube           @relation(fields: [clubeId], references: [id])
+  criadoEm  DateTime        @default(now())
+
+  progressos ProgressoHabilidade[]
+
+  @@index([clubeId])
+}
+
+enum NivelHabilidade {
+  BASICO
+  INTERMEDIO
+  AVANCADO
+}
+
+model ProgressoHabilidade {
+  id              String           @id @default(cuid())
+  atletaId        String
+  atleta          Atleta           @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  habilidadeId    String
+  habilidade      Habilidade       @relation(fields: [habilidadeId], references: [id])
+  epocaId         String
+  epoca           Epoca            @relation(fields: [epocaId], references: [id])
+  estado          EstadoHabilidade @default(NAO_INICIADO)
+  dataDesbloqueio DateTime?
+  notas           String?
+
+  @@unique([atletaId, habilidadeId, epocaId])
+  @@index([atletaId, epocaId])
+}
+
+enum EstadoHabilidade {
+  NAO_INICIADO
+  EM_PROGRESSO
+  DESBLOQUEADO
+}
