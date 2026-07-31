@@ -1,13 +1,22 @@
 # FutsalManager — Instruções do projeto
 
-Training Management System dedicado ao futsal. A especificação em `docs/FutsalManager_Spec_v4.md` é a **fonte única de verdade** ("a bíblia").
+Training Management System dedicado ao futsal. A **bíblia** do produto é `docs/FutsalManager_Spec_v5.md` — **fonte única de verdade** do produto final. (`docs/FutsalManager_Spec_v4_MVP_historico.md` é o histórico do MVP, arquivado — não usar como referência ativa.)
 
-## Regras de leitura da spec
+## Documentação (regra inquebrável)
 
-- Segue a spec **à letra**. Nomes de campos, tipos, assinaturas e terminologia são especificação, não sugestão.
-- **DEVE** = obrigatório · **DEVERIA** = recomendado · **NÃO FAZ PARTE DO MVP** = não implementar agora.
-- Implementa pela ordem da **secção 18**. Cada passo tem de ficar funcional e testado antes de avançar.
+- **Uma única bíblia:** `docs/FutsalManager_Spec_v5.md`. Sem ficheiros de informação funcional espalhados.
+- **Nenhuma alteração de código sem atualizar a bíblia no mesmo passo.** A documentação nunca fica atrás do código.
+- Toda a modificação à bíblia regista-se no **changelog dentro do próprio documento** (secção 19), com **data e descrição** da alteração.
+- Objetivo: se o código se perder, a bíblia permite **recriar tudo do zero a 100%**.
+
+## Regras de leitura da bíblia
+
+- Segue a bíblia **à letra**. Nomes de campos, tipos, assinaturas e terminologia são especificação, não sugestão.
+- **DEVE** = obrigatório · **DEVERIA** = recomendado · **FUTURO** = não implementar agora.
+- Implementa pela ordem das fases (secção 16). Cada fase fica funcional e testada antes de avançar.
 - Não introduzas desvios sem instrução explícita. Em dúvida, pergunta antes de decidir.
+
+> **Nota de estado:** o MVP (secções abaixo) está concluído e aprovado. A partir daqui construímos o **produto final** definido no `Spec_v5`.
 
 ## Stack
 
