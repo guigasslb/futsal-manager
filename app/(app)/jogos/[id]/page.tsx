@@ -138,6 +138,7 @@ export default async function DetalheJogoPage({
         convocadosIniciais={convocadosIniciais}
         estatisticasIniciais={estatisticasIniciais}
         relatorioInicial={j.relatorio ?? ""}
+        golosMarcados={j.golosMarcados}
       />
     </div>
   );

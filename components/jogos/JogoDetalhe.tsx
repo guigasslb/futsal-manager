@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Check } from "lucide-react";
+import { Check, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -55,6 +55,7 @@ export function JogoDetalhe({
   convocadosIniciais,
   estatisticasIniciais,
   relatorioInicial,
+  golosMarcados,
 }: {
   jogoId: string;
   atletas: Atleta[];
@@ -62,6 +63,7 @@ export function JogoDetalhe({
   convocadosIniciais: string[];
   estatisticasIniciais: Record<string, EstatLinha>;
   relatorioInicial: string;
+  golosMarcados: number | null;
 }) {
   const [convocados, setConvocados] = useState<Set<string>>(
     () => new Set(convocadosIniciais),
@@ -229,6 +231,22 @@ export function JogoDetalhe({
           </p>
         ) : (
           <>
+            {(() => {
+              const somaGolos = convocadosLista.reduce(
+                (acc, a) => acc + (estatDe(a.id).golos ?? 0),
+                0,
+              );
+              if (golosMarcados != null && somaGolos !== golosMarcados) {
+                return (
+                  <p className="flex items-center gap-1.5 rounded-md bg-ambar-500/10 px-3 py-2 text-corpo-sec text-ambar-500">
+                    <TriangleAlert className="h-4 w-4 flex-shrink-0" />
+                    A soma dos golos individuais ({somaGolos}) não coincide com o resultado da
+                    equipa ({golosMarcados}). Pode ser normal (autogolos), mas confirma.
+                  </p>
+                );
+              }
+              return null;
+            })()}
             <div className="space-y-3">
               {convocadosLista.map((a) => {
                 const e = estatDe(a.id);
