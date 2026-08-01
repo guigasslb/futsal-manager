@@ -125,10 +125,11 @@ model Epoca {
   clube      Clube    @relation(fields: [clubeId], references: [id])
   criadoEm   DateTime @default(now())
 
-  atletas    Atleta[]
-  sessoes    Sessao[]
-  jogos      Jogo[]
-  progressos ProgressoHabilidade[]
+  atletas      Atleta[]
+  sessoes      Sessao[]
+  jogos        Jogo[]
+  progressos   ProgressoHabilidade[]
+  planeamentos Planeamento[]
 
   @@index([clubeId])
 }
@@ -148,10 +149,11 @@ model Escalao {
   clube                    Clube    @relation(fields: [clubeId], references: [id])
   criadoEm                 DateTime @default(now())
 
-  atletas     Atleta[]
-  sessoes     Sessao[]
-  jogos       Jogo[]
-  atribuicoes AtribuicaoEscalao[]
+  atletas      Atleta[]
+  sessoes      Sessao[]
+  jogos        Jogo[]
+  atribuicoes  AtribuicaoEscalao[]
+  planeamentos Planeamento[]
 
   @@index([clubeId])
 }
@@ -264,24 +266,64 @@ enum CategoriaExercicio {
 }
 
 // ─────────────────────────────────────────────
+// PERIODIZAÇÃO (planos semanais/mensais)
+// ─────────────────────────────────────────────
+
+model Planeamento {
+  id         String          @id @default(cuid())
+  clubeId    String
+  escalaoId  String
+  escalao    Escalao         @relation(fields: [escalaoId], references: [id], onDelete: Cascade)
+  epocaId    String
+  epoca      Epoca           @relation(fields: [epocaId], references: [id], onDelete: Cascade)
+  tipo       TipoPlaneamento @default(SEMANAL)
+  periodo    PeriodoEpoca?
+  mesociclo  Int?
+  microciclo Int?
+  dataInicio DateTime
+  dataFim    DateTime
+  objetivos  String?         @db.Text
+  criadoEm   DateTime        @default(now())
+
+  sessoes Sessao[]
+
+  @@index([epocaId, escalaoId])
+}
+
+enum TipoPlaneamento {
+  SEMANAL
+  MENSAL
+}
+
+enum PeriodoEpoca {
+  PREPARATORIO
+  COMPETITIVO
+  TRANSICAO
+}
+
+// ─────────────────────────────────────────────
 // SESSÕES DE TREINO
 // ─────────────────────────────────────────────
 
 model Sessao {
-  id           String     @id @default(cuid())
-  data         DateTime
-  duracaoMin   Int?
-  objetivo     String?    @db.Text
-  local        String?
-  notas        String?    @db.Text
-  escalaoId    String
-  escalao      Escalao    @relation(fields: [escalaoId], references: [id])
-  epocaId      String
-  epoca        Epoca      @relation(fields: [epocaId], references: [id])
-  criadorId    String
-  criador      Utilizador @relation("SessaoCriador", fields: [criadorId], references: [id])
-  criadoEm     DateTime   @default(now())
-  atualizadoEm DateTime   @updatedAt
+  id            String       @id @default(cuid())
+  data          DateTime
+  duracaoMin    Int?
+  objetivo      String?      @db.Text
+  local         String?
+  notas         String?      @db.Text
+  microciclo    Int?
+  mesociclo     Int?
+  escalaoId     String
+  escalao       Escalao      @relation(fields: [escalaoId], references: [id])
+  epocaId       String
+  epoca         Epoca        @relation(fields: [epocaId], references: [id])
+  planeamentoId String?
+  planeamento   Planeamento? @relation(fields: [planeamentoId], references: [id])
+  criadorId     String
+  criador       Utilizador   @relation("SessaoCriador", fields: [criadorId], references: [id])
+  criadoEm      DateTime     @default(now())
+  atualizadoEm  DateTime     @updatedAt
 
   exercicios SessaoExercicio[]
   presencas  Presenca[]

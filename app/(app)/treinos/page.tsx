@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Dumbbell, MapPin, Users, List, CalendarDays } from "lucide-react";
+import { Plus, Dumbbell, MapPin, Users, List, CalendarDays, CalendarRange } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { listarSessoes } from "@/lib/actions/treinos";
 import { listarEscaloes } from "@/lib/actions/escaloes";
@@ -54,12 +54,20 @@ export default async function TreinosPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1>Treinos</h1>
-        <Button asChild>
-          <Link href="/treinos/novo">
-            <Plus className="h-4 w-4" />
-            Nova sessão
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link href="/treinos/periodizacao">
+              <CalendarRange className="h-4 w-4" />
+              Periodização
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link href="/treinos/novo">
+              <Plus className="h-4 w-4" />
+              Nova sessão
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {escaloes.length > 0 && (
