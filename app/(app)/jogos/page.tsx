@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Home, Plane, ClipboardList } from "lucide-react";
+import { Plus, Home, Plane, ClipboardList, Trophy, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { listarJogos } from "@/lib/actions/jogos";
 import { listarEscaloes } from "@/lib/actions/escaloes";
@@ -35,7 +35,19 @@ export default async function JogosPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1>Jogos</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline">
+            <Link href="/jogos/competicoes">
+              <Trophy className="h-4 w-4" />
+              Competições
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/jogos/scouting">
+              <Eye className="h-4 w-4" />
+              Scouting
+            </Link>
+          </Button>
           <Button asChild variant="outline">
             <Link href="/modelo-jogo">
               <ClipboardList className="h-4 w-4" />
