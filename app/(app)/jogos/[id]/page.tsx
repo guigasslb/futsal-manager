@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, Pencil, Home, Plane } from "lucide-react";
+import { ChevronLeft, Pencil, Home, Plane, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { obterJogo } from "@/lib/actions/jogos";
 import { listarAtletas } from "@/lib/actions/atletas";
 import { listarMetricas } from "@/lib/actions/metricas";
 import { prisma } from "@/lib/db";
 import { JogoDetalhe } from "@/components/jogos/JogoDetalhe";
+import { RegistoAoVivo } from "@/components/jogos/RegistoAoVivo";
 import { ApagarJogoButton } from "@/components/jogos/ApagarJogoButton";
 import { LABEL_CASA_FORA } from "@/lib/schemas/jogo";
 
@@ -119,6 +120,16 @@ export default async function DetalheJogoPage({
             {j.golosMarcados} – {j.golosSofridos}
           </p>
         )}
+        {(j.faltas1aParte != null || j.faltas2aParte != null) && (
+          <p className="text-legenda text-cinza-500">
+            Faltas: {j.faltas1aParte ?? 0} (1ª) · {j.faltas2aParte ?? 0} (2ª)
+          </p>
+        )}
+        {j.videoUrl && (
+          <a href={j.videoUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-corpo-sec text-azul-700 underline">
+            <Video className="h-4 w-4" /> Ver vídeo do jogo
+          </a>
+        )}
       </div>
 
       <JogoDetalhe
@@ -139,6 +150,20 @@ export default async function DetalheJogoPage({
         estatisticasIniciais={estatisticasIniciais}
         relatorioInicial={j.relatorio ?? ""}
         golosMarcados={j.golosMarcados}
+      />
+
+      <RegistoAoVivo
+        jogoId={j.id}
+        eventos={j.eventos.map((e) => ({
+          id: e.id,
+          parte: e.parte,
+          minuto: e.minuto,
+          tipo: e.tipo,
+          atletaId: e.atletaId,
+        }))}
+        atletas={atletas
+          .filter((a) => convocadosIniciais.includes(a.id))
+          .map((a) => ({ id: a.id, nome: a.nome, numero: a.numero }))}
       />
     </div>
   );

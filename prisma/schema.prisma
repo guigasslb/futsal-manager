@@ -173,6 +173,7 @@ model Epoca {
   jogos        Jogo[]
   progressos   ProgressoHabilidade[]
   planeamentos Planeamento[]
+  competicoes  Competicao[]
 
   @@index([clubeId])
 }
@@ -197,6 +198,7 @@ model Escalao {
   jogos        Jogo[]
   atribuicoes  AtribuicaoEscalao[]
   planeamentos Planeamento[]
+  competicoes  Competicao[]
 
   @@index([clubeId])
 }
@@ -414,34 +416,122 @@ enum EstadoPresenca {
 // ─────────────────────────────────────────────
 
 model Jogo {
-  id            String     @id @default(cuid())
+  id            String      @id @default(cuid())
   data          DateTime
   adversario    String
-  casaFora      CasaFora   @default(CASA)
-  competicao    String?
+  casaFora      CasaFora    @default(CASA)
+  tipo          TipoJogo    @default(OFICIAL)
+  competicao    String? // texto livre (legado); preferir competicaoId
+  competicaoId  String?
+  competicaoRef Competicao? @relation(fields: [competicaoId], references: [id])
   golosMarcados Int? // total da equipa (preenchido pós-jogo)
   golosSofridos Int?
+  faltas1aParte Int? // faltas acumuladas da equipa por parte (futsal)
+  faltas2aParte Int?
   local         String?
-  relatorio     String?    @db.Text
+  relatorio     String?     @db.Text
+  videoUrl      String? // link YouTube (sem armazenamento)
   escalaoId     String
-  escalao       Escalao    @relation(fields: [escalaoId], references: [id])
+  escalao       Escalao     @relation(fields: [escalaoId], references: [id])
   epocaId       String
-  epoca         Epoca      @relation(fields: [epocaId], references: [id])
+  epoca         Epoca       @relation(fields: [epocaId], references: [id])
   criadorId     String
-  criador       Utilizador @relation("JogoCriador", fields: [criadorId], references: [id])
-  criadoEm      DateTime   @default(now())
-  atualizadoEm  DateTime   @updatedAt
+  criador       Utilizador  @relation("JogoCriador", fields: [criadorId], references: [id])
+  criadoEm      DateTime    @default(now())
+  atualizadoEm  DateTime    @updatedAt
 
   convocatorias Convocatoria[]
   estatisticas  EstatisticaAtleta[]
   quadros       QuadroTatico[]
+  eventos       EventoJogo[]
 
   @@index([epocaId, escalaoId, data])
+  @@index([competicaoId])
 }
 
 enum CasaFora {
   CASA
   FORA
+}
+
+enum TipoJogo {
+  OFICIAL
+  AMIGAVEL
+}
+
+model Competicao {
+  id        String   @id @default(cuid())
+  clubeId   String
+  escalaoId String
+  escalao   Escalao  @relation(fields: [escalaoId], references: [id], onDelete: Cascade)
+  epocaId   String
+  epoca     Epoca    @relation(fields: [epocaId], references: [id], onDelete: Cascade)
+  nome      String
+  tipo      TipoJogo @default(OFICIAL)
+  criadoEm  DateTime @default(now())
+
+  jogos Jogo[]
+
+  @@index([epocaId, escalaoId])
+}
+
+// Registo ao vivo (beira-campo). Agrega para as estatísticas.
+model EventoJogo {
+  id                 String         @id @default(cuid())
+  jogoId             String
+  jogo               Jogo           @relation(fields: [jogoId], references: [id], onDelete: Cascade)
+  parte              Int // 1 | 2
+  minuto             Int?
+  tipo               TipoEventoJogo
+  atletaId           String?
+  atletaSecundarioId String?
+  criadoEm           DateTime       @default(now())
+
+  @@index([jogoId])
+}
+
+enum TipoEventoJogo {
+  GOLO
+  ASSISTENCIA
+  FALTA
+  CARTAO_AMARELO
+  CARTAO_VERMELHO
+  SUBSTITUICAO
+  DEFESA
+  GOLO_SOFRIDO
+  TIMEOUT
+}
+
+// Scouting do adversário (do clube).
+model ObservacaoAdversario {
+  id            String   @id @default(cuid())
+  clubeId       String
+  escalaoId     String?
+  equipa        String
+  jogoObservado String?
+  competicao    String?
+  sistemaTatico String?
+  pontosFortes  String?  @db.Text
+  pontosFracos  String?  @db.Text
+  notas         String?  @db.Text
+  diagrama      Json?
+  criadoEm      DateTime @default(now())
+
+  jogadores ObservacaoJogadorAdversario[]
+
+  @@index([clubeId])
+}
+
+model ObservacaoJogadorAdversario {
+  id           String               @id @default(cuid())
+  observacaoId String
+  observacao   ObservacaoAdversario @relation(fields: [observacaoId], references: [id], onDelete: Cascade)
+  numero       Int?
+  nome         String?
+  posicao      String?
+  descricao    String?              @db.Text
+
+  @@index([observacaoId])
 }
 
 model Convocatoria {

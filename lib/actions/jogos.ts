@@ -6,7 +6,7 @@ import { auth } from "@/lib/auth";
 import { obterEpocaAtiva, obterClubeIdAtual } from "@/lib/epoca-context";
 import { exigirCapacidade, podeLerEscalao, escaloesLegiveis } from "@/lib/permissoes";
 import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
-import { jogoSchema, guardarEstatisticasSchema } from "@/lib/schemas/jogo";
+import { jogoSchema, guardarEstatisticasSchema, eventoJogoSchema } from "@/lib/schemas/jogo";
 import { Prisma, type Epoca, type Jogo } from "@prisma/client";
 
 const PATH = "/jogos";
@@ -23,6 +23,7 @@ const INCLUDE_DETALHE = {
     },
   },
   estatisticas: { include: { valoresMetricas: true } },
+  eventos: { orderBy: { criadoEm: "asc" } },
 } as const;
 
 export type JogoLista = Prisma.JogoGetPayload<{ include: typeof INCLUDE_LISTA }>;
@@ -101,11 +102,16 @@ export async function criarJogo(dados: unknown): Promise<Resultado<Jogo>> {
       data: parsed.data.data,
       adversario: parsed.data.adversario,
       casaFora: parsed.data.casaFora,
+      tipo: parsed.data.tipo,
       escalaoId: parsed.data.escalaoId,
       competicao: parsed.data.competicao ?? null,
+      competicaoId: parsed.data.competicaoId ?? null,
       local: parsed.data.local ?? null,
       golosMarcados: parsed.data.golosMarcados ?? null,
       golosSofridos: parsed.data.golosSofridos ?? null,
+      faltas1aParte: parsed.data.faltas1aParte ?? null,
+      faltas2aParte: parsed.data.faltas2aParte ?? null,
+      videoUrl: parsed.data.videoUrl ? parsed.data.videoUrl : null,
       epocaId: ctx.epoca.id,
       criadorId: session.user.id,
     },
@@ -137,11 +143,16 @@ export async function atualizarJogo(id: string, dados: unknown): Promise<Resulta
       data: parsed.data.data,
       adversario: parsed.data.adversario,
       casaFora: parsed.data.casaFora,
+      tipo: parsed.data.tipo,
       escalaoId: parsed.data.escalaoId,
       competicao: parsed.data.competicao ?? null,
+      competicaoId: parsed.data.competicaoId ?? null,
       local: parsed.data.local ?? null,
       golosMarcados: parsed.data.golosMarcados ?? null,
       golosSofridos: parsed.data.golosSofridos ?? null,
+      faltas1aParte: parsed.data.faltas1aParte ?? null,
+      faltas2aParte: parsed.data.faltas2aParte ?? null,
+      videoUrl: parsed.data.videoUrl ? parsed.data.videoUrl : null,
     },
   });
   revalidatePath(PATH);
@@ -296,5 +307,73 @@ export async function guardarRelatorio(
     data: { relatorio: relatorio.trim() || null },
   });
   revalidatePath(`${PATH}/${jogoId}`);
+  return ok(undefined);
+}
+
+export async function definirVideo(jogoId: string, videoUrl: string): Promise<Resultado<void>> {
+  const clubeId = await obterClubeIdAtual();
+  if (!clubeId) return erro("Não autenticado");
+
+  const jogo = await prisma.jogo.findFirst({ where: { id: jogoId, escalao: { clubeId } } });
+  if (!jogo) return erro("Jogo não encontrado");
+
+  const perm = await exigirCapacidade("JOGOS_GERIR", jogo.escalaoId);
+  if (!perm.ok) return erro(perm.erro);
+
+  const url = videoUrl.trim();
+  if (url && !/^https?:\/\//.test(url)) return erro("URL inválido");
+
+  await prisma.jogo.update({ where: { id: jogoId }, data: { videoUrl: url || null } });
+  revalidatePath(`${PATH}/${jogoId}`);
+  return ok(undefined);
+}
+
+// ─── Modo ao vivo (registo de eventos) ───────────────────────────────────────
+
+export async function registarEventoJogo(
+  jogoId: string,
+  dados: unknown,
+): Promise<Resultado<void>> {
+  const clubeId = await obterClubeIdAtual();
+  if (!clubeId) return erro("Não autenticado");
+
+  const jogo = await prisma.jogo.findFirst({ where: { id: jogoId, escalao: { clubeId } } });
+  if (!jogo) return erro("Jogo não encontrado");
+
+  const perm = await exigirCapacidade("ESTATISTICAS_GERIR", jogo.escalaoId);
+  if (!perm.ok) return erro(perm.erro);
+
+  const parsed = eventoJogoSchema.safeParse(dados);
+  if (!parsed.success) return erro("Evento inválido");
+
+  await prisma.eventoJogo.create({
+    data: {
+      jogoId,
+      parte: parsed.data.parte,
+      minuto: parsed.data.minuto ?? null,
+      tipo: parsed.data.tipo,
+      atletaId: parsed.data.atletaId ?? null,
+      atletaSecundarioId: parsed.data.atletaSecundarioId ?? null,
+    },
+  });
+  revalidatePath(`${PATH}/${jogoId}`);
+  return ok(undefined);
+}
+
+export async function apagarEventoJogo(eventoId: string): Promise<Resultado<void>> {
+  const clubeId = await obterClubeIdAtual();
+  if (!clubeId) return erro("Não autenticado");
+
+  const evento = await prisma.eventoJogo.findFirst({
+    where: { id: eventoId, jogo: { escalao: { clubeId } } },
+    select: { id: true, jogoId: true, jogo: { select: { escalaoId: true } } },
+  });
+  if (!evento) return erro("Evento não encontrado");
+
+  const perm = await exigirCapacidade("ESTATISTICAS_GERIR", evento.jogo.escalaoId);
+  if (!perm.ok) return erro(perm.erro);
+
+  await prisma.eventoJogo.delete({ where: { id: eventoId } });
+  revalidatePath(`${PATH}/${evento.jogoId}`);
   return ok(undefined);
 }
