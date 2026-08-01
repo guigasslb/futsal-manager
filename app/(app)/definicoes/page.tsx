@@ -7,7 +7,7 @@ const SECCOES = [
   { href: "/definicoes/epocas", label: "Épocas", descricao: "Criar épocas e definir a época ativa", icon: CalendarRange },
   { href: "/definicoes/metricas", label: "Métricas", descricao: "Configurar métricas de estatísticas de jogo", icon: BarChart2 },
   { href: "/definicoes/habilidades", label: "Habilidades", descricao: "Catálogo de habilidades para a caderneta", icon: BookOpen },
-  { href: "/definicoes/utilizadores", label: "Membros", descricao: "Gerir membros do clube e escalões atribuídos", icon: UserCog },
+  { href: "/definicoes/utilizadores", label: "Equipa técnica", descricao: "Treinadores do clube e atribuição a escalões", icon: UserCog },
   { href: "/definicoes/perfis", label: "Perfis", descricao: "Perfis de permissões (configuráveis)", icon: ShieldCheck },
 ];
 

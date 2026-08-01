@@ -206,9 +206,9 @@ export function UtilizadoresLista({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1>Membros</h1>
+          <h1>Equipa técnica</h1>
           <p className="mt-1 text-corpo-sec text-cinza-600">
-            Treinadores e responsáveis do clube, com o seu perfil de permissões.
+            Treinadores e responsáveis do clube. Atribui cada um ao perfil e aos escalões que gere.
           </p>
         </div>
         <ConvidarDialog perfis={perfis} />
