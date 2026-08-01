@@ -10,6 +10,7 @@ import {
   Dumbbell,
   Trophy,
   Settings,
+  Users2,
   MoreHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -20,6 +21,7 @@ const ITENS = [
   { href: "/treinos", label: "Treinos", icon: CalendarCheck },
   { href: "/exercicios", label: "Exercícios", icon: Dumbbell },
   { href: "/jogos", label: "Jogos", icon: Trophy },
+  { href: "/reunioes", label: "Reuniões", icon: Users2 },
   { href: "/definicoes", label: "Definições", icon: Settings },
 ];
 

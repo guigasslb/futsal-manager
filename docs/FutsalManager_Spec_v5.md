@@ -1232,7 +1232,7 @@ Notas transitórias (a completar na Fase 2): `Exercicio` mantém `clubeId` + `cr
 
 **Fase 6 — Animação de diagramas** (`DiagramaCampo` v2 com passos: playback + editor de passos). ✅ Implementada (2026-08-01): `diagramaSchema` estendido (versão 1|2 + `passos`), `CampoAnimado` (playback com interpolação por `requestAnimationFrame`), captura de passos no `EditorCampo` ("Capturar passo"/"Limpar passos"). Usado nos detalhes de exercício e modelo de jogo. Anima elementos-ponto (jogador/bola/cone) A→B; setas/linhas ficam estáticas.
 
-**Fase 7 — Reuniões** (escalão/clube, ata exposta).
+**Fase 7 — Reuniões** (escalão/clube, ata exposta). ✅ Implementada (2026-08-01): modelo `Reuniao` + enum `AmbitoReuniao`, actions `reunioes.ts` (CRUD, REUNIOES_GERIR; reuniões de clube visíveis a todos, de escalão a quem lê o escalão), UI `ReunioesLista` + `/reunioes` (na navegação). Ata exposta na lista.
 
 **Fase 8 — Relatórios e tracking de fim de época + PDF** (equipa e por atleta; templates com branding).
 
@@ -1276,6 +1276,7 @@ Valores/tiers, trial gratuito, limites (nº de escalões/atletas), faturação e
 
 Toda a alteração a este documento é registada aqui, com data e descrição. Do mais recente para o mais antigo.
 
+- **2026-08-01** — **Fase 7 (Reuniões) implementada.** Modelo `Reuniao` + enum `AmbitoReuniao` (CLUBE/ESCALAO); migração `20260801115157_fase7_reunioes`. Schema `reuniao.ts`, actions `reunioes.ts` (CRUD com REUNIOES_GERIR + visibilidade por âmbito), UI `ReunioesLista` + `/reunioes`, item "Reuniões" na navegação. typecheck+lint+testes verdes.
 - **2026-08-01** — **Fase 6 (Animação de diagramas) implementada.** `diagramaSchema` v2 (versão 1|2 + `passos` com posições por elemento). `CampoAnimado` faz playback interpolado (requestAnimationFrame); `EditorCampo` ganha "Capturar passo"/"Limpar passos" (cada passo = snapshot completo das posições). Integrado nos detalhes de exercício e modelo de jogo. Teste de schema atualizado. 43 testes verdes.
 - **2026-08-01** — **Fase 5 (cauda) implementada.** Actions `competicoes.ts` (CRUD, COMPETICOES_GERIR+âmbito) e `scouting.ts` (CRUD ObservacaoAdversario, SCOUTING_GERIR); schema `competicao.ts`. UI `CompeticoesLista` (`/jogos/competicoes`) e `ScoutingLista` (`/jogos/scouting`), ligadas a partir da página de Jogos. Fase 5 concluída (exceto enhancements: seletor de competição no jogo, agregação eventos→estatísticas).
 - **2026-08-01** — **Fase 5 (núcleo) implementada.** `Jogo`: tipo, faltas1aParte/2aParte, videoUrl, competicaoId. Modelos `Competicao`, `EventoJogo`, `ObservacaoAdversario`, `ObservacaoJogadorAdversario` + enums `TipoJogo`/`TipoEventoJogo`. Migração `20260801113000_fase5_jogos_avancado`. Actions de jogo: campos novos em criar/atualizar, `definirVideo`, `registarEventoJogo`, `apagarEventoJogo` (ESTATISTICAS_GERIR + âmbito). UI: `JogoForm` (tipo/faltas/vídeo), detalhe mostra vídeo/faltas, componente `RegistoAoVivo`. Falta na Fase 5: CRUD de Competições e Scouting + seletor de competição no jogo. typecheck+lint+testes verdes.

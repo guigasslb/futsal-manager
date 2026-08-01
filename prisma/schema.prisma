@@ -33,6 +33,33 @@ model Clube {
   exercicios   Exercicio[]
   metricas     MetricaConfig[]
   habilidades  Habilidade[]
+  reunioes     Reuniao[]
+}
+
+// ─────────────────────────────────────────────
+// REUNIÕES
+// ─────────────────────────────────────────────
+
+model Reuniao {
+  id             String        @id @default(cuid())
+  clubeId        String
+  clube          Clube         @relation(fields: [clubeId], references: [id], onDelete: Cascade)
+  ambito         AmbitoReuniao @default(CLUBE)
+  escalaoId      String? // obrigatório (lógico) se ambito = ESCALAO
+  titulo         String
+  data           DateTime
+  participantes  String?       @db.Text
+  ordemTrabalhos String?       @db.Text
+  ata            String?       @db.Text
+  criadorId      String
+  criadoEm       DateTime      @default(now())
+
+  @@index([clubeId])
+}
+
+enum AmbitoReuniao {
+  CLUBE
+  ESCALAO
 }
 
 // O utilizador existe independentemente de qualquer clube (modo individual + portabilidade).
