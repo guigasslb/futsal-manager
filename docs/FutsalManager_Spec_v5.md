@@ -1238,7 +1238,7 @@ Notas transitórias (a completar na Fase 2): `Exercicio` mantém `clubeId` + `cr
 
 **Fase 9 — Biblioteca curada de arranque** (exercícios reais com diagramas, como seed). ✅ Implementada (2026-08-01): `lib/biblioteca-arranque.ts` com 10 exercícios reais de futsal (ativação, técnica, finalização, posse, transições, situações, jogo reduzido, bolas paradas, físico) com diagramas. Action `instalarBibliotecaArranque` (idempotente, EXERCICIOS_GERIR, marca `origemSeed`) + botão na biblioteca; também incluída no seed do clube demo. Custo zero em runtime (conteúdo autorado, sem IA).
 
-**Fase 10 — PWA/offline (modo jornada) + polish visual + caderneta gamificada.**
+**Fase 10 — PWA/offline (modo jornada) + polish visual + caderneta gamificada.** ✅ Implementada (2026-08-01): **PWA** — `app/manifest.ts` (`/manifest.webmanifest`), ícone SVG, service worker (`public/sw.js`, network-first + cache de estáticos), registo via `RegistarSW` (só em produção), theme-color. **Caderneta gamificada** — barra de progresso + percentagem + celebração ao desbloquear. `print:hidden` na navegação (relatórios limpos). Build de produção verde. Nota: offline **robusto** (sync de escrita beira-campo) e ícones PNG dedicados ficam como afinação futura; a base PWA (instalável) está pronta. **Gating de UI de permissões continua parcial** (segurança garantida no servidor) — afinação futura.
 
 *(FUTURO, fora destas fases: portal de pais/WhatsApp, camada de clube (quotas/material/espaços), IA como plugin pago, APK.)*
 
@@ -1276,6 +1276,7 @@ Valores/tiers, trial gratuito, limites (nº de escalões/atletas), faturação e
 
 Toda a alteração a este documento é registada aqui, com data e descrição. Do mais recente para o mais antigo.
 
+- **2026-08-01** — **Fase 10 (PWA + polish) implementada.** PWA: `app/manifest.ts`, `public/icon.svg`, `public/sw.js` (SW seguro), `RegistarSW` no layout raiz, theme-color/appleWebApp. Caderneta: barra de progresso + celebração ao desbloquear. `print:hidden` na navegação. Build de produção verde. **Todas as 10 fases do produto final implementadas.** Afinações futuras: offline de escrita robusto, ícones PNG, gating de UI de permissões completo.
 - **2026-08-01** — **Fase 9 (Biblioteca curada) implementada.** `lib/biblioteca-arranque.ts` (10 exercícios reais com diagramas). Action `instalarBibliotecaArranque` (idempotente) + `InstalarBibliotecaButton` na biblioteca; incluída no seed do clube demo. Sem IA em runtime. 43 testes verdes.
 - **2026-08-01** — **Fase 8 (Relatórios + PDF) implementada.** Action `relatorios.ts` (relatório de equipa por escalão). Páginas `/relatorios` e `/plantel/[id]/relatorio` (relatório individual). PDF por impressão do browser (`BotaoImprimir`); `print:hidden` na barra/navegação. Links a partir do plantel e do perfil do atleta. Sem dependências novas, sem IA. typecheck+lint+testes verdes.
 - **2026-08-01** — **Fase 7 (Reuniões) implementada.** Modelo `Reuniao` + enum `AmbitoReuniao` (CLUBE/ESCALAO); migração `20260801115157_fase7_reunioes`. Schema `reuniao.ts`, actions `reunioes.ts` (CRUD com REUNIOES_GERIR + visibilidade por âmbito), UI `ReunioesLista` + `/reunioes`, item "Reuniões" na navegação. typecheck+lint+testes verdes.
