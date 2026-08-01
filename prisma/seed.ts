@@ -1,6 +1,7 @@
-import { PrismaClient, TipoMetrica, NivelHabilidade } from "@prisma/client";
+import { PrismaClient, TipoMetrica, NivelHabilidade, Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { PERFIS_ARRANQUE } from "../lib/permissoes-catalogo";
+import { BIBLIOTECA_ARRANQUE } from "../lib/biblioteca-arranque";
 
 const prisma = new PrismaClient();
 
@@ -120,6 +121,22 @@ async function main() {
 
   // Silenciar "declarado mas não usado" (traquinas fica disponível para futuros dados)
   void traquinas;
+
+  // 8. Biblioteca de exercícios curada de arranque (Fase 9)
+  await prisma.exercicio.createMany({
+    data: BIBLIOTECA_ARRANQUE.map((e) => ({
+      nome: e.nome,
+      descricao: e.descricao,
+      objetivo: e.objetivo,
+      duracaoMin: e.duracaoMin,
+      categoria: e.categoria,
+      diagrama: e.diagrama as unknown as Prisma.InputJsonValue,
+      clubeId: clube.id,
+      criadorId: goncalo.id,
+      proprietario: "CLUBE",
+      origemSeed: true,
+    })),
+  });
 
   console.log("Seed concluído.");
   console.log("Login inicial:");

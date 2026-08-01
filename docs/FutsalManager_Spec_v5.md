@@ -1236,7 +1236,7 @@ Notas transitórias (a completar na Fase 2): `Exercicio` mantém `clubeId` + `cr
 
 **Fase 8 — Relatórios e tracking de fim de época + PDF** (equipa e por atleta; templates com branding). ✅ Implementada (2026-08-01): action `relatorios.ts` (`obterRelatorioEquipa`: jogos/V-E-D, golos, sessões, melhores marcadores/assistentes). Páginas `/relatorios` (por escalão, com links para relatórios individuais) e `/plantel/[id]/relatorio` (relatório de desenvolvimento do atleta: stats + caderneta + observações). **PDF via impressão do browser** (`BotaoImprimir` → `window.print()`, sem dependências; barra/nav com `print:hidden`). Sem IA.
 
-**Fase 9 — Biblioteca curada de arranque** (exercícios reais com diagramas, como seed).
+**Fase 9 — Biblioteca curada de arranque** (exercícios reais com diagramas, como seed). ✅ Implementada (2026-08-01): `lib/biblioteca-arranque.ts` com 10 exercícios reais de futsal (ativação, técnica, finalização, posse, transições, situações, jogo reduzido, bolas paradas, físico) com diagramas. Action `instalarBibliotecaArranque` (idempotente, EXERCICIOS_GERIR, marca `origemSeed`) + botão na biblioteca; também incluída no seed do clube demo. Custo zero em runtime (conteúdo autorado, sem IA).
 
 **Fase 10 — PWA/offline (modo jornada) + polish visual + caderneta gamificada.**
 
@@ -1276,6 +1276,7 @@ Valores/tiers, trial gratuito, limites (nº de escalões/atletas), faturação e
 
 Toda a alteração a este documento é registada aqui, com data e descrição. Do mais recente para o mais antigo.
 
+- **2026-08-01** — **Fase 9 (Biblioteca curada) implementada.** `lib/biblioteca-arranque.ts` (10 exercícios reais com diagramas). Action `instalarBibliotecaArranque` (idempotente) + `InstalarBibliotecaButton` na biblioteca; incluída no seed do clube demo. Sem IA em runtime. 43 testes verdes.
 - **2026-08-01** — **Fase 8 (Relatórios + PDF) implementada.** Action `relatorios.ts` (relatório de equipa por escalão). Páginas `/relatorios` e `/plantel/[id]/relatorio` (relatório individual). PDF por impressão do browser (`BotaoImprimir`); `print:hidden` na barra/navegação. Links a partir do plantel e do perfil do atleta. Sem dependências novas, sem IA. typecheck+lint+testes verdes.
 - **2026-08-01** — **Fase 7 (Reuniões) implementada.** Modelo `Reuniao` + enum `AmbitoReuniao` (CLUBE/ESCALAO); migração `20260801115157_fase7_reunioes`. Schema `reuniao.ts`, actions `reunioes.ts` (CRUD com REUNIOES_GERIR + visibilidade por âmbito), UI `ReunioesLista` + `/reunioes`, item "Reuniões" na navegação. typecheck+lint+testes verdes.
 - **2026-08-01** — **Fase 6 (Animação de diagramas) implementada.** `diagramaSchema` v2 (versão 1|2 + `passos` com posições por elemento). `CampoAnimado` faz playback interpolado (requestAnimationFrame); `EditorCampo` ganha "Capturar passo"/"Limpar passos" (cada passo = snapshot completo das posições). Integrado nos detalhes de exercício e modelo de jogo. Teste de schema atualizado. 43 testes verdes.

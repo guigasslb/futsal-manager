@@ -7,6 +7,7 @@ import { EstadoErro, EstadoVazio } from "@/components/layout/EstadosUI";
 import { CampoPesquisa } from "@/components/layout/CampoPesquisa";
 import { LABEL_CATEGORIA, CATEGORIAS, diagramaSchema } from "@/lib/schemas/exercicio";
 import { MiniaturaCampo } from "@/components/campo/MiniaturaCampo";
+import { InstalarBibliotecaButton } from "@/components/exercicios/InstalarBibliotecaButton";
 import type { CategoriaExercicio } from "@prisma/client";
 
 export default async function ExerciciosPage({
@@ -31,12 +32,15 @@ export default async function ExerciciosPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1>Exercícios</h1>
-        <Button asChild>
-          <Link href="/exercicios/novo">
-            <Plus className="h-4 w-4" />
-            Novo exercício
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <InstalarBibliotecaButton />
+          <Button asChild>
+            <Link href="/exercicios/novo">
+              <Plus className="h-4 w-4" />
+              Novo exercício
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Filtro por categoria */}
