@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { obterEpocaAtiva, obterClubeIdAtual } from "@/lib/epoca-context";
+import { exigirCapacidade, podeLerEscalao, escaloesLegiveis } from "@/lib/permissoes";
 import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
 import { atletaSchema } from "@/lib/schemas/atleta";
 import { agregarEstatisticas, type EstatisticasAgregadas } from "@/lib/estatisticas";
@@ -28,12 +29,22 @@ export async function listarAtletas(
   const epoca = await obterEpocaAtiva();
   if (!epoca) return erro("Nenhuma época ativa");
 
+  // Filtro de âmbito: escalões que o membro pode ler (secção 6.4)
+  const legiveis = await escaloesLegiveis();
+  let filtroEscalao: Prisma.AtletaWhereInput = {};
+  if (escalaoId) {
+    if (!(await podeLerEscalao(escalaoId))) return ok([]);
+    filtroEscalao = { escalaoId };
+  } else if (legiveis !== "TODOS") {
+    filtroEscalao = { escalaoId: { in: legiveis } };
+  }
+
   const atletas = await prisma.atleta.findMany({
     where: {
       epocaId: epoca.id,
       escalao: { clubeId },
       ativo: true,
-      ...(escalaoId ? { escalaoId } : {}),
+      ...filtroEscalao,
     },
     include: INCLUDE_RELACOES,
     orderBy: [{ numero: "asc" }, { nome: "asc" }],
@@ -50,15 +61,17 @@ export async function obterAtleta(id: string): Promise<Resultado<AtletaComRelaco
     include: INCLUDE_RELACOES,
   });
   if (!atleta) return erro("Atleta não encontrado");
+  if (!(await podeLerEscalao(atleta.escalaoId))) return erro("Sem permissão neste escalão");
   return ok(atleta);
 }
 
 export async function criarAtleta(dados: unknown): Promise<Resultado<Atleta>> {
-  const clubeId = await obterClubeIdAtual();
-  if (!clubeId) return erro("Não autenticado");
-
   const parsed = atletaSchema.safeParse(dados);
   if (!parsed.success) return erroDeValidacao(parsed.error);
+
+  const perm = await exigirCapacidade("PLANTEL_GERIR", parsed.data.escalaoId);
+  if (!perm.ok) return erro(perm.erro);
+  const clubeId = perm.ctx.clube.id;
 
   const epoca = await obterEpocaAtiva();
   if (!epoca)
@@ -91,7 +104,14 @@ export async function atualizarAtleta(
   });
   if (!existe) return erro("Atleta não encontrado");
 
+  // Permissão sobre o escalão atual do atleta
+  const perm = await exigirCapacidade("PLANTEL_GERIR", existe.escalaoId);
+  if (!perm.ok) return erro(perm.erro);
+
   if (parsed.data.escalaoId !== existe.escalaoId) {
+    // Mover para outro escalão exige permissão também no escalão de destino
+    const permDestino = await exigirCapacidade("PLANTEL_GERIR", parsed.data.escalaoId);
+    if (!permDestino.ok) return erro(permDestino.erro);
     const escalao = await prisma.escalao.findFirst({
       where: { id: parsed.data.escalaoId, clubeId },
     });
@@ -124,6 +144,9 @@ export async function apagarAtleta(id: string): Promise<Resultado<void>> {
   });
   if (!existe) return erro("Atleta não encontrado");
 
+  const perm = await exigirCapacidade("PLANTEL_GERIR", existe.escalaoId);
+  if (!perm.ok) return erro(perm.erro);
+
   await prisma.atleta.update({ where: { id }, data: { ativo: false } });
   revalidatePath(PATH);
   return ok(undefined);
@@ -145,6 +168,7 @@ export async function obterEstatisticasAtleta(
     select: { id: true, escalaoId: true, posicao: true, criadoEm: true, epocaId: true },
   });
   if (!atleta) return erro("Atleta não encontrado");
+  if (!(await podeLerEscalao(atleta.escalaoId))) return erro("Sem permissão neste escalão");
 
   const eGR = atleta.posicao === "GUARDA_REDES";
 

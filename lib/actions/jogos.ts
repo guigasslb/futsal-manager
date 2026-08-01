@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { obterEpocaAtiva, obterClubeIdAtual } from "@/lib/epoca-context";
+import { exigirCapacidade, podeLerEscalao, escaloesLegiveis } from "@/lib/permissoes";
 import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
 import { jogoSchema, guardarEstatisticasSchema } from "@/lib/schemas/jogo";
 import { Prisma, type Epoca, type Jogo } from "@prisma/client";
@@ -43,11 +44,20 @@ export async function listarJogos(escalaoId?: string): Promise<Resultado<JogoLis
   const ctx = await contexto();
   if (ctx.estado === "erro") return erro(ctx.erro);
 
+  const legiveis = await escaloesLegiveis();
+  let filtroEscalao: Prisma.JogoWhereInput = {};
+  if (escalaoId) {
+    if (!(await podeLerEscalao(escalaoId))) return ok([]);
+    filtroEscalao = { escalaoId };
+  } else if (legiveis !== "TODOS") {
+    filtroEscalao = { escalaoId: { in: legiveis } };
+  }
+
   const jogos = await prisma.jogo.findMany({
     where: {
       epocaId: ctx.epoca.id,
       escalao: { clubeId: ctx.clubeId },
-      ...(escalaoId ? { escalaoId } : {}),
+      ...filtroEscalao,
     },
     include: INCLUDE_LISTA,
     orderBy: { data: "desc" },
@@ -64,6 +74,7 @@ export async function obterJogo(id: string): Promise<Resultado<JogoDetalhe>> {
     include: INCLUDE_DETALHE,
   });
   if (!jogo) return erro("Jogo não encontrado");
+  if (!(await podeLerEscalao(jogo.escalaoId))) return erro("Sem permissão neste escalão");
   return ok(jogo);
 }
 
@@ -76,6 +87,9 @@ export async function criarJogo(dados: unknown): Promise<Resultado<Jogo>> {
 
   const parsed = jogoSchema.safeParse(dados);
   if (!parsed.success) return erroDeValidacao(parsed.error);
+
+  const perm = await exigirCapacidade("JOGOS_GERIR", parsed.data.escalaoId);
+  if (!perm.ok) return erro(perm.erro);
 
   const escalao = await prisma.escalao.findFirst({
     where: { id: parsed.data.escalaoId, clubeId: ctx.clubeId },
@@ -110,6 +124,13 @@ export async function atualizarJogo(id: string, dados: unknown): Promise<Resulta
   const existe = await prisma.jogo.findFirst({ where: { id, escalao: { clubeId } } });
   if (!existe) return erro("Jogo não encontrado");
 
+  const perm = await exigirCapacidade("JOGOS_GERIR", existe.escalaoId);
+  if (!perm.ok) return erro(perm.erro);
+  if (parsed.data.escalaoId !== existe.escalaoId) {
+    const permDestino = await exigirCapacidade("JOGOS_GERIR", parsed.data.escalaoId);
+    if (!permDestino.ok) return erro(permDestino.erro);
+  }
+
   const jogo = await prisma.jogo.update({
     where: { id },
     data: {
@@ -135,6 +156,9 @@ export async function apagarJogo(id: string): Promise<Resultado<void>> {
   const existe = await prisma.jogo.findFirst({ where: { id, escalao: { clubeId } } });
   if (!existe) return erro("Jogo não encontrado");
 
+  const perm = await exigirCapacidade("JOGOS_GERIR", existe.escalaoId);
+  if (!perm.ok) return erro(perm.erro);
+
   await prisma.jogo.delete({ where: { id } });
   revalidatePath(PATH);
   return ok(undefined);
@@ -151,6 +175,9 @@ export async function definirConvocatoria(
 
   const jogo = await prisma.jogo.findFirst({ where: { id: jogoId, escalao: { clubeId } } });
   if (!jogo) return erro("Jogo não encontrado");
+
+  const perm = await exigirCapacidade("CONVOCATORIA_GERIR", jogo.escalaoId);
+  if (!perm.ok) return erro(perm.erro);
 
   const convocadosAtuais = await prisma.convocatoria.findMany({
     where: { jogoId },
@@ -189,6 +216,9 @@ export async function guardarEstatisticas(
 
   const jogo = await prisma.jogo.findFirst({ where: { id: jogoId, escalao: { clubeId } } });
   if (!jogo) return erro("Jogo não encontrado");
+
+  const perm = await exigirCapacidade("ESTATISTICAS_GERIR", jogo.escalaoId);
+  if (!perm.ok) return erro(perm.erro);
 
   const parsed = guardarEstatisticasSchema.safeParse(estatisticas);
   if (!parsed.success) return erro("Dados de estatísticas inválidos");
@@ -257,6 +287,9 @@ export async function guardarRelatorio(
 
   const jogo = await prisma.jogo.findFirst({ where: { id: jogoId, escalao: { clubeId } } });
   if (!jogo) return erro("Jogo não encontrado");
+
+  const perm = await exigirCapacidade("JOGOS_GERIR", jogo.escalaoId);
+  if (!perm.ok) return erro(perm.erro);
 
   await prisma.jogo.update({
     where: { id: jogoId },

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { obterEpocaAtiva, obterClubeIdAtual } from "@/lib/epoca-context";
+import { exigirCapacidade, podeLerEscalao } from "@/lib/permissoes";
 import { ok, erro, type Resultado } from "@/lib/utils";
 import type { EstadoHabilidade, Habilidade, ProgressoHabilidade } from "@prisma/client";
 
@@ -23,9 +24,10 @@ export async function obterCadernetaAtleta(
 
   const atleta = await prisma.atleta.findFirst({
     where: { id: atletaId, escalao: { clubeId } },
-    select: { id: true },
+    select: { id: true, escalaoId: true },
   });
   if (!atleta) return erro("Atleta não encontrado");
+  if (!(await podeLerEscalao(atleta.escalaoId))) return erro("Sem permissão neste escalão");
 
   const [habilidades, progressos] = await Promise.all([
     prisma.habilidade.findMany({
@@ -67,11 +69,14 @@ export async function atualizarProgresso(
   if (!epoca) return erro("Nenhuma época ativa");
 
   const [atleta, habilidade] = await Promise.all([
-    prisma.atleta.findFirst({ where: { id: atletaId, escalao: { clubeId } }, select: { id: true } }),
+    prisma.atleta.findFirst({ where: { id: atletaId, escalao: { clubeId } }, select: { id: true, escalaoId: true } }),
     prisma.habilidade.findFirst({ where: { id: habilidadeId, clubeId }, select: { id: true } }),
   ]);
   if (!atleta) return erro("Atleta não encontrado");
   if (!habilidade) return erro("Habilidade não encontrada");
+
+  const perm = await exigirCapacidade("CADERNETA_GERIR", atleta.escalaoId);
+  if (!perm.ok) return erro(perm.erro);
 
   // DESBLOQUEADO regista data; voltar atrás limpa (secção 12.7)
   const dataDesbloqueio = estado === "DESBLOQUEADO" ? new Date() : null;

@@ -119,3 +119,20 @@ export async function podeLerEscalao(escalaoId: string): Promise<boolean> {
   });
   return escalao?.visivelOutrosTreinadores ?? false;
 }
+
+/**
+ * IDs dos escalões que o membro atual pode LER.
+ * Devolve "TODOS" quando o âmbito é todo o clube (sem restrição).
+ * Devolve [] se não houver membro ativo.
+ */
+export async function escaloesLegiveis(): Promise<string[] | "TODOS"> {
+  const ctx = await obterMembroAtual();
+  if (!ctx) return [];
+  if (ctx.ambito === "TODO_CLUBE") return "TODOS";
+
+  const visiveis = await prisma.escalao.findMany({
+    where: { clubeId: ctx.clube.id, visivelOutrosTreinadores: true },
+    select: { id: true },
+  });
+  return [...new Set([...ctx.escaloesAtribuidos, ...visiveis.map((v) => v.id)])];
+}

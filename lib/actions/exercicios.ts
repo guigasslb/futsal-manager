@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { obterClubeIdAtual } from "@/lib/epoca-context";
+import { exigirCapacidade } from "@/lib/permissoes";
 import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
 import { exercicioSchema } from "@/lib/schemas/exercicio";
 import type { CategoriaExercicio, Exercicio } from "@prisma/client";
@@ -41,8 +42,9 @@ export async function criarExercicio(dados: unknown): Promise<Resultado<Exercici
   const session = await auth();
   if (!session?.user?.id) return erro("Não autenticado");
 
-  const clubeId = await obterClubeIdAtual();
-  if (!clubeId) return erro("Não autenticado");
+  const perm = await exigirCapacidade("EXERCICIOS_GERIR");
+  if (!perm.ok) return erro(perm.erro);
+  const clubeId = perm.ctx.clube.id;
 
   const parsed = exercicioSchema.safeParse(dados);
   if (!parsed.success) return erroDeValidacao(parsed.error);
@@ -64,8 +66,9 @@ export async function atualizarExercicio(
   id: string,
   dados: unknown,
 ): Promise<Resultado<Exercicio>> {
-  const clubeId = await obterClubeIdAtual();
-  if (!clubeId) return erro("Não autenticado");
+  const perm = await exigirCapacidade("EXERCICIOS_GERIR");
+  if (!perm.ok) return erro(perm.erro);
+  const clubeId = perm.ctx.clube.id;
 
   const parsed = exercicioSchema.safeParse(dados);
   if (!parsed.success) return erroDeValidacao(parsed.error);
@@ -90,8 +93,9 @@ export async function atualizarExercicio(
 }
 
 export async function apagarExercicio(id: string): Promise<Resultado<void>> {
-  const clubeId = await obterClubeIdAtual();
-  if (!clubeId) return erro("Não autenticado");
+  const perm = await exigirCapacidade("EXERCICIOS_GERIR");
+  if (!perm.ok) return erro(perm.erro);
+  const clubeId = perm.ctx.clube.id;
 
   const existe = await prisma.exercicio.findFirst({ where: { id, clubeId } });
   if (!existe) return erro("Exercício não encontrado");
