@@ -291,13 +291,11 @@ export function EditorCampo({
   }
 
   function anular() {
-    setHistorico((h) => {
-      if (!h.length) return h;
-      const anterior = h[h.length - 1];
-      aplicar(anterior);
-      setSelecionadoId(null);
-      return h.slice(0, -1);
-    });
+    if (!historico.length) return;
+    const anterior = historico[historico.length - 1];
+    aplicar(anterior);
+    setSelecionadoId(null);
+    setHistorico((h) => h.slice(0, -1));
   }
 
   function limparTudo() {
