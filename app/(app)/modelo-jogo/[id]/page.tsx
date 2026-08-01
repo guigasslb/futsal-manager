@@ -7,6 +7,7 @@ import { obterModeloJogo } from "@/lib/actions/modeloJogo";
 import { LABEL_MOMENTO } from "@/lib/schemas/modeloJogo";
 import { diagramaSchema } from "@/lib/schemas/exercicio";
 import { CampoFutsal } from "@/components/campo/CampoFutsal";
+import { CampoAnimado } from "@/components/campo/CampoAnimado";
 
 export default async function DetalheModeloJogoPage({
   params,
@@ -39,7 +40,11 @@ export default async function DetalheModeloJogoPage({
 
       {diagrama && diagrama.elementos.length > 0 && (
         <div className="max-w-2xl rounded-lg border border-cinza-200 bg-white p-5 shadow-card">
-          <CampoFutsal diagrama={diagrama} />
+          {diagrama.passos && diagrama.passos.length > 0 ? (
+            <CampoAnimado diagrama={diagrama} />
+          ) : (
+            <CampoFutsal diagrama={diagrama} />
+          )}
         </div>
       )}
 

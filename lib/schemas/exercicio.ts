@@ -72,10 +72,24 @@ export const elementoCampoSchema = z.discriminatedUnion("tipo", [
   textoSchema,
 ]);
 
-export const diagramaSchema = z.object({
-  versao: z.literal(1),
-  elementos: z.array(elementoCampoSchema),
+// Passo de animação (secção 11.2 da bíblia): posições dos elementos neste passo.
+const passoAnimacaoSchema = z.object({
+  id: z.string(),
+  ordem: z.number().int(),
+  posicoes: z.array(
+    z.object({ elementoId: z.string(), x: z.number(), y: z.number() }),
+  ),
+  duracaoMs: z.number().int().min(100).max(10000).optional(),
 });
+
+// Retrocompatível: versão 1 (estático) ou 2 (com passos opcionais).
+export const diagramaSchema = z.object({
+  versao: z.union([z.literal(1), z.literal(2)]),
+  elementos: z.array(elementoCampoSchema),
+  passos: z.array(passoAnimacaoSchema).optional(),
+});
+
+export type PassoAnimacao = z.infer<typeof passoAnimacaoSchema>;
 
 export type CorJogador = z.infer<typeof corJogadorSchema>;
 export type Jogador = z.infer<typeof jogadorSchema>;

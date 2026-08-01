@@ -14,6 +14,7 @@ import {
   Undo2,
   Trash2,
   Check,
+  Camera,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -100,10 +101,27 @@ export function EditorCampo({
 
   const aplicar = useCallback(
     (novos: ElementoCampo[]) => {
-      onChange({ versao: 1, elementos: novos });
+      // Preserva os passos de animação ao editar os elementos.
+      onChange({ versao: valor.passos?.length ? 2 : 1, elementos: novos, passos: valor.passos });
     },
-    [onChange],
+    [onChange, valor.passos],
   );
+
+  function capturarPasso() {
+    const posicoes = elementos
+      .filter((el): el is Extract<ElementoCampo, { x: number; y: number }> => "x" in el && "y" in el)
+      .map((el) => ({ elementoId: el.id, x: el.x, y: el.y }));
+    const passos = valor.passos ?? [];
+    onChange({
+      versao: 2,
+      elementos,
+      passos: [...passos, { id: novoId(), ordem: passos.length, posicoes }],
+    });
+  }
+
+  function limparPassos() {
+    onChange({ versao: 1, elementos, passos: [] });
+  }
 
   function coordsDoEvento(e: React.PointerEvent): { x: number; y: number } | null {
     const svg = svgRef.current;
@@ -530,6 +548,24 @@ export function EditorCampo({
               Toca num elemento para o selecionar e arrastar.
             </span>
           )}
+        </div>
+
+        {/* Passos de animação (secção 11) */}
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-cinza-200 p-3 text-corpo-sec">
+          <span className="font-medium text-cinza-700">Animação:</span>
+          <Button type="button" size="sm" variant="outline" onClick={capturarPasso}>
+            <Camera className="h-4 w-4" />
+            Capturar passo
+          </Button>
+          <span className="text-cinza-500">{valor.passos?.length ?? 0} passo(s)</span>
+          {(valor.passos?.length ?? 0) > 0 && (
+            <Button type="button" size="sm" variant="ghost" className="text-vermelho-600" onClick={limparPassos}>
+              Limpar passos
+            </Button>
+          )}
+          <span className="text-legenda text-cinza-400">
+            Posiciona os elementos e captura cada momento (A→B). O primeiro passo é a posição inicial.
+          </span>
         </div>
       </div>
     </div>

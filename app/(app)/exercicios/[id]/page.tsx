@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { obterExercicio } from "@/lib/actions/exercicios";
 import { LABEL_CATEGORIA, diagramaSchema } from "@/lib/schemas/exercicio";
 import { CampoFutsal } from "@/components/campo/CampoFutsal";
+import { CampoAnimado } from "@/components/campo/CampoAnimado";
 
 export default async function DetalheExercicioPage({
   params,
@@ -82,7 +83,11 @@ export default async function DetalheExercicioPage({
             Diagrama
           </p>
           <div className="max-w-2xl">
-            <CampoFutsal diagrama={diagrama} />
+            {diagrama.passos && diagrama.passos.length > 0 ? (
+              <CampoAnimado diagrama={diagrama} />
+            ) : (
+              <CampoFutsal diagrama={diagrama} />
+            )}
           </div>
         </div>
       )}

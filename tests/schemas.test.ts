@@ -84,8 +84,17 @@ describe("diagramaSchema", () => {
     expect(diagramaSchema.safeParse(diagrama).success).toBe(true);
   });
 
-  it("rejeita versão diferente de 1", () => {
-    expect(diagramaSchema.safeParse({ versao: 2, elementos: [] }).success).toBe(false);
+  it("aceita versão 2 (com passos de animação)", () => {
+    const d = {
+      versao: 2,
+      elementos: [{ id: "a", tipo: "jogador", x: 100, y: 100, cor: "azul" }],
+      passos: [{ id: "p1", ordem: 0, posicoes: [{ elementoId: "a", x: 120, y: 130 }] }],
+    };
+    expect(diagramaSchema.safeParse(d).success).toBe(true);
+  });
+
+  it("rejeita versão inválida (3)", () => {
+    expect(diagramaSchema.safeParse({ versao: 3, elementos: [] }).success).toBe(false);
   });
 
   it("rejeita coordenadas fora do campo (0-400 / 0-200)", () => {
