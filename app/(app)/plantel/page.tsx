@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, AlertTriangle } from "lucide-react";
+import { Plus, AlertTriangle, FileBarChart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { listarAtletas } from "@/lib/actions/atletas";
 import { listarEscaloes } from "@/lib/actions/escaloes";
@@ -45,12 +45,20 @@ export default async function PlantelPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1>Plantel</h1>
-        <Button asChild>
-          <Link href="/plantel/novo">
-            <Plus className="h-4 w-4" />
-            Novo atleta
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link href="/relatorios">
+              <FileBarChart className="h-4 w-4" />
+              Relatórios
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link href="/plantel/novo">
+              <Plus className="h-4 w-4" />
+              Novo atleta
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {escaloes.length > 0 && (

@@ -1234,7 +1234,7 @@ Notas transitórias (a completar na Fase 2): `Exercicio` mantém `clubeId` + `cr
 
 **Fase 7 — Reuniões** (escalão/clube, ata exposta). ✅ Implementada (2026-08-01): modelo `Reuniao` + enum `AmbitoReuniao`, actions `reunioes.ts` (CRUD, REUNIOES_GERIR; reuniões de clube visíveis a todos, de escalão a quem lê o escalão), UI `ReunioesLista` + `/reunioes` (na navegação). Ata exposta na lista.
 
-**Fase 8 — Relatórios e tracking de fim de época + PDF** (equipa e por atleta; templates com branding).
+**Fase 8 — Relatórios e tracking de fim de época + PDF** (equipa e por atleta; templates com branding). ✅ Implementada (2026-08-01): action `relatorios.ts` (`obterRelatorioEquipa`: jogos/V-E-D, golos, sessões, melhores marcadores/assistentes). Páginas `/relatorios` (por escalão, com links para relatórios individuais) e `/plantel/[id]/relatorio` (relatório de desenvolvimento do atleta: stats + caderneta + observações). **PDF via impressão do browser** (`BotaoImprimir` → `window.print()`, sem dependências; barra/nav com `print:hidden`). Sem IA.
 
 **Fase 9 — Biblioteca curada de arranque** (exercícios reais com diagramas, como seed).
 
@@ -1276,6 +1276,7 @@ Valores/tiers, trial gratuito, limites (nº de escalões/atletas), faturação e
 
 Toda a alteração a este documento é registada aqui, com data e descrição. Do mais recente para o mais antigo.
 
+- **2026-08-01** — **Fase 8 (Relatórios + PDF) implementada.** Action `relatorios.ts` (relatório de equipa por escalão). Páginas `/relatorios` e `/plantel/[id]/relatorio` (relatório individual). PDF por impressão do browser (`BotaoImprimir`); `print:hidden` na barra/navegação. Links a partir do plantel e do perfil do atleta. Sem dependências novas, sem IA. typecheck+lint+testes verdes.
 - **2026-08-01** — **Fase 7 (Reuniões) implementada.** Modelo `Reuniao` + enum `AmbitoReuniao` (CLUBE/ESCALAO); migração `20260801115157_fase7_reunioes`. Schema `reuniao.ts`, actions `reunioes.ts` (CRUD com REUNIOES_GERIR + visibilidade por âmbito), UI `ReunioesLista` + `/reunioes`, item "Reuniões" na navegação. typecheck+lint+testes verdes.
 - **2026-08-01** — **Fase 6 (Animação de diagramas) implementada.** `diagramaSchema` v2 (versão 1|2 + `passos` com posições por elemento). `CampoAnimado` faz playback interpolado (requestAnimationFrame); `EditorCampo` ganha "Capturar passo"/"Limpar passos" (cada passo = snapshot completo das posições). Integrado nos detalhes de exercício e modelo de jogo. Teste de schema atualizado. 43 testes verdes.
 - **2026-08-01** — **Fase 5 (cauda) implementada.** Actions `competicoes.ts` (CRUD, COMPETICOES_GERIR+âmbito) e `scouting.ts` (CRUD ObservacaoAdversario, SCOUTING_GERIR); schema `competicao.ts`. UI `CompeticoesLista` (`/jogos/competicoes`) e `ScoutingLista` (`/jogos/scouting`), ligadas a partir da página de Jogos. Fase 5 concluída (exceto enhancements: seletor de competição no jogo, agregação eventos→estatísticas).

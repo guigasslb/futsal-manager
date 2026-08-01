@@ -45,7 +45,7 @@ export function BarraTopo({ nomeUtilizador, epocas, epocaAtivaId, nomeClube, log
   const [pending, startTransition] = useTransition();
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-cinza-200 bg-white px-4 gap-3">
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-cinza-200 bg-white px-4 gap-3 print:hidden">
       {/* Logo / identidade do clube */}
       <Link
         href="/dashboard"

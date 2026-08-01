@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, Pencil } from "lucide-react";
+import { ChevronLeft, Pencil, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { obterAtleta, obterEstatisticasAtleta } from "@/lib/actions/atletas";
@@ -62,12 +62,20 @@ export default async function PerfilAtletaPage({
           <ChevronLeft className="h-4 w-4" />
           Plantel
         </Link>
-        <Button asChild variant="outline">
-          <Link href={`/plantel/${a.id}/editar`}>
-            <Pencil className="h-4 w-4" />
-            Editar
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link href={`/plantel/${a.id}/relatorio`}>
+              <FileText className="h-4 w-4" />
+              Relatório
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href={`/plantel/${a.id}/editar`}>
+              <Pencil className="h-4 w-4" />
+              Editar
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Cabeçalho de identidade */}

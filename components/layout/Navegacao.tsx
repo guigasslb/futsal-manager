@@ -38,7 +38,7 @@ export function Navegacao() {
   return (
     <>
       {/* ── Sidebar (tablet / PC) ── */}
-      <nav className="hidden md:flex w-[220px] flex-shrink-0 flex-col border-r border-cinza-200 bg-white">
+      <nav className="hidden md:flex w-[220px] flex-shrink-0 flex-col border-r border-cinza-200 bg-white print:hidden">
         <ul className="flex flex-col gap-1 p-3">
           {ITENS.map(({ href, label, icon: Icon }) => (
             <li key={href}>
@@ -65,7 +65,7 @@ export function Navegacao() {
       </nav>
 
       {/* ── Bottom nav (móvel) ── */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-cinza-200 bg-white md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-cinza-200 bg-white md:hidden print:hidden">
         {/* Menu "Mais" expandido */}
         {maisAberto && (
           <>
