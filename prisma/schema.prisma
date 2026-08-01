@@ -46,9 +46,52 @@ model Utilizador {
   atualizadoEm DateTime @updatedAt
 
   membros           MembroClube[]
-  sessoesCriadas    Sessao[]    @relation("SessaoCriador")
-  jogosCriados      Jogo[]      @relation("JogoCriador")
-  exerciciosCriados Exercicio[] @relation("ExercicioCriador")
+  sessoesCriadas    Sessao[]     @relation("SessaoCriador")
+  jogosCriados      Jogo[]       @relation("JogoCriador")
+  exerciciosCriados Exercicio[]  @relation("ExercicioCriador")
+  modelosJogo       ModeloJogo[] @relation("ModeloJogoAutor")
+}
+
+// ─────────────────────────────────────────────
+// MODELO DE JOGO E QUADRO TÁTICO
+// ─────────────────────────────────────────────
+
+// Metodologia do treinador. Propriedade determinada pela licença (secção 4.2). Reutiliza o editor de campo.
+model ModeloJogo {
+  id                  String              @id @default(cuid())
+  autorId             String
+  autor               Utilizador          @relation("ModeloJogoAutor", fields: [autorId], references: [id])
+  proprietario        PropriedadeConteudo @default(CLUBE)
+  clubeProprietarioId String?
+  nome                String
+  momento             MomentoJogo
+  principios          String?             @db.Text
+  diagrama            Json?
+  criadoEm            DateTime            @default(now())
+  atualizadoEm        DateTime            @updatedAt
+
+  @@index([clubeProprietarioId])
+  @@index([autorId])
+}
+
+enum MomentoJogo {
+  ORG_OFENSIVA
+  ORG_DEFENSIVA
+  TRANS_OFENSIVA
+  TRANS_DEFENSIVA
+  BOLAS_PARADAS
+}
+
+// Quadro tático específico de um jogo (do clube).
+model QuadroTatico {
+  id       String  @id @default(cuid())
+  jogoId   String
+  jogo     Jogo    @relation(fields: [jogoId], references: [id], onDelete: Cascade)
+  nome     String
+  diagrama Json?
+  notas    String? @db.Text
+
+  @@index([jogoId])
 }
 
 // Adesão utilizador↔clube. REGRA (lógica): no máximo UMA adesão ATIVA por utilizador.
@@ -391,6 +434,7 @@ model Jogo {
 
   convocatorias Convocatoria[]
   estatisticas  EstatisticaAtleta[]
+  quadros       QuadroTatico[]
 
   @@index([epocaId, escalaoId, data])
 }
