@@ -46,7 +46,7 @@ export default async function AppLayout({
       <div className="flex flex-1 overflow-hidden">
         <Navegacao />
 
-        <main className="flex-1 overflow-y-auto p-4 pb-20 md:pb-6 md:p-6">
+        <main className="flex-1 overflow-y-auto bg-gradient-to-b from-azul-50 via-cinza-50 to-cinza-50 p-4 pb-20 md:pb-6 md:p-6">
           <div className="mx-auto max-w-[1200px]">
             {!epocaAtiva && (
               <div className="mb-4 rounded-md border border-ambar-500/30 bg-ambar-500/10 px-4 py-3 text-corpo text-cinza-900">

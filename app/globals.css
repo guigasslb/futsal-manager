@@ -66,3 +66,29 @@
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
+
+@layer components {
+  /* Cartão com profundidade (sombra em duas camadas, cantos suaves) */
+  .card-base {
+    @apply rounded-xl border border-cinza-200/80 bg-white;
+    box-shadow:
+      0 1px 2px rgba(16, 24, 40, 0.04),
+      0 6px 20px -8px rgba(16, 24, 40, 0.12);
+  }
+
+  .card-hover {
+    @apply transition-all duration-200;
+  }
+  .card-hover:hover {
+    box-shadow:
+      0 2px 4px rgba(16, 24, 40, 0.05),
+      0 12px 28px -8px rgba(26, 47, 212, 0.2);
+    transform: translateY(-2px);
+  }
+
+  /* Chip de ícone com a cor do clube (usa a variável de branding) */
+  .chip-clube {
+    background-color: color-mix(in srgb, var(--cor-primaria, #1a2fd4) 12%, white);
+    color: var(--cor-primaria, #1a2fd4);
+  }
+}

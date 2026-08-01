@@ -1,13 +1,24 @@
 import Link from "next/link";
-import { Plus, Calendar, Trophy, Users, ClipboardCheck } from "lucide-react";
+import {
+  Plus,
+  Calendar,
+  Trophy,
+  Users,
+  ClipboardCheck,
+  UserPlus,
+  CalendarPlus,
+  ChevronRight,
+  Dumbbell,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/db";
 import { obterEpocaAtiva, obterClubeIdAtual } from "@/lib/epoca-context";
+import { obterClubeAtivo } from "@/lib/permissoes";
 import { EstadoVazio } from "@/components/layout/EstadosUI";
 
 function formatarDataHora(data: Date): string {
   return new Date(data).toLocaleString("pt-PT", {
-    weekday: "short",
+    weekday: "long",
     day: "2-digit",
     month: "short",
     hour: "2-digit",
@@ -17,7 +28,7 @@ function formatarDataHora(data: Date): string {
 
 function formatarData(data: Date): string {
   return new Date(data).toLocaleDateString("pt-PT", {
-    weekday: "short",
+    weekday: "long",
     day: "2-digit",
     month: "short",
   });
@@ -46,7 +57,8 @@ export default async function DashboardPage() {
 
   const agora = new Date();
 
-  const [proximaSessao, proximoJogo, nAtletas, nSessoes, nJogos] = await Promise.all([
+  const [clube, proximaSessao, proximoJogo, nAtletas, nSessoes, nJogos] = await Promise.all([
+    obterClubeAtivo(),
     prisma.sessao.findFirst({
       where: { epocaId: epoca.id, escalao: { clubeId }, data: { gte: agora } },
       include: { escalao: { select: { nome: true } } },
@@ -62,31 +74,40 @@ export default async function DashboardPage() {
     prisma.jogo.count({ where: { epocaId: epoca.id, escalao: { clubeId } } }),
   ]);
 
-  const semEventos = !proximaSessao && !proximoJogo;
-
   return (
     <div className="space-y-8">
-      <h1>Início</h1>
+      {/* Cabeçalho */}
+      <div>
+        <h1>Início</h1>
+        <p className="mt-1 text-corpo-sec text-cinza-500">
+          {clube?.nome ?? "Clube"} · Época {epoca.nome}
+        </p>
+      </div>
 
       {/* Próximos eventos */}
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="rounded-lg border border-cinza-200 bg-white p-5 shadow-card">
-          <p className="mb-2 flex items-center gap-1.5 text-legenda font-medium uppercase tracking-wide text-cinza-500">
-            <Calendar className="h-4 w-4" />
-            Próximo treino
-          </p>
+        {/* Próximo treino */}
+        <div className="card-base p-5">
+          <div className="mb-3 flex items-center gap-2.5">
+            <span className="chip-clube flex h-9 w-9 items-center justify-center rounded-lg">
+              <Calendar className="h-5 w-5" />
+            </span>
+            <p className="text-legenda font-semibold uppercase tracking-wide text-cinza-500">
+              Próximo treino
+            </p>
+          </div>
           {proximaSessao ? (
             <>
-              <p className="text-corpo font-semibold text-cinza-900 capitalize">
+              <p className="text-titulo-seccao font-semibold text-cinza-900 first-letter:uppercase">
                 {formatarDataHora(proximaSessao.data)}
               </p>
-              <p className="text-corpo-sec text-cinza-600">
+              <p className="mt-0.5 text-corpo-sec text-cinza-600">
                 {proximaSessao.escalao.nome}
                 {proximaSessao.local ? ` · ${proximaSessao.local}` : ""}
               </p>
-              <div className="mt-3 flex gap-2">
-                <Button asChild size="sm" variant="outline">
-                  <Link href={`/treinos/${proximaSessao.id}`}>Ver</Link>
+              <div className="mt-4 flex gap-2">
+                <Button asChild size="sm">
+                  <Link href={`/treinos/${proximaSessao.id}`}>Ver sessão</Link>
                 </Button>
                 <Button asChild size="sm" variant="outline">
                   <Link href={`/treinos/${proximaSessao.id}`}>
@@ -97,26 +118,39 @@ export default async function DashboardPage() {
               </div>
             </>
           ) : (
-            <p className="text-corpo-sec text-cinza-500">Sem treinos agendados.</p>
+            <div className="flex flex-col items-start gap-3 py-2">
+              <p className="text-corpo-sec text-cinza-500">Sem treinos agendados.</p>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/treinos/novo">
+                  <Plus className="h-4 w-4" />
+                  Agendar treino
+                </Link>
+              </Button>
+            </div>
           )}
         </div>
 
-        <div className="rounded-lg border border-cinza-200 bg-white p-5 shadow-card">
-          <p className="mb-2 flex items-center gap-1.5 text-legenda font-medium uppercase tracking-wide text-cinza-500">
-            <Trophy className="h-4 w-4" />
-            Próximo jogo
-          </p>
+        {/* Próximo jogo */}
+        <div className="card-base p-5">
+          <div className="mb-3 flex items-center gap-2.5">
+            <span className="chip-clube flex h-9 w-9 items-center justify-center rounded-lg">
+              <Trophy className="h-5 w-5" />
+            </span>
+            <p className="text-legenda font-semibold uppercase tracking-wide text-cinza-500">
+              Próximo jogo
+            </p>
+          </div>
           {proximoJogo ? (
             <>
-              <p className="text-corpo font-semibold text-cinza-900 capitalize">
+              <p className="text-titulo-seccao font-semibold text-cinza-900 first-letter:uppercase">
                 {formatarData(proximoJogo.data)}
               </p>
-              <p className="text-corpo-sec text-cinza-600">
+              <p className="mt-0.5 text-corpo-sec text-cinza-600">
                 vs {proximoJogo.adversario} ({proximoJogo.casaFora === "CASA" ? "Casa" : "Fora"})
               </p>
-              <div className="mt-3 flex gap-2">
-                <Button asChild size="sm" variant="outline">
-                  <Link href={`/jogos/${proximoJogo.id}`}>Ver</Link>
+              <div className="mt-4 flex gap-2">
+                <Button asChild size="sm">
+                  <Link href={`/jogos/${proximoJogo.id}`}>Ver jogo</Link>
                 </Button>
                 <Button asChild size="sm" variant="outline">
                   <Link href={`/jogos/${proximoJogo.id}`}>
@@ -127,53 +161,85 @@ export default async function DashboardPage() {
               </div>
             </>
           ) : (
-            <p className="text-corpo-sec text-cinza-500">Sem jogos agendados.</p>
+            <div className="flex flex-col items-start gap-3 py-2">
+              <p className="text-corpo-sec text-cinza-500">Sem jogos agendados.</p>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/jogos/novo">
+                  <Plus className="h-4 w-4" />
+                  Registar jogo
+                </Link>
+              </Button>
+            </div>
           )}
         </div>
       </div>
 
-      {semEventos && (
-        <p className="text-corpo-sec text-cinza-500">
-          Ainda não há treinos ou jogos agendados nesta época.
-        </p>
-      )}
-
       {/* Ações rápidas */}
       <div className="space-y-3">
-        <p className="text-legenda font-medium uppercase tracking-wide text-cinza-500">
+        <p className="text-legenda font-semibold uppercase tracking-wide text-cinza-500">
           Ações rápidas
         </p>
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline">
-            <Link href="/treinos/novo">
-              <Plus className="h-4 w-4" />
-              Nova sessão
-            </Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/jogos/novo">
-              <Plus className="h-4 w-4" />
-              Novo jogo
-            </Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/plantel/novo">
-              <Plus className="h-4 w-4" />
-              Novo atleta
-            </Link>
-          </Button>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <AcaoRapida href="/treinos/novo" icon={CalendarPlus} titulo="Nova sessão" desc="Planear um treino" />
+          <AcaoRapida href="/jogos/novo" icon={Trophy} titulo="Novo jogo" desc="Registar um jogo" />
+          <AcaoRapida href="/plantel/novo" icon={UserPlus} titulo="Novo atleta" desc="Adicionar ao plantel" />
         </div>
       </div>
 
       {/* Resumo */}
       <div className="space-y-3">
-        <p className="text-legenda font-medium uppercase tracking-wide text-cinza-500">
+        <p className="text-legenda font-semibold uppercase tracking-wide text-cinza-500">
           Resumo — {epoca.nome}
         </p>
-        <p className="text-corpo text-cinza-900">
-          {nAtletas} atletas · {nSessoes} sessões · {nJogos} jogos nesta época
-        </p>
+        <div className="grid grid-cols-3 gap-3">
+          <StatTile valor={nAtletas} label="atletas" icon={Users} />
+          <StatTile valor={nSessoes} label="sessões" icon={Dumbbell} />
+          <StatTile valor={nJogos} label="jogos" icon={Trophy} />
+        </div>
       </div>
+    </div>
+  );
+}
+
+function AcaoRapida({
+  href,
+  icon: Icon,
+  titulo,
+  desc,
+}: {
+  href: string;
+  icon: typeof Plus;
+  titulo: string;
+  desc: string;
+}) {
+  return (
+    <Link href={href} className="card-base card-hover group flex items-center gap-3 p-4">
+      <span className="chip-clube flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg">
+        <Icon className="h-5 w-5" />
+      </span>
+      <div className="flex-1">
+        <p className="text-corpo font-semibold text-cinza-900">{titulo}</p>
+        <p className="text-legenda text-cinza-500">{desc}</p>
+      </div>
+      <ChevronRight className="h-4 w-4 text-cinza-300 transition-transform group-hover:translate-x-0.5 group-hover:text-cinza-400" />
+    </Link>
+  );
+}
+
+function StatTile({
+  valor,
+  label,
+  icon: Icon,
+}: {
+  valor: number;
+  label: string;
+  icon: typeof Plus;
+}) {
+  return (
+    <div className="card-base flex flex-col gap-1 p-4">
+      <Icon className="h-4 w-4 text-cinza-300" />
+      <span className="text-[28px] font-bold leading-none text-cinza-900 tabular-nums">{valor}</span>
+      <span className="text-legenda text-cinza-500">{label}</span>
     </div>
   );
 }
