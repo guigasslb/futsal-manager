@@ -124,7 +124,7 @@ export default async function PlantelPage({
                 href={`/plantel/${a.id}`}
                 className="flex flex-col items-center gap-3 rounded-lg border border-cinza-200 bg-white p-4 text-center shadow-card transition-all hover:border-azul-300 hover:shadow-md"
               >
-                <AvatarAtleta nome={a.nome} tamanho="lg" />
+                <AvatarAtleta nome={a.nome} tamanho="lg" fotoUrl={a.fotoUrl} />
                 <div className="w-full">
                   <p className="truncate text-corpo font-semibold text-cinza-900">{a.nome}</p>
                   <p className="text-legenda text-cinza-600">
@@ -133,9 +133,9 @@ export default async function PlantelPage({
                         #{a.numero}
                       </span>
                     )}
-                    {a.numero != null && a.posicao ? " · " : ""}
-                    {a.posicao ? ABREV_POSICAO[a.posicao] : ""}
-                    {a.numero == null && !a.posicao ? "—" : ""}
+                    {a.numero != null && a.posicoes.length ? " · " : ""}
+                    {a.posicoes.map((p) => ABREV_POSICAO[p]).join(", ")}
+                    {a.numero == null && a.posicoes.length === 0 ? "—" : ""}
                   </p>
                 </div>
               </Link>

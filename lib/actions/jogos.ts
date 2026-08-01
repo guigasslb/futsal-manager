@@ -19,7 +19,7 @@ const INCLUDE_DETALHE = {
   escalao: { select: { id: true, nome: true } },
   convocatorias: {
     include: {
-      atleta: { select: { id: true, nome: true, numero: true, posicao: true } },
+      atleta: { select: { id: true, nome: true, numero: true, posicoes: true } },
     },
   },
   estatisticas: { include: { valoresMetricas: true } },

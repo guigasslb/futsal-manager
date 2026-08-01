@@ -30,9 +30,9 @@ import {
   guardarRelatorio,
 } from "@/lib/actions/jogos";
 import { LABEL_UTILIZACAO } from "@/lib/schemas/jogo";
-import type { Posicao, TipoMetrica, Utilizacao } from "@prisma/client";
+import type { TipoMetrica, Utilizacao } from "@prisma/client";
 
-type Atleta = { id: string; nome: string; numero: number | null; posicao: Posicao | null };
+type Atleta = { id: string; nome: string; numero: number | null; eGR: boolean };
 
 type Metrica = { id: string; nome: string; tipo: TipoMetrica; ativa: boolean };
 
@@ -250,7 +250,7 @@ export function JogoDetalhe({
             <div className="space-y-3">
               {convocadosLista.map((a) => {
                 const e = estatDe(a.id);
-                const eGR = atletaPorId.get(a.id)?.posicao === "GUARDA_REDES";
+                const eGR = atletaPorId.get(a.id)?.eGR ?? false;
                 return (
                   <div
                     key={a.id}

@@ -220,32 +220,41 @@ model Escalao {
   clube                    Clube    @relation(fields: [clubeId], references: [id])
   criadoEm                 DateTime @default(now())
 
-  atletas      Atleta[]
-  sessoes      Sessao[]
-  jogos        Jogo[]
-  atribuicoes  AtribuicaoEscalao[]
-  planeamentos Planeamento[]
-  competicoes  Competicao[]
+  atletas            Atleta[]            @relation("AtletaEscalaoPrincipal")
+  atletasSecundarios Atleta[]            @relation("AtletaEscalaoSecundario")
+  sessoes            Sessao[]
+  jogos              Jogo[]
+  atribuicoes        AtribuicaoEscalao[]
+  planeamentos       Planeamento[]
+  competicoes        Competicao[]
 
   @@index([clubeId])
 }
 
 model Atleta {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   nome           String
   dataNascimento DateTime?
-  posicao        Posicao?
+  posicoes       Posicao[] // um atleta pode ter várias posições
   numero         Int?
   observacoes    String?   @db.Text
+  fotoUrl        String? // por URL (sem upload por agora)
   ativo          Boolean   @default(true)
   dataIngresso   DateTime? // para a taxa de presença (secção 10); fallback = criadoEm
 
-  // Um atleta pertence a um escalão NUMA época.
-  // Se transitar de escalão/época, cria-se novo registo (histórico preservado).
-  escalaoId String
-  escalao   Escalao @relation(fields: [escalaoId], references: [id])
-  epocaId   String
-  epoca     Epoca   @relation(fields: [epocaId], references: [id])
+  // Dados do encarregado de educação (RGPD — minimização).
+  encarregadoNome     String?
+  encarregadoContacto String?
+  encarregadoEmail    String?
+
+  // Um atleta pertence a um escalão principal NUMA época, podendo jogar
+  // também num escalão secundário (opcional).
+  escalaoId           String
+  escalao             Escalao  @relation("AtletaEscalaoPrincipal", fields: [escalaoId], references: [id])
+  escalaoSecundarioId String?
+  escalaoSecundario   Escalao? @relation("AtletaEscalaoSecundario", fields: [escalaoSecundarioId], references: [id])
+  epocaId             String
+  epoca               Epoca    @relation(fields: [epocaId], references: [id])
 
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
@@ -257,6 +266,7 @@ model Atleta {
   consentimentos Consentimento[]
 
   @@index([escalaoId])
+  @@index([escalaoSecundarioId])
   @@index([epocaId])
   @@index([epocaId, escalaoId, ativo])
 }

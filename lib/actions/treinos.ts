@@ -28,7 +28,7 @@ const INCLUDE_DETALHE = {
     },
   },
   presencas: {
-    include: { atleta: { select: { id: true, nome: true, numero: true, posicao: true } } },
+    include: { atleta: { select: { id: true, nome: true, numero: true, posicoes: true } } },
   },
 } as const;
 

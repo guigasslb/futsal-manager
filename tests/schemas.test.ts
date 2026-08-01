@@ -29,17 +29,20 @@ describe("atletaSchema", () => {
     );
   });
 
-  it("rejeita posição inválida", () => {
-    const r = atletaSchema.safeParse({ nome: "João", escalaoId: CUID, posicao: "AVANCADO" });
+  it("rejeita posição inválida no array de posições", () => {
+    const r = atletaSchema.safeParse({ nome: "João", escalaoId: CUID, posicoes: ["AVANCADO"] });
     expect(r.success).toBe(false);
   });
 
-  it("aceita as cinco posições válidas", () => {
-    for (const posicao of ["GUARDA_REDES", "FIXO", "ALA", "PIVO", "UNIVERSAL"]) {
-      expect(atletaSchema.safeParse({ nome: "João", escalaoId: CUID, posicao }).success).toBe(
-        true,
-      );
-    }
+  it("aceita múltiplas posições válidas", () => {
+    const r = atletaSchema.safeParse({ nome: "João", escalaoId: CUID, posicoes: ["ALA", "PIVO"] });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.posicoes).toEqual(["ALA", "PIVO"]);
+  });
+
+  it("rejeita escalão secundário igual ao principal", () => {
+    const r = atletaSchema.safeParse({ nome: "João", escalaoId: CUID, escalaoSecundarioId: CUID });
+    expect(r.success).toBe(false);
   });
 });
 

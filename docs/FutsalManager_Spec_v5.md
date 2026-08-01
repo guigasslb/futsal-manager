@@ -261,19 +261,25 @@ model Escalao {
 }
 
 model Atleta {
-  id             String    @id @default(cuid())
-  nome           String
-  dataNascimento DateTime?
-  posicao        Posicao?  // GUARDA_REDES | FIXO | ALA | PIVO | UNIVERSAL
-  numero         Int?
-  observacoes    String?
-  fotoUrl        String?   // FUTURO
-  ativo          Boolean   @default(true) // soft delete
-  dataIngresso   DateTime? // para taxa de presença (secção 10); default = criadoEm
-  escalaoId      String
-  epocaId        String
-  criadoEm       DateTime  @default(now())
-  atualizadoEm   DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  nome                String
+  dataNascimento      DateTime?
+  posicoes            Posicao[] // um atleta pode ter VÁRIAS posições
+  numero              Int?
+  observacoes         String?
+  fotoUrl             String?   // por URL (sem upload por agora)
+  ativo               Boolean   @default(true) // soft delete
+  dataIngresso        DateTime? // para taxa de presença (secção 10); default = criadoEm
+  // Encarregado de educação (RGPD — minimização)
+  encarregadoNome     String?
+  encarregadoContacto String?
+  encarregadoEmail    String?
+  // Escalão principal + secundário opcional (um atleta joga em 1 ou 2 escalões)
+  escalaoId           String
+  escalaoSecundarioId String?
+  epocaId             String
+  criadoEm            DateTime  @default(now())
+  atualizadoEm        DateTime  @updatedAt
 
   consentimentos Consentimento[] // RGPD (secção 5)
 }
@@ -1275,6 +1281,8 @@ Valores/tiers, trial gratuito, limites (nº de escalões/atletas), faturação e
 ## 19. Changelog da documentação
 
 Toda a alteração a este documento é registada aqui, com data e descrição. Do mais recente para o mais antigo.
+
+- **2026-08-01** — **Melhorias pós-review (dono do produto).** (1) Layout: dashboard redesenhado (fundo com profundidade, `card-base`/`card-hover`/`chip-clube` em globals.css). (2) Fix: `EditorCampo.anular()` fazia setState do pai dentro de updater. (3) **Grupo A — modelo do Atleta:** `posicao` (única) → `posicoes Posicao[]` (posições múltiplas); `escalaoSecundarioId?` (atleta em 1–2 escalões; listagens incluem principal OU secundário); `fotoUrl` (por URL) + avatar com foto; campos do **encarregado de educação** (nome/contacto/email). Migração `20260801153513_grupo_a_atleta`. GR passa a `posicoes.includes(GUARDA_REDES)` em todo o lado. AtletaForm com posições em chips + escalão secundário + encarregado. 44 testes verdes. *(Backlog do review em memória: grupos B periodização/sessão, C equipa técnica, D exercícios, E estatística/visualização.)*
 
 - **2026-08-01** — **Fase 10 (PWA + polish) implementada.** PWA: `app/manifest.ts`, `public/icon.svg`, `public/sw.js` (SW seguro), `RegistarSW` no layout raiz, theme-color/appleWebApp. Caderneta: barra de progresso + celebração ao desbloquear. `print:hidden` na navegação. Build de produção verde. **Todas as 10 fases do produto final implementadas.** Afinações futuras: offline de escrita robusto, ícones PNG, gating de UI de permissões completo.
 - **2026-08-01** — **Fase 9 (Biblioteca curada) implementada.** `lib/biblioteca-arranque.ts` (10 exercícios reais com diagramas). Action `instalarBibliotecaArranque` (idempotente) + `InstalarBibliotecaButton` na biblioteca; incluída no seed do clube demo. Sem IA em runtime. 43 testes verdes.

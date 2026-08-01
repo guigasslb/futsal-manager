@@ -138,7 +138,7 @@ export default async function DetalheJogoPage({
           id: a.id,
           nome: a.nome,
           numero: a.numero,
-          posicao: a.posicao,
+          eGR: a.posicoes.includes("GUARDA_REDES"),
         }))}
         metricas={metricas.map((m) => ({
           id: m.id,

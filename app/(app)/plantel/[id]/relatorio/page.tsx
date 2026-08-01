@@ -25,7 +25,7 @@ export default async function RelatorioAtletaPage({
   const res = await obterAtleta(id);
   if (!res.sucesso) notFound();
   const a = res.dados;
-  const eGR = a.posicao === "GUARDA_REDES";
+  const eGR = a.posicoes.includes("GUARDA_REDES");
 
   const [resStats, resCad] = await Promise.all([
     obterEstatisticasAtleta(id),
@@ -38,7 +38,7 @@ export default async function RelatorioAtletaPage({
   const totalHab = resCad.sucesso ? resCad.dados.length : 0;
 
   const meta: string[] = [];
-  if (a.posicao) meta.push(LABEL_POSICAO[a.posicao]);
+  if (a.posicoes.length) meta.push(a.posicoes.map((p) => LABEL_POSICAO[p]).join(", "));
   if (a.numero != null) meta.push(`#${a.numero}`);
   meta.push(a.escalao.nome);
   meta.push(a.epoca.nome);
