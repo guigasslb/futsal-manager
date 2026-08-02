@@ -30,10 +30,11 @@ model Clube {
   perfis       Perfil[]
   epocas       Epoca[]
   escaloes     Escalao[]
-  exercicios   Exercicio[]
-  metricas     MetricaConfig[]
-  habilidades  Habilidade[]
-  reunioes     Reuniao[]
+  exercicios    Exercicio[]
+  metricas      MetricaConfig[]
+  habilidades   Habilidade[]
+  reunioes      Reuniao[]
+  subcategorias SubcategoriaExercicio[]
 }
 
 // ─────────────────────────────────────────────
@@ -303,28 +304,45 @@ enum Posicao {
 // ─────────────────────────────────────────────
 
 model Exercicio {
-  id           String              @id @default(cuid())
-  nome         String
-  descricao    String?             @db.Text
-  objetivo     String?             @db.Text
-  duracaoMin   Int?
-  categoria    CategoriaExercicio?
-  diagrama     Json? // DiagramaCampo (ver secção 11 da bíblia)
-  clubeId      String
-  clube        Clube               @relation(fields: [clubeId], references: [id])
-  criadorId    String // autor (quem o criou)
-  criador      Utilizador          @relation("ExercicioCriador", fields: [criadorId], references: [id])
-  // Propriedade determinada pela licença (secção 4.2). Transitório: em Fase 1 os exercícios
-  // existentes continuam ligados a clubeId; a portabilidade completa consolida-se em fase posterior.
-  proprietario PropriedadeConteudo @default(CLUBE)
-  origemSeed   Boolean             @default(false)
-  criadoEm     DateTime            @default(now())
-  atualizadoEm DateTime            @updatedAt
+  id                String                       @id @default(cuid())
+  nome              String
+  descricao         String?                      @db.Text
+  objetivo          String?                      @db.Text
+  duracaoMin        Int?
+  categoriaPrincipal CategoriaExercicioPrincipal?
+  subcategoriaId    String?
+  subcategoria      SubcategoriaExercicio?       @relation(fields: [subcategoriaId], references: [id])
+  diagrama          Json? // DiagramaCampo (ver secção 11 da bíblia)
+  clubeId           String
+  clube             Clube                        @relation(fields: [clubeId], references: [id])
+  criadorId         String
+  criador           Utilizador                   @relation("ExercicioCriador", fields: [criadorId], references: [id])
+  proprietario      PropriedadeConteudo          @default(CLUBE)
+  origemSeed        Boolean                      @default(false)
+  criadoEm          DateTime                     @default(now())
+  atualizadoEm      DateTime                     @updatedAt
 
   sessoes SessaoExercicio[]
 
   // Exercícios não são filtrados por época — a biblioteca é reutilizável entre épocas.
   @@index([clubeId])
+  @@index([clubeId, categoriaPrincipal])
+  @@index([subcategoriaId])
+}
+
+// Subcategoria de exercício, customizável por clube (ex: "Finalização", "1x1", "Contra-ataque").
+model SubcategoriaExercicio {
+  id         String                       @id @default(cuid())
+  clubeId    String
+  clube      Clube                        @relation(fields: [clubeId], references: [id], onDelete: Cascade)
+  nome       String
+  categoria  CategoriaExercicioPrincipal
+  ordem      Int                          @default(0)
+  sistema    Boolean                      @default(false) // instalada por seed, não apagável pelo utilizador
+  criadoEm   DateTime                     @default(now())
+
+  exercicios Exercicio[]
+
   @@index([clubeId, categoria])
 }
 
@@ -334,16 +352,13 @@ enum PropriedadeConteudo {
   TREINADOR
 }
 
-enum CategoriaExercicio {
-  ATIVACAO
-  TECNICA_INDIVIDUAL
-  FINALIZACAO
-  POSSE_BOLA
-  TRANSICOES
-  SITUACOES_JOGO
-  JOGO_REDUZIDO
+enum CategoriaExercicioPrincipal {
+  ATAQUE
+  DEFESA
+  TRANSICAO
   BOLAS_PARADAS
   FISICO
+  GUARDA_REDES
   OUTRO
 }
 

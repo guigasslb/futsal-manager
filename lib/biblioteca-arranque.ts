@@ -2,12 +2,12 @@
 // Conteúdo autorado (uma vez), sem IA em runtime. Campo 400×200 unidades (secção 11).
 // Instalável num clube via lib/actions/exercicios.ts → instalarBibliotecaArranque().
 
-import type { CategoriaExercicio } from "@prisma/client";
+import type { CategoriaExercicioPrincipal } from "@prisma/client";
 import type { DiagramaCampo } from "@/lib/schemas/exercicio";
 
 export interface ExercicioArranque {
   nome: string;
-  categoria: CategoriaExercicio;
+  categoriaPrincipal: CategoriaExercicioPrincipal;
   duracaoMin: number;
   objetivo: string;
   descricao: string;
@@ -27,7 +27,7 @@ const seta = (
 export const BIBLIOTECA_ARRANQUE: ExercicioArranque[] = [
   {
     nome: "Ativação — Roda de passe",
-    categoria: "ATIVACAO",
+    categoriaPrincipal: "FISICO",
     duracaoMin: 10,
     objetivo: "Elevar a temperatura corporal e melhorar a qualidade do passe curto.",
     descricao:
@@ -53,7 +53,7 @@ export const BIBLIOTECA_ARRANQUE: ExercicioArranque[] = [
   },
   {
     nome: "Passe e receção em losango",
-    categoria: "TECNICA_INDIVIDUAL",
+    categoriaPrincipal: "ATAQUE",
     duracaoMin: 12,
     objetivo: "Melhorar a orientação da receção e o passe com o pé de dentro.",
     descricao:
@@ -79,7 +79,7 @@ export const BIBLIOTECA_ARRANQUE: ExercicioArranque[] = [
   },
   {
     nome: "Condução em slalom + finalização",
-    categoria: "FINALIZACAO",
+    categoriaPrincipal: "ATAQUE",
     duracaoMin: 15,
     objetivo: "Condução de bola em espaço reduzido e finalização em corrida.",
     descricao:
@@ -108,7 +108,7 @@ export const BIBLIOTECA_ARRANQUE: ExercicioArranque[] = [
   },
   {
     nome: "Manutenção 4x4+3 apoios",
-    categoria: "POSSE_BOLA",
+    categoriaPrincipal: "ATAQUE",
     duracaoMin: 18,
     objetivo: "Manter a posse sob pressão, criar linhas de passe e apoio.",
     descricao:
@@ -133,7 +133,7 @@ export const BIBLIOTECA_ARRANQUE: ExercicioArranque[] = [
   },
   {
     nome: "Transição ofensiva 3x2",
-    categoria: "TRANSICOES",
+    categoriaPrincipal: "TRANSICAO",
     duracaoMin: 15,
     objetivo: "Explorar a superioridade numérica na transição rápida.",
     descricao:
@@ -160,7 +160,7 @@ export const BIBLIOTECA_ARRANQUE: ExercicioArranque[] = [
   },
   {
     nome: "Situação 1x1 com apoio",
-    categoria: "SITUACOES_JOGO",
+    categoriaPrincipal: "ATAQUE",
     duracaoMin: 12,
     objetivo: "Resolver o 1x1 ofensivo com uso do apoio para fixar e encarar.",
     descricao:
@@ -185,7 +185,7 @@ export const BIBLIOTECA_ARRANQUE: ExercicioArranque[] = [
   },
   {
     nome: "Jogo reduzido 3x3 com balizas pequenas",
-    categoria: "JOGO_REDUZIDO",
+    categoriaPrincipal: "ATAQUE",
     duracaoMin: 20,
     objetivo: "Tomada de decisão, transições e ocupação de espaços em contexto real.",
     descricao:
@@ -205,7 +205,7 @@ export const BIBLIOTECA_ARRANQUE: ExercicioArranque[] = [
   },
   {
     nome: "Canto ofensivo — bloqueio e cortina",
-    categoria: "BOLAS_PARADAS",
+    categoriaPrincipal: "BOLAS_PARADAS",
     duracaoMin: 12,
     objetivo: "Criar espaço no canto com bloqueio direto e finalização.",
     descricao:
@@ -227,7 +227,7 @@ export const BIBLIOTECA_ARRANQUE: ExercicioArranque[] = [
   },
   {
     nome: "Circuito físico com bola",
-    categoria: "FISICO",
+    categoriaPrincipal: "FISICO",
     duracaoMin: 15,
     objetivo: "Trabalho de resistência específica intercalado com técnica.",
     descricao:
@@ -250,7 +250,7 @@ export const BIBLIOTECA_ARRANQUE: ExercicioArranque[] = [
   },
   {
     nome: "Saída de bola pressionada (4-0)",
-    categoria: "SITUACOES_JOGO",
+    categoriaPrincipal: "ATAQUE",
     duracaoMin: 18,
     objetivo: "Construir a saída sob pressão alta com estrutura 4-0.",
     descricao:

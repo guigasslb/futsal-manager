@@ -2,6 +2,7 @@ import { PrismaClient, TipoMetrica, NivelHabilidade, Prisma } from "@prisma/clie
 import bcrypt from "bcryptjs";
 import { PERFIS_ARRANQUE } from "../lib/permissoes-catalogo";
 import { BIBLIOTECA_ARRANQUE } from "../lib/biblioteca-arranque";
+import { SUBCATEGORIAS_ARRANQUE } from "../lib/subcategorias-arranque";
 
 const prisma = new PrismaClient();
 
@@ -122,14 +123,25 @@ async function main() {
   // Silenciar "declarado mas não usado" (traquinas fica disponível para futuros dados)
   void traquinas;
 
-  // 8. Biblioteca de exercícios curada de arranque (Fase 9)
+  // 8. Subcategorias de exercícios (predefinições do sistema)
+  await prisma.subcategoriaExercicio.createMany({
+    data: SUBCATEGORIAS_ARRANQUE.map((s) => ({
+      nome: s.nome,
+      categoria: s.categoria,
+      ordem: s.ordem,
+      clubeId: clube.id,
+      sistema: true,
+    })),
+  });
+
+  // 9. Biblioteca de exercícios curada de arranque (Fase 9)
   await prisma.exercicio.createMany({
     data: BIBLIOTECA_ARRANQUE.map((e) => ({
       nome: e.nome,
       descricao: e.descricao,
       objetivo: e.objetivo,
       duracaoMin: e.duracaoMin,
-      categoria: e.categoria,
+      categoriaPrincipal: e.categoriaPrincipal,
       diagrama: e.diagrama as unknown as Prisma.InputJsonValue,
       clubeId: clube.id,
       criadorId: goncalo.id,

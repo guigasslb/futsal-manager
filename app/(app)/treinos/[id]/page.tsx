@@ -107,13 +107,13 @@ export default async function DetalheSessaoPage({
             exercicio: {
               id: se.exercicio.id,
               nome: se.exercicio.nome,
-              categoria: se.exercicio.categoria,
+              categoriaPrincipal: se.exercicio.categoriaPrincipal,
             },
           }))}
           biblioteca={biblioteca.map((b) => ({
             id: b.id,
             nome: b.nome,
-            categoria: b.categoria,
+            categoriaPrincipal: b.categoriaPrincipal,
             duracaoMin: b.duracaoMin,
           }))}
         />

@@ -17,19 +17,19 @@ import {
   reordenarExercicios,
 } from "@/lib/actions/treinos";
 import { LABEL_CATEGORIA } from "@/lib/schemas/exercicio";
-import type { CategoriaExercicio } from "@prisma/client";
+import type { CategoriaExercicioPrincipal } from "@prisma/client";
 
 type ExercicioSessao = {
   id: string;
   ordem: number;
   duracaoMin: number | null;
-  exercicio: { id: string; nome: string; categoria: CategoriaExercicio | null };
+  exercicio: { id: string; nome: string; categoriaPrincipal: CategoriaExercicioPrincipal | null };
 };
 
 type ExercicioBiblioteca = {
   id: string;
   nome: string;
-  categoria: CategoriaExercicio | null;
+  categoriaPrincipal: CategoriaExercicioPrincipal | null;
   duracaoMin: number | null;
 };
 
@@ -108,7 +108,7 @@ export function GestorExercicios({
                     <div>
                       <p className="text-corpo font-medium text-cinza-900">{ex.nome}</p>
                       <p className="text-legenda text-cinza-500">
-                        {ex.categoria ? LABEL_CATEGORIA[ex.categoria] : "Sem categoria"}
+                        {ex.categoriaPrincipal ? LABEL_CATEGORIA[ex.categoriaPrincipal] : "Sem categoria"}
                         {ex.duracaoMin ? ` · ${ex.duracaoMin} min` : ""}
                       </p>
                     </div>
@@ -162,8 +162,8 @@ export function GestorExercicios({
                 <div className="flex-1">
                   <p className="text-corpo font-medium text-cinza-900">{e.exercicio.nome}</p>
                   <p className="text-legenda text-cinza-500">
-                    {e.exercicio.categoria
-                      ? LABEL_CATEGORIA[e.exercicio.categoria]
+                    {e.exercicio.categoriaPrincipal
+                      ? LABEL_CATEGORIA[e.exercicio.categoriaPrincipal]
                       : "Sem categoria"}
                     {e.duracaoMin ? ` · ${e.duracaoMin} min` : ""}
                   </p>

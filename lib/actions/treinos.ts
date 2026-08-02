@@ -24,7 +24,7 @@ const INCLUDE_DETALHE = {
     orderBy: { ordem: "asc" },
     include: {
       exercicio: {
-        select: { id: true, nome: true, duracaoMin: true, categoria: true, diagrama: true },
+        select: { id: true, nome: true, duracaoMin: true, categoriaPrincipal: true, diagrama: true },
       },
     },
   },

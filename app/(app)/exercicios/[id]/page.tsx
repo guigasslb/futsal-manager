@@ -44,8 +44,8 @@ export default async function DetalheExercicioPage({
       <div className="space-y-3">
         <h1 className="leading-tight">{e.nome}</h1>
         <div className="flex flex-wrap items-center gap-3">
-          {e.categoria && (
-            <Badge variant="secondary">{LABEL_CATEGORIA[e.categoria]}</Badge>
+          {e.categoriaPrincipal && (
+            <Badge variant="secondary">{LABEL_CATEGORIA[e.categoriaPrincipal]}</Badge>
           )}
           {e.duracaoMin && (
             <span className="flex items-center gap-1.5 text-corpo-sec text-cinza-600">

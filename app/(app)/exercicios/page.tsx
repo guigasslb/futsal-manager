@@ -8,7 +8,7 @@ import { CampoPesquisa } from "@/components/layout/CampoPesquisa";
 import { LABEL_CATEGORIA, CATEGORIAS, diagramaSchema } from "@/lib/schemas/exercicio";
 import { MiniaturaCampo } from "@/components/campo/MiniaturaCampo";
 import { InstalarBibliotecaButton } from "@/components/exercicios/InstalarBibliotecaButton";
-import type { CategoriaExercicio } from "@prisma/client";
+import type { CategoriaExercicioPrincipal } from "@prisma/client";
 
 export default async function ExerciciosPage({
   searchParams,
@@ -16,8 +16,8 @@ export default async function ExerciciosPage({
   searchParams: Promise<{ categoria?: string; q?: string }>;
 }) {
   const { categoria: categoriaParam, q } = await searchParams;
-  const categoria = CATEGORIAS.includes(categoriaParam as CategoriaExercicio)
-    ? (categoriaParam as CategoriaExercicio)
+  const categoria = CATEGORIAS.includes(categoriaParam as CategoriaExercicioPrincipal)
+    ? (categoriaParam as CategoriaExercicioPrincipal)
     : undefined;
 
   const res = await listarExercicios(categoria);
@@ -121,8 +121,8 @@ export default async function ExerciciosPage({
                   <p className="line-clamp-2 text-corpo-sec text-cinza-600">{e.objetivo}</p>
                 )}
                 <div className="mt-auto">
-                  {e.categoria ? (
-                    <Badge variant="secondary">{LABEL_CATEGORIA[e.categoria]}</Badge>
+                  {e.categoriaPrincipal ? (
+                    <Badge variant="secondary">{LABEL_CATEGORIA[e.categoriaPrincipal]}</Badge>
                   ) : (
                     <Badge variant="outline" className="text-cinza-400">
                       Sem categoria
