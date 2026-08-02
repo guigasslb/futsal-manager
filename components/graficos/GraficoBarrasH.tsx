@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 
-// Design system color tokens
-const C_BARRA = "#1A2FD4";       // azul-700 (série 1, sequential)
-const C_BARRA_HOVER = "#0F1E8A"; // azul-900
-const C_GRID = "#E2E5EF";        // cinza-200 (hairline)
-const C_TEXTO_MUTED = "#8A90A6"; // cinza-400 (axis/labels recessive)
-const C_TEXTO = "#4A4F63";       // cinza-600
+// Cor do clube (herda de --cor-primaria no layout) + neutros quentes da marca
+const C_BARRA = "var(--cor-primaria, #F0531E)";
+const C_BARRA_HOVER = "color-mix(in srgb, var(--cor-primaria, #F0531E) 80%, #000)";
+const C_GRID = "#E4E1DB";        // cinza-200 quente (hairline)
+const C_TEXTO_MUTED = "#98938D"; // cinza-400 (axis/labels)
+const C_TEXTO = "#57514A";       // cinza-600
 
 const LABEL_W = 148;
 const BAR_AREA = 200;
@@ -102,7 +102,7 @@ export function GraficoBarrasH({
                   y={PAD_V + i * ROW_H}
                   width={TOTAL_W}
                   height={ROW_H}
-                  fill="#F4F6FF"
+                  fill="color-mix(in srgb, var(--cor-primaria, #F0531E) 8%, white)"
                   rx={2}
                 />
               )}

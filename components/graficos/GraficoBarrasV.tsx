@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 
-// Sequential blue ramp for magnitude (presença %)
-const C_BARRA = "#1A2FD4";       // azul-700
-const C_BARRA_HOVER = "#0F1E8A"; // azul-900
-const C_BARRA_0 = "#E4E8FF";     // azul-100 (zero bar placeholder)
-const C_GRID = "#E2E5EF";
-const C_TEXTO_MUTED = "#8A90A6";
+// Cor do clube (herda de --cor-primaria) + neutros quentes
+const C_BARRA = "var(--cor-primaria, #F0531E)";
+const C_BARRA_HOVER = "color-mix(in srgb, var(--cor-primaria, #F0531E) 80%, #000)";
+const C_BARRA_0 = "color-mix(in srgb, var(--cor-primaria, #F0531E) 18%, white)"; // barra zero
+const C_GRID = "#E4E1DB";
+const C_TEXTO_MUTED = "#98938D";
 
 const ML = 28;   // left margin (y-axis)
 const MR = 8;

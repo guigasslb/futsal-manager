@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { listarEpocas } from "@/lib/actions/epocas";
 import { obterEpocaAtiva } from "@/lib/epoca-context";
 import { obterMembroAtual } from "@/lib/permissoes";
@@ -38,7 +39,15 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const session = await auth();
-  if (!session?.user) redirect("/login");
+  if (!session?.user?.id) redirect("/login");
+
+  // Sessão obsoleta (JWT válido mas utilizador já não existe — ex.: BD reseeded):
+  // enviar para /login (e não forçar /criar-clube).
+  const utilizadorExiste = await prisma.utilizador.findUnique({
+    where: { id: session.user.id },
+    select: { id: true },
+  });
+  if (!utilizadorExiste) redirect("/login");
 
   // Sem clube ativo → onboarding (criar clube ou aceitar convite).
   const membro = await obterMembroAtual();

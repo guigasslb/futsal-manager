@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { obterMembroAtual } from "@/lib/permissoes";
 import { CriarClubeForm } from "@/components/onboarding/CriarClubeForm";
 import {
@@ -12,7 +13,14 @@ import {
 
 export default async function CriarClubePage() {
   const session = await auth();
-  if (!session?.user) redirect("/login");
+  if (!session?.user?.id) redirect("/login");
+
+  // Sessão obsoleta → login (não deixar preso no /criar-clube).
+  const utilizadorExiste = await prisma.utilizador.findUnique({
+    where: { id: session.user.id },
+    select: { id: true },
+  });
+  if (!utilizadorExiste) redirect("/login");
 
   const membro = await obterMembroAtual();
   if (membro) redirect("/dashboard");
