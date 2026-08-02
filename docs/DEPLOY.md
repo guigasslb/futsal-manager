@@ -1,6 +1,17 @@
-# Guia de deploy — FutsalManager
+# Guia de deploy — FutsalCoach
 
 Complemento operacional da bíblia (`FutsalManager_Spec_v5.md`, secção 15). Passos para colocar a app em produção.
+
+## 0. Deploy rápido no Vercel (recomendado)
+
+1. Criar conta em **vercel.com** com "Continue with GitHub".
+2. **Add New → Project** → importar o repo `guigasslb/futsal-manager` (branch `main`).
+3. Vercel deteta Next.js automaticamente (build `npm run build`, que corre `prisma generate && next build`).
+4. **Environment Variables** — adicionar (secção 1): `DATABASE_URL`, `DIRECT_URL`, `AUTH_SECRET`, `AUTH_TRUST_HOST=true`.
+5. **Deploy**. No fim, a app fica em `https://<projeto>.vercel.app`.
+6. Migrações: a BD Supabase já tem o schema aplicado (`prisma migrate deploy` já corrido em dev). Numa BD nova, correr `npx prisma migrate deploy` com o `DATABASE_URL` de produção antes do primeiro acesso.
+
+> Prisma: o `generator` inclui `binaryTargets = ["native", "rhel-openssl-3.0.x"]` para o runtime serverless do Vercel. Cada `git push` para `main` faz redeploy automático.
 
 ## 1. Variáveis de ambiente (obrigatórias)
 

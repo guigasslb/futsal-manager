@@ -2,7 +2,9 @@
 // FutsalManager — Modelo de dados do MVP (secção 5.2 da especificação v4.0)
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // "native" para dev local; "rhel-openssl-3.0.x" para o runtime serverless (Vercel).
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
