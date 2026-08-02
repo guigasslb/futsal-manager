@@ -2,13 +2,14 @@
 
 import { useRef, useState } from "react";
 
-// Design system colors
-const C_S1 = "#1A2FD4";       // azul-700 — série 1 (golos)
-const C_S2 = "#E0900A";       // ambar-500 — série 2 (assistências); passes palette validator
+// Série 1 = cor do clube (herda de --cor-primaria); série 2 = âmbar (contraste).
+const C_S1 = "var(--cor-primaria, #F0531E)";
+const C_S1_DARK = "color-mix(in srgb, var(--cor-primaria, #F0531E) 80%, #000)";
+const C_S2 = "#E0900A";       // ambar-500 — série 2 (assistências)
 const C_SURFACE = "#ffffff";  // card surface for dot rings
-const C_GRID = "#E2E5EF";     // cinza-200 hairline
-const C_AXIS = "#E2E5EF";     // same
-const C_TEXTO_MUTED = "#8A90A6";
+const C_GRID = "#E4E1DB";     // cinza-200 quente hairline
+const C_AXIS = "#E4E1DB";
+const C_TEXTO_MUTED = "#98938D";
 
 const ML = 32;   // margin left (y-axis labels)
 const MR = 12;   // margin right
@@ -221,7 +222,7 @@ export function GraficoLinhas({
                 )}
                 {/* 2px surface ring */}
                 <circle cx={x} cy={yOf(p.valor1)} r={7} fill={C_SURFACE} />
-                <circle cx={x} cy={yOf(p.valor1)} r={5} fill={isHov ? "#0F1E8A" : C_S1} />
+                <circle cx={x} cy={yOf(p.valor1)} r={5} fill={isHov ? C_S1_DARK : C_S1} />
               </g>
             );
           })}

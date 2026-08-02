@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { Logo } from "@/components/layout/Logo";
 import {
@@ -12,7 +13,15 @@ import {
 
 export default async function LoginPage() {
   const session = await auth();
-  if (session?.user) redirect("/dashboard");
+  // Só redireciona se a sessão for válida (utilizador existe). Uma sessão obsoleta
+  // fica no login (evita loop login↔dashboard após reseed/conta apagada).
+  if (session?.user?.id) {
+    const existe = await prisma.utilizador.findUnique({
+      where: { id: session.user.id },
+      select: { id: true },
+    });
+    if (existe) redirect("/dashboard");
+  }
 
   return (
     <Card className="w-full max-w-sm">
