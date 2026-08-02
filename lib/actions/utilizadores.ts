@@ -9,7 +9,7 @@ import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
 import { convidarMembroSchema } from "@/lib/schemas/membro";
 import { alterarPasswordSchema, passwordSchema } from "@/lib/schemas/utilizador";
 
-const BCRYPT_COST = 10;
+const BCRYPT_COST = 12;
 const PATH = "/definicoes/membros";
 
 export interface MembroLista {

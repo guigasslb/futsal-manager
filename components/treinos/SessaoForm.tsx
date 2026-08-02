@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -189,9 +190,9 @@ export function SessaoForm({
           {planeamentosDoEscalao.length === 0 ? (
             <p className="text-legenda text-cinza-500">
               Nenhum planeamento para este escalão.{" "}
-              <a href="/treinos/periodizacao" className="underline hover:text-cinza-700">
+              <Link href="/treinos/periodizacao" className="underline hover:text-cinza-700">
                 Criar planeamento
-              </a>
+              </Link>
             </p>
           ) : (
             <>

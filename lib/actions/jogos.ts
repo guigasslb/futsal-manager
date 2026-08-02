@@ -6,7 +6,12 @@ import { auth } from "@/lib/auth";
 import { obterEpocaAtiva, obterClubeIdAtual } from "@/lib/epoca-context";
 import { exigirCapacidade, podeLerEscalao, escaloesLegiveis } from "@/lib/permissoes";
 import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
-import { jogoSchema, guardarEstatisticasSchema, eventoJogoSchema } from "@/lib/schemas/jogo";
+import {
+  jogoSchema,
+  guardarEstatisticasSchema,
+  eventoJogoSchema,
+  isVideoUrlValido,
+} from "@/lib/schemas/jogo";
 import { Prisma, type Epoca, type Jogo } from "@prisma/client";
 
 const PATH = "/jogos";
@@ -321,7 +326,7 @@ export async function definirVideo(jogoId: string, videoUrl: string): Promise<Re
   if (!perm.ok) return erro(perm.erro);
 
   const url = videoUrl.trim();
-  if (url && !/^https?:\/\//.test(url)) return erro("URL inválido");
+  if (!isVideoUrlValido(url)) return erro("Indica um link válido do YouTube (https)");
 
   await prisma.jogo.update({ where: { id: jogoId }, data: { videoUrl: url || null } });
   revalidatePath(`${PATH}/${jogoId}`);

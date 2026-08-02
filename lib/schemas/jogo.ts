@@ -1,5 +1,27 @@
 import { z } from "zod";
 
+/**
+ * Valida um URL de vídeo: só https e só domínios YouTube (secção 8 da bíblia).
+ * Impede esquemas perigosos (javascript:, data:) que `z.string().url()` aceita.
+ */
+const HOSTS_YOUTUBE = new Set([
+  "youtube.com",
+  "www.youtube.com",
+  "m.youtube.com",
+  "youtu.be",
+]);
+
+export function isVideoUrlValido(valor: string): boolean {
+  if (valor === "") return true; // vazio = sem vídeo
+  let url: URL;
+  try {
+    url = new URL(valor);
+  } catch {
+    return false;
+  }
+  return url.protocol === "https:" && HOSTS_YOUTUBE.has(url.hostname);
+}
+
 export const jogoSchema = z.object({
   data: z.coerce.date(),
   adversario: z.string().min(1, "Indica o adversário").max(100),
@@ -15,8 +37,8 @@ export const jogoSchema = z.object({
   faltas2aParte: z.number().int().min(0).max(50).nullable().optional(),
   videoUrl: z
     .string()
-    .url("URL inválido")
     .max(300)
+    .refine(isVideoUrlValido, "Indica um link válido do YouTube (https)")
     .optional()
     .or(z.literal("")),
 });

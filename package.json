@@ -18,6 +18,10 @@
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
+  "overrides": {
+    "postcss": "$postcss",
+    "sharp": "^0.35.0"
+  },
   "dependencies": {
     "@prisma/client": "^5.22.0",
     "@radix-ui/react-alert-dialog": "^1.1.23",
@@ -34,8 +38,8 @@
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "lucide-react": "^0.469.0",
-    "next": "15.1.0",
-    "next-auth": "5.0.0-beta.25",
+    "next": "^15.5.22",
+    "next-auth": "^5.0.0-beta.32",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "sonner": "^1.7.0",
@@ -50,8 +54,8 @@
     "@types/react-dom": "^19.0.0",
     "autoprefixer": "^10.4.20",
     "eslint": "^8.57.1",
-    "eslint-config-next": "15.1.0",
-    "postcss": "^8.4.49",
+    "eslint-config-next": "^15.5.22",
+    "postcss": "^8.5.25",
     "prisma": "^5.22.0",
     "tailwindcss": "^3.4.15",
     "tsx": "^4.19.2",

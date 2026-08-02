@@ -8,7 +8,7 @@ import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
 import { registarSchema, criarClubeSchema } from "@/lib/schemas/onboarding";
 import { PERFIS_ARRANQUE } from "@/lib/permissoes-catalogo";
 
-const BCRYPT_COST = 10;
+const BCRYPT_COST = 12;
 
 /** Registo de um novo utilizador (modo individual, sem clube). */
 export async function registar(dados: unknown): Promise<Resultado<void>> {

@@ -6,9 +6,17 @@ import { SUBCATEGORIAS_ARRANQUE } from "../lib/subcategorias-arranque";
 
 const prisma = new PrismaClient();
 
+// Em produção o seed NÃO usa password default — falha se não for fornecida,
+// para nunca criar contas com credencial pública num ambiente real.
+if (process.env.NODE_ENV === "production" && (!process.env.SEED_PASS_GONCALO || !process.env.SEED_PASS_ADJUNTO)) {
+  throw new Error(
+    "Seed abortado: define SEED_PASS_GONCALO e SEED_PASS_ADJUNTO em produção (sem password default).",
+  );
+}
+
 const PASS_GONCALO = process.env.SEED_PASS_GONCALO || "futsal2026";
 const PASS_ADJUNTO = process.env.SEED_PASS_ADJUNTO || "futsal2026";
-const BCRYPT_COST = 10;
+const BCRYPT_COST = 12;
 
 async function main() {
   const jaExiste = await prisma.clube.findFirst({

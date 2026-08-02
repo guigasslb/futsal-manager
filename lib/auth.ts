@@ -32,8 +32,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   pages: { signIn: "/login" },
-  session: { strategy: "jwt" },
+  // Sessão JWT com validade de 7 dias (em vez do default de 30).
+  session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 7 },
   callbacks: {
+    // Executado pelo middleware: bloqueia (redireciona para /login) qualquer
+    // rota correspondente ao matcher sem sessão válida. Defesa em profundidade
+    // — o layout (app) também redireciona, mas o middleware fecha rotas novas.
+    authorized({ auth }) {
+      return !!auth?.user;
+    },
     async jwt({ token, user }) {
       if (user) token.id = user.id;
       return token;
