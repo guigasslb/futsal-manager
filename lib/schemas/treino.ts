@@ -1,8 +1,19 @@
 import { z } from "zod";
 
+export const TIPOS_SESSAO = ["NORMAL", "ABERTO", "CAPTACAO", "EVENTO"] as const;
+
+export const LABEL_TIPO_SESSAO: Record<(typeof TIPOS_SESSAO)[number], string> = {
+  NORMAL: "Treino normal",
+  ABERTO: "Treino aberto",
+  CAPTACAO: "Captação",
+  EVENTO: "Evento",
+};
+
 export const sessaoSchema = z.object({
   data: z.coerce.date(),
   escalaoId: z.string().cuid("Escalão inválido"),
+  tipoSessao: z.enum(TIPOS_SESSAO).default("NORMAL"),
+  planeamentoId: z.string().cuid().nullable().optional(),
   duracaoMin: z.number().int().min(1).max(300).optional(),
   objetivo: z.string().max(500).optional(),
   local: z.string().max(100).optional(),

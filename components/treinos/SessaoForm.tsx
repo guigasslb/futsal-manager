@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +16,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { criarSessao, atualizarSessao } from "@/lib/actions/treinos";
-import type { Escalao, Sessao } from "@prisma/client";
+import { TIPOS_SESSAO, LABEL_TIPO_SESSAO } from "@/lib/schemas/treino";
+import type { Escalao, Sessao, TipoSessao } from "@prisma/client";
+
+const SENTINEL_NONE = "__none__";
 
 function paraInputDateTime(date: Date | null | undefined): string {
   if (!date) return "";
@@ -28,17 +32,35 @@ function paraInputDateTime(date: Date | null | undefined): string {
 type EscalaoBasico = Pick<Escalao, "id" | "nome">;
 type SessaoParaEdicao = Pick<
   Sessao,
-  "id" | "data" | "escalaoId" | "duracaoMin" | "objetivo" | "local" | "notas"
+  "id" | "data" | "escalaoId" | "tipoSessao" | "planeamentoId" | "duracaoMin" | "objetivo" | "local" | "notas"
 >;
+type PlaneamentoBasico = {
+  id: string;
+  escalaoId: string;
+  tipo: "SEMANAL" | "MENSAL";
+  dataInicio: Date;
+  dataFim: Date;
+  microciclo: number | null;
+};
+
+function labelPlaneamento(p: PlaneamentoBasico): string {
+  const opt: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short" };
+  const intervalo = `${new Date(p.dataInicio).toLocaleDateString("pt-PT", opt)} – ${new Date(p.dataFim).toLocaleDateString("pt-PT", opt)}`;
+  const tipo = p.tipo === "SEMANAL" ? "Semanal" : "Mensal";
+  const micro = p.microciclo != null ? ` · Micro ${p.microciclo}` : "";
+  return `${tipo} · ${intervalo}${micro}`;
+}
 
 export function SessaoForm({
   escaloes,
   sessao,
   escalaoIdInicial,
+  planeamentos = [],
 }: {
   escaloes: EscalaoBasico[];
   sessao?: SessaoParaEdicao;
   escalaoIdInicial?: string;
+  planeamentos?: PlaneamentoBasico[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -47,6 +69,13 @@ export function SessaoForm({
   const [escalaoId, setEscalaoId] = useState<string>(
     sessao?.escalaoId ?? escalaoIdInicial ?? "",
   );
+  const [tipoSessao, setTipoSessao] = useState<TipoSessao>(sessao?.tipoSessao ?? "NORMAL");
+  const [planeamentoId, setPlaneamentoId] = useState<string>(
+    sessao?.planeamentoId ?? SENTINEL_NONE,
+  );
+
+  const planeamentosDoEscalao = planeamentos.filter((p) => p.escalaoId === escalaoId);
+  const mostrarAviso = tipoSessao === "NORMAL" && planeamentoId === SENTINEL_NONE && planeamentosDoEscalao.length > 0;
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -59,6 +88,8 @@ export function SessaoForm({
     const dados = {
       data: String(fd.get("data")),
       escalaoId: escalaoId || undefined,
+      tipoSessao,
+      planeamentoId: planeamentoId !== SENTINEL_NONE ? planeamentoId : null,
       duracaoMin: duracaoRaw !== "" ? Number(duracaoRaw) : undefined,
       objetivo: String(fd.get("objetivo") ?? "").trim() || undefined,
       local: String(fd.get("local") ?? "").trim() || undefined,
@@ -85,6 +116,21 @@ export function SessaoForm({
       {erroGeral && !Object.keys(erros).length && (
         <p className="text-corpo-sec text-vermelho-600">{erroGeral}</p>
       )}
+
+      {/* Tipo de sessão */}
+      <div className="space-y-1.5">
+        <Label>Tipo de sessão *</Label>
+        <Select value={tipoSessao} onValueChange={(v) => setTipoSessao(v as TipoSessao)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TIPOS_SESSAO.map((t) => (
+              <SelectItem key={t} value={t}>{LABEL_TIPO_SESSAO[t]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
@@ -115,7 +161,13 @@ export function SessaoForm({
 
       <div className="space-y-1.5">
         <Label>Escalão *</Label>
-        <Select value={escalaoId} onValueChange={setEscalaoId}>
+        <Select
+          value={escalaoId}
+          onValueChange={(v) => {
+            setEscalaoId(v);
+            setPlaneamentoId(SENTINEL_NONE); // reset planeamento ao mudar escalão
+          }}
+        >
           <SelectTrigger>
             <SelectValue placeholder="Seleciona um escalão" />
           </SelectTrigger>
@@ -129,6 +181,43 @@ export function SessaoForm({
         </Select>
         {erros.escalaoId && <p className="text-legenda text-vermelho-600">{erros.escalaoId}</p>}
       </div>
+
+      {/* Planeamento — só para treino normal */}
+      {tipoSessao === "NORMAL" && (
+        <div className="space-y-1.5">
+          <Label>Planeamento</Label>
+          {planeamentosDoEscalao.length === 0 ? (
+            <p className="text-legenda text-cinza-500">
+              Nenhum planeamento para este escalão.{" "}
+              <a href="/treinos/periodizacao" className="underline hover:text-cinza-700">
+                Criar planeamento
+              </a>
+            </p>
+          ) : (
+            <>
+              <Select value={planeamentoId} onValueChange={setPlaneamentoId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="— Nenhum —" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SENTINEL_NONE}>— Nenhum —</SelectItem>
+                  {planeamentosDoEscalao.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {labelPlaneamento(p)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {mostrarAviso && (
+                <p className="flex items-center gap-1 text-legenda text-ambar-500">
+                  <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                  Recomendado associar a um planeamento.
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       <div className="space-y-1.5">
         <Label htmlFor="objetivo">Objetivo</Label>

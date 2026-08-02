@@ -400,6 +400,7 @@ model Sessao {
   escalao       Escalao      @relation(fields: [escalaoId], references: [id])
   epocaId       String
   epoca         Epoca        @relation(fields: [epocaId], references: [id])
+  tipoSessao    TipoSessao   @default(NORMAL)
   planeamentoId String?
   planeamento   Planeamento? @relation(fields: [planeamentoId], references: [id])
   criadorId     String
@@ -446,6 +447,13 @@ enum EstadoPresenca {
   FALTA_JUSTIFICADA
   LESIONADO
   ATRASADO
+}
+
+enum TipoSessao {
+  NORMAL
+  ABERTO
+  CAPTACAO
+  EVENTO
 }
 
 // ─────────────────────────────────────────────

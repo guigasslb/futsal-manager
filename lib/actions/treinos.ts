@@ -15,6 +15,7 @@ const INCLUDE_LISTA = {
   escalao: { select: { id: true, nome: true } },
   _count: { select: { exercicios: true } },
   presencas: { select: { estado: true } },
+  planeamento: { select: { id: true, tipo: true, dataInicio: true, dataFim: true, microciclo: true } },
 } as const;
 
 const INCLUDE_DETALHE = {
@@ -103,9 +104,25 @@ export async function criarSessao(dados: unknown): Promise<Resultado<Sessao>> {
   });
   if (!escalao) return erro("O escalão selecionado não existe");
 
+  if (parsed.data.planeamentoId) {
+    const plan = await prisma.planeamento.findFirst({
+      where: { id: parsed.data.planeamentoId, escalao: { clubeId: ctx.clubeId } },
+    });
+    if (!plan) return erro("Planeamento não encontrado");
+    if (plan.escalaoId !== parsed.data.escalaoId)
+      return erro("O planeamento pertence a um escalão diferente");
+  }
+
   const sessao = await prisma.sessao.create({
     data: {
-      ...parsed.data,
+      data: parsed.data.data,
+      escalaoId: parsed.data.escalaoId,
+      tipoSessao: parsed.data.tipoSessao,
+      planeamentoId: parsed.data.planeamentoId ?? null,
+      duracaoMin: parsed.data.duracaoMin ?? null,
+      objetivo: parsed.data.objetivo ?? null,
+      local: parsed.data.local ?? null,
+      notas: parsed.data.notas ?? null,
       epocaId: ctx.epoca.id,
       criadorId: session.user.id,
     },
@@ -131,11 +148,22 @@ export async function atualizarSessao(id: string, dados: unknown): Promise<Resul
     if (!permDestino.ok) return erro(permDestino.erro);
   }
 
+  if (parsed.data.planeamentoId) {
+    const plan = await prisma.planeamento.findFirst({
+      where: { id: parsed.data.planeamentoId, escalao: { clubeId } },
+    });
+    if (!plan) return erro("Planeamento não encontrado");
+    if (plan.escalaoId !== parsed.data.escalaoId)
+      return erro("O planeamento pertence a um escalão diferente");
+  }
+
   const sessao = await prisma.sessao.update({
     where: { id },
     data: {
       data: parsed.data.data,
       escalaoId: parsed.data.escalaoId,
+      tipoSessao: parsed.data.tipoSessao,
+      planeamentoId: parsed.data.planeamentoId ?? null,
       duracaoMin: parsed.data.duracaoMin ?? null,
       objetivo: parsed.data.objetivo ?? null,
       local: parsed.data.local ?? null,

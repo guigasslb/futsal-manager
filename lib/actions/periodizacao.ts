@@ -114,6 +114,85 @@ export async function atualizarPlaneamento(
   return ok(planeamento);
 }
 
+// ─── Sugestão inteligente ────────────────────────────────────────────────────
+
+export type SugestaoPlaneamento = {
+  dataInicio: string; // "YYYY-MM-DD"
+  dataFim: string;
+  microciclo: number | undefined;
+  mesociclo: number | undefined;
+  periodo: "PREPARATORIO" | "COMPETITIVO" | "TRANSICAO" | undefined;
+  tipo: "SEMANAL" | "MENSAL";
+};
+
+export async function sugerirPlaneamento(
+  escalaoId: string,
+  tipo: "SEMANAL" | "MENSAL" = "SEMANAL",
+): Promise<Resultado<SugestaoPlaneamento>> {
+  const clubeId = await obterClubeIdAtual();
+  if (!clubeId) return erro("Não autenticado");
+  const epoca = await obterEpocaAtiva();
+  if (!epoca) return erro("Nenhuma época ativa");
+
+  const ultimo = await prisma.planeamento.findFirst({
+    where: { epocaId: epoca.id, escalaoId, escalao: { clubeId } },
+    orderBy: { dataInicio: "desc" },
+  });
+
+  function fmt(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  const epocaInicio = new Date(epoca.dataInicio).getTime();
+  const epocaFim = new Date(epoca.dataFim).getTime();
+
+  function inferirPeriodo(data: Date): "PREPARATORIO" | "COMPETITIVO" | "TRANSICAO" {
+    const total = epocaFim - epocaInicio;
+    if (total <= 0) return "COMPETITIVO";
+    const pct = (data.getTime() - epocaInicio) / total;
+    if (pct < 0.2) return "PREPARATORIO";
+    if (pct > 0.9) return "TRANSICAO";
+    return "COMPETITIVO";
+  }
+
+  const duracao = tipo === "SEMANAL" ? 6 : 27;
+
+  if (!ultimo) {
+    // Começa na próxima segunda-feira
+    const hoje = new Date();
+    const diaSemana = hoje.getDay(); // 0 = domingo
+    const diasAteSegunda = diaSemana === 1 ? 0 : diaSemana === 0 ? 1 : 8 - diaSemana;
+    const dataInicio = new Date(hoje);
+    dataInicio.setDate(hoje.getDate() + diasAteSegunda);
+    dataInicio.setHours(0, 0, 0, 0);
+    const dataFim = new Date(dataInicio);
+    dataFim.setDate(dataInicio.getDate() + duracao);
+    return ok({
+      dataInicio: fmt(dataInicio),
+      dataFim: fmt(dataFim),
+      microciclo: 1,
+      mesociclo: 1,
+      periodo: inferirPeriodo(dataInicio),
+      tipo,
+    });
+  }
+
+  // Continua a partir do último planeamento
+  const dataInicio = new Date(ultimo.dataFim);
+  dataInicio.setDate(dataInicio.getDate() + 1);
+  const dataFim = new Date(dataInicio);
+  dataFim.setDate(dataInicio.getDate() + duracao);
+
+  return ok({
+    dataInicio: fmt(dataInicio),
+    dataFim: fmt(dataFim),
+    microciclo: ultimo.microciclo != null ? ultimo.microciclo + 1 : undefined,
+    mesociclo: ultimo.mesociclo ?? undefined,
+    periodo: (ultimo.periodo as SugestaoPlaneamento["periodo"]) ?? inferirPeriodo(dataInicio),
+    tipo,
+  });
+}
+
 export async function apagarPlaneamento(id: string): Promise<Resultado<void>> {
   const clubeId = await obterClubeIdAtual();
   if (!clubeId) return erro("Não autenticado");
