@@ -238,7 +238,7 @@ export function JogoDetalhe({
               );
               if (golosMarcados != null && somaGolos !== golosMarcados) {
                 return (
-                  <p className="flex items-center gap-1.5 rounded-md bg-ambar-500/10 px-3 py-2 text-corpo-sec text-ambar-500">
+                  <p className="flex items-center gap-1.5 rounded-md bg-ambar-500/10 px-3 py-2 text-corpo-sec text-ambar-600">
                     <TriangleAlert className="h-4 w-4 flex-shrink-0" />
                     A soma dos golos individuais ({somaGolos}) não coincide com o resultado da
                     equipa ({golosMarcados}). Pode ser normal (autogolos), mas confirma.

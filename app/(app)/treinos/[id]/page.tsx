@@ -89,7 +89,7 @@ export default async function DetalheSessaoPage({
         </div>
         {s.objetivo && <p className="text-corpo text-cinza-900">Objetivo: {s.objetivo}</p>}
         {foraDaEpoca && (
-          <p className="flex items-center gap-1.5 text-legenda text-ambar-500">
+          <p className="flex items-center gap-1.5 text-legenda text-ambar-600">
             <AlertTriangle className="h-4 w-4" />
             A data está fora do intervalo da época ativa.
           </p>

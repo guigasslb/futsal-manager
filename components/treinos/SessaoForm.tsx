@@ -210,7 +210,7 @@ export function SessaoForm({
                 </SelectContent>
               </Select>
               {mostrarAviso && (
-                <p className="flex items-center gap-1 text-legenda text-ambar-500">
+                <p className="flex items-center gap-1 text-legenda text-ambar-600">
                   <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
                   Recomendado associar a um planeamento.
                 </p>

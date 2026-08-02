@@ -110,7 +110,7 @@ export default async function PlantelPage({
       ) : (
         <>
           {haDuplicados && (
-            <p className="flex items-center gap-1.5 rounded-md bg-ambar-500/10 px-3 py-2 text-corpo-sec text-ambar-500">
+            <p className="flex items-center gap-1.5 rounded-md bg-ambar-500/10 px-3 py-2 text-corpo-sec text-ambar-600">
               <AlertTriangle className="h-4 w-4 flex-shrink-0" />
               Há atletas do mesmo escalão com o mesmo número (assinalados a laranja).
             </p>
@@ -129,7 +129,7 @@ export default async function PlantelPage({
                   <p className="truncate text-corpo font-semibold text-cinza-900">{a.nome}</p>
                   <p className="text-legenda text-cinza-600">
                     {a.numero != null && (
-                      <span className={dup ? "font-semibold text-ambar-500" : ""}>
+                      <span className={dup ? "font-semibold text-ambar-600" : ""}>
                         #{a.numero}
                       </span>
                     )}

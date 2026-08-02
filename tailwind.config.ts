@@ -18,18 +18,24 @@ const config: Config = {
           900: "#0F1E8A",
           700: "#1A2FD4", // PRIMÁRIA
           500: "#3A50E0",
+          300: "#A9B4F5",
           100: "#E4E8FF",
           50: "#F4F6FF",
         },
         cinza: {
           900: "#1A1D29",
+          700: "#2E3344",
           600: "#4A4F63",
+          500: "#676D82",
           400: "#8A90A6",
+          300: "#B4B9C9",
           200: "#E2E5EF",
+          100: "#EEF0F6",
           50: "#F8F9FC",
         },
         verde: { 600: "#1E9E5A" },
-        ambar: { 500: "#E0900A" },
+        // ambar-500: acento/ícone/borda. ambar-600: texto de aviso (contraste AA ≥4.5:1).
+        ambar: { 600: "#8A5A06", 500: "#E0900A" },
         vermelho: { 600: "#D33A3A" },
         "amarelo-jsc": "#FFD700", // decorativo/identitário — nunca ação
 
