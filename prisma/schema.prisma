@@ -140,6 +140,7 @@ model MembroClube {
   @@unique([utilizadorId, clubeId])
   @@index([clubeId])
   @@index([utilizadorId])
+  @@index([perfilId])
 }
 
 enum EstadoMembro {
@@ -385,6 +386,7 @@ model Planeamento {
   sessoes Sessao[]
 
   @@index([epocaId, escalaoId])
+  @@index([escalaoId])
 }
 
 enum TipoPlaneamento {
@@ -427,6 +429,8 @@ model Sessao {
   presencas  Presenca[]
 
   @@index([epocaId, escalaoId, data])
+  @@index([escalaoId])
+  @@index([planeamentoId])
 }
 
 model SessaoExercicio {
@@ -441,6 +445,7 @@ model SessaoExercicio {
 
   @@unique([sessaoId, ordem])
   @@index([sessaoId])
+  @@index([exercicioId])
 }
 
 model Presenca {
@@ -507,6 +512,7 @@ model Jogo {
 
   @@index([epocaId, escalaoId, data])
   @@index([competicaoId])
+  @@index([escalaoId])
 }
 
 enum CasaFora {
@@ -533,6 +539,8 @@ model Competicao {
   jogos Jogo[]
 
   @@index([epocaId, escalaoId])
+  @@index([clubeId])
+  @@index([escalaoId])
 }
 
 // Registo ao vivo (beira-campo). Agrega para as estatísticas.
@@ -672,6 +680,7 @@ model ValorMetrica {
   valor         Int
 
   @@unique([metricaId, estatisticaId])
+  @@index([estatisticaId])
 }
 
 // ─────────────────────────────────────────────
@@ -713,6 +722,7 @@ model ProgressoHabilidade {
 
   @@unique([atletaId, habilidadeId, epocaId])
   @@index([atletaId, epocaId])
+  @@index([habilidadeId])
 }
 
 enum EstadoHabilidade {
