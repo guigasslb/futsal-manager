@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { obterClubeIdAtual } from "@/lib/epoca-context";
+import { exigirCapacidade } from "@/lib/permissoes";
 import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
 import { escalaoSchema } from "@/lib/schemas/escalao";
 import type { Escalao } from "@prisma/client";
@@ -21,8 +22,9 @@ export async function listarEscaloes(): Promise<Resultado<Escalao[]>> {
 }
 
 export async function criarEscalao(dados: unknown): Promise<Resultado<Escalao>> {
-  const clubeId = await obterClubeIdAtual();
-  if (!clubeId) return erro("Não autenticado");
+  const perm = await exigirCapacidade("CLUBE_ESCALOES");
+  if (!perm.ok) return erro(perm.erro);
+  const clubeId = perm.ctx.clube.id;
 
   const parsed = escalaoSchema.safeParse(dados);
   if (!parsed.success) return erroDeValidacao(parsed.error);
@@ -42,50 +44,80 @@ export async function criarEscalao(dados: unknown): Promise<Resultado<Escalao>> 
 }
 
 export async function atualizarEscalao(id: string, dados: unknown): Promise<Resultado<Escalao>> {
-  const clubeId = await obterClubeIdAtual();
-  if (!clubeId) return erro("Não autenticado");
+  const perm = await exigirCapacidade("CLUBE_ESCALOES");
+  if (!perm.ok) return erro(perm.erro);
 
   const parsed = escalaoSchema.safeParse(dados);
   if (!parsed.success) return erroDeValidacao(parsed.error);
 
-  const existe = await prisma.escalao.findFirst({ where: { id, clubeId } });
+  const existe = await prisma.escalao.findFirst({ where: { id, clubeId: perm.ctx.clube.id } });
   if (!existe) return erro("Escalão não encontrado");
 
-  const escalao = await prisma.escalao.update({
-    where: { id },
-    data: parsed.data,
-  });
+  const escalao = await prisma.escalao.update({ where: { id }, data: parsed.data });
   revalidatePath(PATH);
   return ok(escalao);
 }
 
-export async function apagarEscalao(id: string): Promise<Resultado<void>> {
-  const clubeId = await obterClubeIdAtual();
-  if (!clubeId) return erro("Não autenticado");
+export async function definirVisibilidadeEscalao(
+  id: string,
+  visivel: boolean,
+): Promise<Resultado<void>> {
+  const perm = await exigirCapacidade("CLUBE_ESCALOES");
+  if (!perm.ok) return erro(perm.erro);
 
-  const existe = await prisma.escalao.findFirst({ where: { id, clubeId } });
+  const existe = await prisma.escalao.findFirst({ where: { id, clubeId: perm.ctx.clube.id } });
   if (!existe) return erro("Escalão não encontrado");
 
-  // Bloqueado se tiver atletas associados (secção 12.8)
-  const totalAtletas = await prisma.atleta.count({ where: { escalaoId: id } });
+  await prisma.escalao.update({
+    where: { id },
+    data: { visivelOutrosTreinadores: visivel },
+  });
+  revalidatePath(PATH);
+  return ok(undefined);
+}
+
+export async function apagarEscalao(id: string): Promise<Resultado<void>> {
+  const perm = await exigirCapacidade("CLUBE_ESCALOES");
+  if (!perm.ok) return erro(perm.erro);
+
+  const existe = await prisma.escalao.findFirst({ where: { id, clubeId: perm.ctx.clube.id } });
+  if (!existe) return erro("Escalão não encontrado");
+
+  // Guardas de integridade: as relações Sessao/Jogo/Planeamento/Competicao são
+  // Restrict — apagar com dependentes lançaria P2003 (500). Bloquear com mensagem.
+  const [totalAtletas, totalSessoes, totalJogos, totalPlaneamentos, totalCompeticoes] =
+    await Promise.all([
+      prisma.atleta.count({ where: { escalaoId: id } }),
+      prisma.sessao.count({ where: { escalaoId: id } }),
+      prisma.jogo.count({ where: { escalaoId: id } }),
+      prisma.planeamento.count({ where: { escalaoId: id } }),
+      prisma.competicao.count({ where: { escalaoId: id } }),
+    ]);
   if (totalAtletas > 0)
     return erro(`Não é possível apagar: este escalão tem ${totalAtletas} atleta(s) associado(s).`);
+  if (totalSessoes > 0)
+    return erro(`Não é possível apagar: este escalão tem ${totalSessoes} sessão(ões) associada(s).`);
+  if (totalJogos > 0)
+    return erro(`Não é possível apagar: este escalão tem ${totalJogos} jogo(s) associado(s).`);
+  if (totalPlaneamentos > 0)
+    return erro(`Não é possível apagar: este escalão tem ${totalPlaneamentos} planeamento(s) associado(s).`);
+  if (totalCompeticoes > 0)
+    return erro(`Não é possível apagar: este escalão tem ${totalCompeticoes} competição(ões) associada(s).`);
 
   await prisma.escalao.delete({ where: { id } });
   revalidatePath(PATH);
   return ok(undefined);
 }
 
-// Reordenação por troca com item adjacente
 export async function moverEscalao(
   id: string,
   direcao: "subir" | "descer",
 ): Promise<Resultado<void>> {
-  const clubeId = await obterClubeIdAtual();
-  if (!clubeId) return erro("Não autenticado");
+  const perm = await exigirCapacidade("CLUBE_ESCALOES");
+  if (!perm.ok) return erro(perm.erro);
 
   const todos = await prisma.escalao.findMany({
-    where: { clubeId },
+    where: { clubeId: perm.ctx.clube.id },
     orderBy: { ordem: "asc" },
   });
   const idx = todos.findIndex((e) => e.id === id);

@@ -89,7 +89,7 @@ export default async function DetalheSessaoPage({
         </div>
         {s.objetivo && <p className="text-corpo text-cinza-900">Objetivo: {s.objetivo}</p>}
         {foraDaEpoca && (
-          <p className="flex items-center gap-1.5 text-legenda text-ambar-500">
+          <p className="flex items-center gap-1.5 text-legenda text-ambar-600">
             <AlertTriangle className="h-4 w-4" />
             A data está fora do intervalo da época ativa.
           </p>
@@ -107,13 +107,13 @@ export default async function DetalheSessaoPage({
             exercicio: {
               id: se.exercicio.id,
               nome: se.exercicio.nome,
-              categoria: se.exercicio.categoria,
+              categoriaPrincipal: se.exercicio.categoriaPrincipal,
             },
           }))}
           biblioteca={biblioteca.map((b) => ({
             id: b.id,
             nome: b.nome,
-            categoria: b.categoria,
+            categoriaPrincipal: b.categoriaPrincipal,
             duracaoMin: b.duracaoMin,
           }))}
         />

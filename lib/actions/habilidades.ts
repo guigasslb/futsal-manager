@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { obterClubeIdAtual } from "@/lib/epoca-context";
+import { exigirCapacidade } from "@/lib/permissoes";
 import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
 import { habilidadeSchema } from "@/lib/schemas/habilidade";
 import type { Habilidade, NivelHabilidade } from "@prisma/client";
@@ -21,8 +22,9 @@ export async function listarHabilidades(): Promise<Resultado<Habilidade[]>> {
 }
 
 export async function criarHabilidade(dados: unknown): Promise<Resultado<Habilidade>> {
-  const clubeId = await obterClubeIdAtual();
-  if (!clubeId) return erro("Não autenticado");
+  const perm = await exigirCapacidade("CATALOGO_HABILIDADES");
+  if (!perm.ok) return erro(perm.erro);
+  const clubeId = perm.ctx.clube.id;
 
   const parsed = habilidadeSchema.safeParse(dados);
   if (!parsed.success) return erroDeValidacao(parsed.error);
@@ -45,8 +47,9 @@ export async function atualizarHabilidade(
   id: string,
   dados: unknown,
 ): Promise<Resultado<Habilidade>> {
-  const clubeId = await obterClubeIdAtual();
-  if (!clubeId) return erro("Não autenticado");
+  const perm = await exigirCapacidade("CATALOGO_HABILIDADES");
+  if (!perm.ok) return erro(perm.erro);
+  const clubeId = perm.ctx.clube.id;
 
   const parsed = habilidadeSchema.safeParse(dados);
   if (!parsed.success) return erroDeValidacao(parsed.error);
@@ -60,11 +63,18 @@ export async function atualizarHabilidade(
 }
 
 export async function apagarHabilidade(id: string): Promise<Resultado<void>> {
-  const clubeId = await obterClubeIdAtual();
-  if (!clubeId) return erro("Não autenticado");
+  const perm = await exigirCapacidade("CATALOGO_HABILIDADES");
+  if (!perm.ok) return erro(perm.erro);
 
-  const existe = await prisma.habilidade.findFirst({ where: { id, clubeId } });
+  const existe = await prisma.habilidade.findFirst({ where: { id, clubeId: perm.ctx.clube.id } });
   if (!existe) return erro("Habilidade não encontrada");
+
+  // ProgressoHabilidade é Restrict — apagar com progressos lançaria P2003 (500).
+  const totalProgressos = await prisma.progressoHabilidade.count({ where: { habilidadeId: id } });
+  if (totalProgressos > 0)
+    return erro(
+      `Não é possível apagar: esta habilidade tem ${totalProgressos} registo(s) de progresso na caderneta.`,
+    );
 
   await prisma.habilidade.delete({ where: { id } });
   revalidatePath(PATH);
@@ -75,8 +85,9 @@ export async function moverHabilidade(
   id: string,
   direcao: "subir" | "descer",
 ): Promise<Resultado<void>> {
-  const clubeId = await obterClubeIdAtual();
-  if (!clubeId) return erro("Não autenticado");
+  const perm = await exigirCapacidade("CATALOGO_HABILIDADES");
+  if (!perm.ok) return erro(perm.erro);
+  const clubeId = perm.ctx.clube.id;
 
   const habilidade = await prisma.habilidade.findFirst({ where: { id, clubeId } });
   if (!habilidade) return erro("Habilidade não encontrada");

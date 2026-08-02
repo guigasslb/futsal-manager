@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { obterEpocaAtiva, obterClubeIdAtual } from "@/lib/epoca-context";
-import { ok, erro, type Resultado } from "@/lib/utils";
+import { exigirCapacidade, podeLerEscalao } from "@/lib/permissoes";
+import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
+import { atualizarProgressoSchema } from "@/lib/schemas/caderneta";
 import type { EstadoHabilidade, Habilidade, ProgressoHabilidade } from "@prisma/client";
 
 export interface HabilidadeComProgresso extends Habilidade {
@@ -23,9 +25,10 @@ export async function obterCadernetaAtleta(
 
   const atleta = await prisma.atleta.findFirst({
     where: { id: atletaId, escalao: { clubeId } },
-    select: { id: true },
+    select: { id: true, escalaoId: true },
   });
   if (!atleta) return erro("Atleta não encontrado");
+  if (!(await podeLerEscalao(atleta.escalaoId))) return erro("Sem permissão neste escalão");
 
   const [habilidades, progressos] = await Promise.all([
     prisma.habilidade.findMany({
@@ -63,15 +66,21 @@ export async function atualizarProgresso(
   const clubeId = await obterClubeIdAtual();
   if (!clubeId) return erro("Não autenticado");
 
+  const parsed = atualizarProgressoSchema.safeParse({ atletaId, habilidadeId, estado, notas });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
+
   const epoca = await obterEpocaAtiva();
   if (!epoca) return erro("Nenhuma época ativa");
 
   const [atleta, habilidade] = await Promise.all([
-    prisma.atleta.findFirst({ where: { id: atletaId, escalao: { clubeId } }, select: { id: true } }),
+    prisma.atleta.findFirst({ where: { id: atletaId, escalao: { clubeId } }, select: { id: true, escalaoId: true } }),
     prisma.habilidade.findFirst({ where: { id: habilidadeId, clubeId }, select: { id: true } }),
   ]);
   if (!atleta) return erro("Atleta não encontrado");
   if (!habilidade) return erro("Habilidade não encontrada");
+
+  const perm = await exigirCapacidade("CADERNETA_GERIR", atleta.escalaoId);
+  if (!perm.ok) return erro(perm.erro);
 
   // DESBLOQUEADO regista data; voltar atrás limpa (secção 12.7)
   const dataDesbloqueio = estado === "DESBLOQUEADO" ? new Date() : null;

@@ -16,6 +16,12 @@ vi.mock("@/lib/epoca-context", () => ({
   COOKIE_EPOCA: "epoca_ativa",
 }));
 
+vi.mock("@/lib/permissoes", () => ({
+  exigirCapacidade: vi.fn(),
+  podeLerEscalao: vi.fn(),
+  escaloesLegiveis: vi.fn(),
+}));
+
 vi.mock("@/lib/db", () => ({
   prisma: {
     escalao: { findFirst: vi.fn() },
@@ -28,25 +34,28 @@ vi.mock("@/lib/db", () => ({
 import { criarAtleta, apagarAtleta } from "@/lib/actions/atletas";
 import { apagarExercicio } from "@/lib/actions/exercicios";
 import { obterClubeIdAtual, obterEpocaAtiva } from "@/lib/epoca-context";
+import { exigirCapacidade } from "@/lib/permissoes";
 import { prisma } from "@/lib/db";
 
 const CUID = "ckv9v0z1w0000abcd1234efgh";
 const mocked = <T,>(fn: T) => fn as unknown as { mockResolvedValue: (v: unknown) => void };
+const PERM_OK = { ok: true, ctx: { clube: { id: "clube1" } } };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Por defeito, a permissão é concedida (o clube ativo é "clube1").
+  mocked(exigirCapacidade).mockResolvedValue(PERM_OK);
 });
 
 describe("criarAtleta", () => {
-  it("falha se não autenticado", async () => {
-    mocked(obterClubeIdAtual).mockResolvedValue(null);
-    const r = await criarAtleta({ nome: "João", escalaoId: CUID });
+  it("falha sem permissão/capacidade", async () => {
+    mocked(exigirCapacidade).mockResolvedValue({ ok: false, erro: "Sem permissão" });
+    const r = await criarAtleta({ nome: "João Silva", escalaoId: CUID });
     expect(r.sucesso).toBe(false);
-    if (!r.sucesso) expect(r.erro).toMatch(/autenticado/i);
+    if (!r.sucesso) expect(r.erro).toMatch(/permiss/i);
   });
 
   it("falha na validação Zod (nome curto) sem tocar na BD", async () => {
-    mocked(obterClubeIdAtual).mockResolvedValue("clube1");
     const r = await criarAtleta({ nome: "J", escalaoId: CUID });
     expect(r.sucesso).toBe(false);
     if (!r.sucesso) expect(r.camposInvalidos?.nome).toBeTruthy();
@@ -54,7 +63,6 @@ describe("criarAtleta", () => {
   });
 
   it("falha se não há época ativa", async () => {
-    mocked(obterClubeIdAtual).mockResolvedValue("clube1");
     mocked(obterEpocaAtiva).mockResolvedValue(null);
     const r = await criarAtleta({ nome: "João Silva", escalaoId: CUID });
     expect(r.sucesso).toBe(false);
@@ -62,7 +70,6 @@ describe("criarAtleta", () => {
   });
 
   it("falha se o escalão não existe no clube", async () => {
-    mocked(obterClubeIdAtual).mockResolvedValue("clube1");
     mocked(obterEpocaAtiva).mockResolvedValue({ id: "ep1" });
     mocked(prisma.escalao.findFirst).mockResolvedValue(null);
     const r = await criarAtleta({ nome: "João Silva", escalaoId: CUID });
@@ -71,7 +78,6 @@ describe("criarAtleta", () => {
   });
 
   it("cria o atleta na época ativa quando tudo é válido", async () => {
-    mocked(obterClubeIdAtual).mockResolvedValue("clube1");
     mocked(obterEpocaAtiva).mockResolvedValue({ id: "ep1" });
     mocked(prisma.escalao.findFirst).mockResolvedValue({ id: CUID, clubeId: "clube1" });
     mocked(prisma.atleta.create).mockResolvedValue({ id: "atleta1", nome: "João Silva" });
@@ -89,7 +95,7 @@ describe("criarAtleta", () => {
 describe("apagarAtleta (soft delete)", () => {
   it("marca ativo=false em vez de apagar", async () => {
     mocked(obterClubeIdAtual).mockResolvedValue("clube1");
-    mocked(prisma.atleta.findFirst).mockResolvedValue({ id: "atleta1" });
+    mocked(prisma.atleta.findFirst).mockResolvedValue({ id: "atleta1", escalaoId: CUID });
     mocked(prisma.atleta.update).mockResolvedValue({ id: "atleta1", ativo: false });
 
     const r = await apagarAtleta("atleta1");
@@ -99,11 +105,20 @@ describe("apagarAtleta (soft delete)", () => {
       .calls[0][0] as { data: { ativo: boolean } };
     expect(updateArg.data.ativo).toBe(false);
   });
+
+  it("falha sem permissão no escalão do atleta", async () => {
+    mocked(obterClubeIdAtual).mockResolvedValue("clube1");
+    mocked(prisma.atleta.findFirst).mockResolvedValue({ id: "atleta1", escalaoId: CUID });
+    mocked(exigirCapacidade).mockResolvedValue({ ok: false, erro: "Sem permissão neste escalão" });
+
+    const r = await apagarAtleta("atleta1");
+    expect(r.sucesso).toBe(false);
+    expect(prisma.atleta.update).not.toHaveBeenCalled();
+  });
 });
 
 describe("apagarExercicio (secção 22.7 — bloqueado se em uso)", () => {
   it("bloqueia quando o exercício está em sessões", async () => {
-    mocked(obterClubeIdAtual).mockResolvedValue("clube1");
     mocked(prisma.exercicio.findFirst).mockResolvedValue({ id: "ex1" });
     mocked(prisma.sessaoExercicio.count).mockResolvedValue(3);
 
@@ -114,7 +129,6 @@ describe("apagarExercicio (secção 22.7 — bloqueado se em uso)", () => {
   });
 
   it("apaga quando não está em uso", async () => {
-    mocked(obterClubeIdAtual).mockResolvedValue("clube1");
     mocked(prisma.exercicio.findFirst).mockResolvedValue({ id: "ex1" });
     mocked(prisma.sessaoExercicio.count).mockResolvedValue(0);
     mocked(prisma.exercicio.delete).mockResolvedValue({ id: "ex1" });

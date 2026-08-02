@@ -1,4 +1,7 @@
 import type { EstatisticasAgregadas } from "@/lib/actions/atletas";
+import type { JogoDadosAtleta, PresencaMensal } from "@/lib/actions/analise";
+import { GraficoLinhas } from "@/components/graficos/GraficoLinhas";
+import { GraficoBarrasV } from "@/components/graficos/GraficoBarrasV";
 
 function Cartao({ valor, label }: { valor: string | number; label: string }) {
   return (
@@ -12,12 +15,15 @@ function Cartao({ valor, label }: { valor: string | number; label: string }) {
 export function EstatisticasAtleta({
   stats,
   eGR,
+  evolucao,
+  presencas,
 }: {
   stats: EstatisticasAgregadas;
   eGR: boolean;
+  evolucao?: JogoDadosAtleta[];
+  presencas?: PresencaMensal[];
 }) {
-  const semDados =
-    stats.jogosConvocado === 0 && stats.sessoesTotais === 0;
+  const semDados = stats.jogosConvocado === 0 && stats.sessoesTotais === 0;
 
   if (semDados) {
     return (
@@ -29,22 +35,65 @@ export function EstatisticasAtleta({
 
   const taxa = `${Math.round(stats.taxaPresenca * 100)}%`;
 
+  // Prepare line chart data: only games where the player was utilized
+  const pontosJogos = (evolucao ?? [])
+    .filter((j) => j.utilizado)
+    .map((j) =>
+      eGR
+        ? { label: j.adversario, valor1: j.defesas ?? 0 }
+        : { label: j.adversario, valor1: j.golos, valor2: j.assistencias },
+    );
+
+  // Prepare monthly presence bar data
+  const pontosPresenca = (presencas ?? []).map((p) => ({
+    label: p.mes,
+    valor: p.taxa,
+  }));
+
+  const temEvolucaoJogos = pontosJogos.length >= 2;
+  const temPresencaMensal = pontosPresenca.length >= 2;
+
   return (
-    <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
-      {eGR ? (
-        <>
-          <Cartao valor={stats.totalDefesas ?? 0} label="defesas" />
-          <Cartao valor={stats.totalGolosSofridos ?? 0} label="sofridos" />
-        </>
-      ) : (
-        <>
-          <Cartao valor={stats.totalGolos} label="golos" />
-          <Cartao valor={stats.totalAssistencias} label="assist." />
-        </>
+    <div className="space-y-6">
+      {/* Stat tiles */}
+      <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
+        {eGR ? (
+          <>
+            <Cartao valor={stats.totalDefesas ?? 0} label="defesas" />
+            <Cartao valor={stats.totalGolosSofridos ?? 0} label="sofridos" />
+          </>
+        ) : (
+          <>
+            <Cartao valor={stats.totalGolos} label="golos" />
+            <Cartao valor={stats.totalAssistencias} label="assist." />
+          </>
+        )}
+        <Cartao valor={stats.jogosUtilizados} label="jogos" />
+        <Cartao valor={stats.titularidades} label="titular" />
+        <Cartao valor={taxa} label="presenças" />
+      </div>
+
+      {/* Evolution chart: golos + assistências por jogo */}
+      {temEvolucaoJogos && (
+        <div className="rounded-lg border border-cinza-200 bg-white p-5 shadow-card">
+          <GraficoLinhas
+            pontos={pontosJogos}
+            serie1={eGR ? "Defesas" : "Golos"}
+            serie2={eGR ? undefined : "Assistências"}
+            titulo={eGR ? "Defesas por jogo" : "Golos e assistências por jogo"}
+          />
+        </div>
       )}
-      <Cartao valor={stats.jogosUtilizados} label="jogos" />
-      <Cartao valor={stats.titularidades} label="titular" />
-      <Cartao valor={taxa} label="presenças" />
+
+      {/* Monthly presence bar chart */}
+      {temPresencaMensal && (
+        <div className="rounded-lg border border-cinza-200 bg-white p-5 shadow-card">
+          <GraficoBarrasV
+            dados={pontosPresenca}
+            titulo="Taxa de presença por mês"
+          />
+        </div>
+      )}
     </div>
   );
 }

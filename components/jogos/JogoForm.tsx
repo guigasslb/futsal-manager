@@ -14,8 +14,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { criarJogo, atualizarJogo } from "@/lib/actions/jogos";
-import { LABEL_CASA_FORA } from "@/lib/schemas/jogo";
-import type { CasaFora, Escalao, Jogo } from "@prisma/client";
+import { LABEL_CASA_FORA, LABEL_TIPO_JOGO } from "@/lib/schemas/jogo";
+import type { CasaFora, Escalao, Jogo, TipoJogo } from "@prisma/client";
 
 function paraInputDateTime(date: Date | null | undefined): string {
   if (!date) return "";
@@ -31,11 +31,15 @@ type JogoParaEdicao = Pick<
   | "data"
   | "adversario"
   | "casaFora"
+  | "tipo"
   | "escalaoId"
   | "competicao"
   | "local"
   | "golosMarcados"
   | "golosSofridos"
+  | "faltas1aParte"
+  | "faltas2aParte"
+  | "videoUrl"
 >;
 
 export function JogoForm({
@@ -51,6 +55,7 @@ export function JogoForm({
   const [erroGeral, setErroGeral] = useState<string | null>(null);
   const [escalaoId, setEscalaoId] = useState<string>(jogo?.escalaoId ?? "");
   const [casaFora, setCasaFora] = useState<CasaFora>(jogo?.casaFora ?? "CASA");
+  const [tipo, setTipo] = useState<TipoJogo>(jogo?.tipo ?? "OFICIAL");
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -60,16 +65,22 @@ export function JogoForm({
 
     const gm = String(fd.get("golosMarcados") ?? "").trim();
     const gs = String(fd.get("golosSofridos") ?? "").trim();
+    const f1 = String(fd.get("faltas1aParte") ?? "").trim();
+    const f2 = String(fd.get("faltas2aParte") ?? "").trim();
 
     const dados = {
       data: String(fd.get("data")),
       adversario: String(fd.get("adversario")),
       casaFora,
+      tipo,
       escalaoId: escalaoId || undefined,
       competicao: String(fd.get("competicao") ?? "").trim() || undefined,
       local: String(fd.get("local") ?? "").trim() || undefined,
       golosMarcados: gm !== "" ? Number(gm) : null,
       golosSofridos: gs !== "" ? Number(gs) : null,
+      faltas1aParte: f1 !== "" ? Number(f1) : null,
+      faltas2aParte: f2 !== "" ? Number(f2) : null,
+      videoUrl: String(fd.get("videoUrl") ?? "").trim(),
     };
 
     startTransition(async () => {
@@ -198,6 +209,33 @@ export function JogoForm({
             defaultValue={jogo?.golosSofridos ?? ""}
           />
         </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        <div className="space-y-1.5">
+          <Label>Tipo</Label>
+          <Select value={tipo} onValueChange={(v) => setTipo(v as TipoJogo)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="OFICIAL">{LABEL_TIPO_JOGO.OFICIAL}</SelectItem>
+              <SelectItem value="AMIGAVEL">{LABEL_TIPO_JOGO.AMIGAVEL}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="faltas1aParte">Faltas 1ª parte</Label>
+          <Input id="faltas1aParte" name="faltas1aParte" type="number" min={0} max={50} defaultValue={jogo?.faltas1aParte ?? ""} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="faltas2aParte">Faltas 2ª parte</Label>
+          <Input id="faltas2aParte" name="faltas2aParte" type="number" min={0} max={50} defaultValue={jogo?.faltas2aParte ?? ""} />
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="videoUrl">Vídeo (link YouTube)</Label>
+        <Input id="videoUrl" name="videoUrl" defaultValue={jogo?.videoUrl ?? ""} placeholder="https://youtube.com/…" />
+        {erros.videoUrl && <p className="text-legenda text-vermelho-600">{erros.videoUrl}</p>}
       </div>
 
       <div className="flex gap-3 pt-2">

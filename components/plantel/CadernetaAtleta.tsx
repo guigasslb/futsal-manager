@@ -51,7 +51,7 @@ export function CadernetaAtleta({
     startTransition(async () => {
       const res = await atualizarProgresso(atletaId, habilidadeId, estado);
       if (res.sucesso) {
-        toast.success("Progresso atualizado");
+        toast.success(estado === "DESBLOQUEADO" ? "🎉 Habilidade desbloqueada!" : "Progresso atualizado");
       } else {
         setEstados((prev) => ({ ...prev, [habilidadeId]: anterior }));
         toast.error(res.erro);
@@ -67,11 +67,24 @@ export function CadernetaAtleta({
     );
   }
 
+  const pct = habilidades.length ? Math.round((desbloqueadas / habilidades.length) * 100) : 0;
+
   return (
     <div className="space-y-6">
-      <p className="text-corpo-sec text-cinza-600">
-        {desbloqueadas} de {habilidades.length} habilidades desbloqueadas
-      </p>
+      <div className="rounded-lg border border-cinza-200 bg-white p-4 shadow-card">
+        <div className="flex items-center justify-between">
+          <p className="text-corpo font-semibold text-cinza-900">
+            {desbloqueadas} de {habilidades.length} habilidades desbloqueadas
+          </p>
+          <span className="text-titulo-seccao font-bold text-verde-600">{pct}%</span>
+        </div>
+        <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-cinza-100">
+          <div
+            className="h-full rounded-full bg-verde-600 transition-all"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
 
       {NIVEIS.map((nivel, i) => {
         const doNivel = habilidades.filter((h) => h.nivel === nivel);

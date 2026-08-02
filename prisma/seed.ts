@@ -1,16 +1,24 @@
-import { PrismaClient, TipoMetrica, NivelHabilidade } from "@prisma/client";
+import { PrismaClient, TipoMetrica, NivelHabilidade, Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { PERFIS_ARRANQUE } from "../lib/permissoes-catalogo";
+import { BIBLIOTECA_ARRANQUE } from "../lib/biblioteca-arranque";
+import { SUBCATEGORIAS_ARRANQUE } from "../lib/subcategorias-arranque";
 
 const prisma = new PrismaClient();
 
-// Passwords iniciais — documentadas para o primeiro login (secção 6.2/17.4).
-// Podem ser sobrepostas por variáveis de ambiente antes de correr o seed.
+// Em produção o seed NÃO usa password default — falha se não for fornecida,
+// para nunca criar contas com credencial pública num ambiente real.
+if (process.env.NODE_ENV === "production" && (!process.env.SEED_PASS_GONCALO || !process.env.SEED_PASS_ADJUNTO)) {
+  throw new Error(
+    "Seed abortado: define SEED_PASS_GONCALO e SEED_PASS_ADJUNTO em produção (sem password default).",
+  );
+}
+
 const PASS_GONCALO = process.env.SEED_PASS_GONCALO || "futsal2026";
 const PASS_ADJUNTO = process.env.SEED_PASS_ADJUNTO || "futsal2026";
-const BCRYPT_COST = 10;
+const BCRYPT_COST = 12;
 
 async function main() {
-  // Evita duplicar se o seed correr mais do que uma vez.
   const jaExiste = await prisma.clube.findFirst({
     where: { nome: "Juventude Sport Clube" },
   });
@@ -28,7 +36,23 @@ async function main() {
     },
   });
 
-  // 2. Época ativa
+  // 2. Perfis de arranque (editáveis) — secção 6.5
+  const perfis: Record<string, string> = {};
+  for (const p of PERFIS_ARRANQUE) {
+    const criado = await prisma.perfil.create({
+      data: {
+        clubeId: clube.id,
+        nome: p.nome,
+        descricao: p.descricao,
+        ambito: p.ambito,
+        capacidades: p.capacidades,
+        sistema: true,
+      },
+    });
+    perfis[p.nome] = criado.id;
+  }
+
+  // 3. Época ativa
   await prisma.epoca.create({
     data: {
       nome: "2025/26",
@@ -39,33 +63,51 @@ async function main() {
     },
   });
 
-  // 3. Utilizadores (permissões iguais)
-  await prisma.utilizador.createMany({
-    data: [
-      {
-        nome: "Gonçalo Pereira",
-        email: "goncalo@jsc.pt",
-        passwordHash: await bcrypt.hash(PASS_GONCALO, BCRYPT_COST),
-        clubeId: clube.id,
-      },
-      {
-        nome: "Treinador Adjunto",
-        email: "adjunto@jsc.pt",
-        passwordHash: await bcrypt.hash(PASS_ADJUNTO, BCRYPT_COST),
-        clubeId: clube.id,
-      },
-    ],
-  });
-
   // 4. Escalões
-  await prisma.escalao.createMany({
-    data: [
-      { nome: "Traquinas", idadeMin: 6, idadeMax: 8, ordem: 0, clubeId: clube.id },
-      { nome: "Benjamins", idadeMin: 9, idadeMax: 10, ordem: 1, clubeId: clube.id },
-    ],
+  const traquinas = await prisma.escalao.create({
+    data: { nome: "Traquinas", idadeMin: 6, idadeMax: 8, ordem: 0, clubeId: clube.id },
+  });
+  const benjamins = await prisma.escalao.create({
+    data: { nome: "Benjamins", idadeMin: 9, idadeMax: 10, ordem: 1, clubeId: clube.id },
   });
 
-  // 5. Métricas configuráveis exemplo
+  // 5. Utilizadores + adesões (membros)
+  const goncalo = await prisma.utilizador.create({
+    data: {
+      nome: "Gonçalo Pereira",
+      email: "goncalo@jsc.pt",
+      passwordHash: await bcrypt.hash(PASS_GONCALO, BCRYPT_COST),
+    },
+  });
+  const adjunto = await prisma.utilizador.create({
+    data: {
+      nome: "Treinador Adjunto",
+      email: "adjunto@jsc.pt",
+      passwordHash: await bcrypt.hash(PASS_ADJUNTO, BCRYPT_COST),
+    },
+  });
+
+  // Gonçalo = Administrador (âmbito todo o clube)
+  await prisma.membroClube.create({
+    data: {
+      utilizadorId: goncalo.id,
+      clubeId: clube.id,
+      perfilId: perfis["Administrador"],
+      estado: "ATIVO",
+    },
+  });
+  // Adjunto = perfil Adjunto, atribuído aos Benjamins
+  await prisma.membroClube.create({
+    data: {
+      utilizadorId: adjunto.id,
+      clubeId: clube.id,
+      perfilId: perfis["Adjunto"],
+      estado: "ATIVO",
+      atribuicoes: { create: [{ escalaoId: benjamins.id }] },
+    },
+  });
+
+  // 6. Métricas configuráveis exemplo
   await prisma.metricaConfig.createMany({
     data: [
       { nome: "Dribles completados", tipo: TipoMetrica.NUMERO, ordem: 0, clubeId: clube.id },
@@ -74,7 +116,7 @@ async function main() {
     ],
   });
 
-  // 6. Habilidades exemplo por nível
+  // 7. Habilidades exemplo por nível
   await prisma.habilidade.createMany({
     data: [
       { nome: "Rolo", nivel: NivelHabilidade.BASICO, ordem: 0, clubeId: clube.id },
@@ -86,10 +128,40 @@ async function main() {
     ],
   });
 
+  // Silenciar "declarado mas não usado" (traquinas fica disponível para futuros dados)
+  void traquinas;
+
+  // 8. Subcategorias de exercícios (predefinições do sistema)
+  await prisma.subcategoriaExercicio.createMany({
+    data: SUBCATEGORIAS_ARRANQUE.map((s) => ({
+      nome: s.nome,
+      categoria: s.categoria,
+      ordem: s.ordem,
+      clubeId: clube.id,
+      sistema: true,
+    })),
+  });
+
+  // 9. Biblioteca de exercícios curada de arranque (Fase 9)
+  await prisma.exercicio.createMany({
+    data: BIBLIOTECA_ARRANQUE.map((e) => ({
+      nome: e.nome,
+      descricao: e.descricao,
+      objetivo: e.objetivo,
+      duracaoMin: e.duracaoMin,
+      categoriaPrincipal: e.categoriaPrincipal,
+      diagrama: e.diagrama as unknown as Prisma.InputJsonValue,
+      clubeId: clube.id,
+      criadorId: goncalo.id,
+      proprietario: "CLUBE",
+      origemSeed: true,
+    })),
+  });
+
   console.log("Seed concluído.");
   console.log("Login inicial:");
-  console.log(`  goncalo@jsc.pt / ${PASS_GONCALO}`);
-  console.log(`  adjunto@jsc.pt / ${PASS_ADJUNTO}`);
+  console.log(`  goncalo@jsc.pt / ${PASS_GONCALO}  (Administrador)`);
+  console.log(`  adjunto@jsc.pt / ${PASS_ADJUNTO}  (Adjunto — Benjamins)`);
 }
 
 main()

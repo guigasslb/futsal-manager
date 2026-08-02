@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, Pencil } from "lucide-react";
+import { ChevronLeft, Pencil, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { obterAtleta, obterEstatisticasAtleta } from "@/lib/actions/atletas";
 import { obterCadernetaAtleta } from "@/lib/actions/caderneta";
+import { obterEvolucaoAtleta, obterPresencasMensal } from "@/lib/actions/analise";
 import { AvatarAtleta } from "@/components/plantel/AvatarAtleta";
 import { EstatisticasAtleta } from "@/components/plantel/EstatisticasAtleta";
 import { CadernetaAtleta } from "@/components/plantel/CadernetaAtleta";
@@ -37,17 +38,20 @@ export default async function PerfilAtletaPage({
   if (!res.sucesso) notFound();
 
   const a = res.dados;
-  const eGR = a.posicao === "GUARDA_REDES";
+  const eGR = a.posicoes.includes("GUARDA_REDES");
 
-  const [resStats, resCaderneta] = await Promise.all([
+  const [resStats, resCaderneta, resEvolucao, resPresencas] = await Promise.all([
     obterEstatisticasAtleta(id),
     obterCadernetaAtleta(id),
+    obterEvolucaoAtleta(id),
+    obterPresencasMensal(id),
   ]);
 
   const metaPartes: string[] = [];
-  if (a.posicao) metaPartes.push(LABEL_POSICAO[a.posicao]);
+  if (a.posicoes.length) metaPartes.push(a.posicoes.map((p) => LABEL_POSICAO[p]).join(", "));
   if (a.numero != null) metaPartes.push(`#${a.numero}`);
   metaPartes.push(a.escalao.nome);
+  if (a.escalaoSecundario) metaPartes.push(`+ ${a.escalaoSecundario.nome}`);
   metaPartes.push(a.epoca.nome);
   if (a.dataNascimento) metaPartes.push(`${calcularIdade(a.dataNascimento)} anos`);
 
@@ -62,17 +66,25 @@ export default async function PerfilAtletaPage({
           <ChevronLeft className="h-4 w-4" />
           Plantel
         </Link>
-        <Button asChild variant="outline">
-          <Link href={`/plantel/${a.id}/editar`}>
-            <Pencil className="h-4 w-4" />
-            Editar
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link href={`/plantel/${a.id}/relatorio`}>
+              <FileText className="h-4 w-4" />
+              Relatório
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href={`/plantel/${a.id}/editar`}>
+              <Pencil className="h-4 w-4" />
+              Editar
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Cabeçalho de identidade */}
       <div className="flex items-center gap-5">
-        <AvatarAtleta nome={a.nome} tamanho="xl" />
+        <AvatarAtleta nome={a.nome} tamanho="xl" fotoUrl={a.fotoUrl} />
         <div>
           <h1 className="leading-tight">{a.nome}</h1>
           <p className="mt-1 text-corpo-sec text-cinza-600">{metaPartes.join(" · ")}</p>
@@ -90,7 +102,12 @@ export default async function PerfilAtletaPage({
         <TabsContent value="estatisticas" className="space-y-3">
           <p className="text-corpo-sec text-cinza-500">Estatísticas de {a.epoca.nome}</p>
           {resStats.sucesso ? (
-            <EstatisticasAtleta stats={resStats.dados} eGR={eGR} />
+            <EstatisticasAtleta
+              stats={resStats.dados}
+              eGR={eGR}
+              evolucao={resEvolucao.sucesso ? resEvolucao.dados : undefined}
+              presencas={resPresencas.sucesso ? resPresencas.dados : undefined}
+            />
           ) : (
             <p className="text-corpo-sec text-vermelho-600">{resStats.erro}</p>
           )}
@@ -128,6 +145,32 @@ export default async function PerfilAtletaPage({
             </div>
           ) : (
             <p className="text-corpo-sec text-cinza-500">Sem dados pessoais adicionais.</p>
+          )}
+
+          {(a.encarregadoNome || a.encarregadoContacto || a.encarregadoEmail) && (
+            <div className="rounded-lg border border-cinza-200 bg-white p-5 shadow-card space-y-3">
+              <p className="text-corpo font-semibold text-cinza-900">Encarregado de educação</p>
+              {a.encarregadoNome && (
+                <div>
+                  <p className="text-legenda uppercase tracking-wide text-cinza-500">Nome</p>
+                  <p className="text-corpo text-cinza-900">{a.encarregadoNome}</p>
+                </div>
+              )}
+              <div className="flex flex-wrap gap-6">
+                {a.encarregadoContacto && (
+                  <div>
+                    <p className="text-legenda uppercase tracking-wide text-cinza-500">Contacto</p>
+                    <p className="text-corpo text-cinza-900">{a.encarregadoContacto}</p>
+                  </div>
+                )}
+                {a.encarregadoEmail && (
+                  <div>
+                    <p className="text-legenda uppercase tracking-wide text-cinza-500">Email</p>
+                    <p className="text-corpo text-cinza-900">{a.encarregadoEmail}</p>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </TabsContent>
       </Tabs>

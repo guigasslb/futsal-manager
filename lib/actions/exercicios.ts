@@ -4,14 +4,16 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { obterClubeIdAtual } from "@/lib/epoca-context";
+import { exigirCapacidade } from "@/lib/permissoes";
 import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
 import { exercicioSchema } from "@/lib/schemas/exercicio";
-import type { CategoriaExercicio, Exercicio } from "@prisma/client";
+import { BIBLIOTECA_ARRANQUE } from "@/lib/biblioteca-arranque";
+import type { CategoriaExercicioPrincipal, Exercicio, Prisma } from "@prisma/client";
 
 const PATH = "/exercicios";
 
 export async function listarExercicios(
-  categoria?: CategoriaExercicio,
+  categoriaPrincipal?: CategoriaExercicioPrincipal,
 ): Promise<Resultado<Exercicio[]>> {
   const clubeId = await obterClubeIdAtual();
   if (!clubeId) return erro("Não autenticado");
@@ -19,9 +21,9 @@ export async function listarExercicios(
   const exercicios = await prisma.exercicio.findMany({
     where: {
       clubeId,
-      ...(categoria ? { categoria } : {}),
+      ...(categoriaPrincipal ? { categoriaPrincipal } : {}),
     },
-    orderBy: [{ categoria: "asc" }, { nome: "asc" }],
+    orderBy: [{ categoriaPrincipal: "asc" }, { nome: "asc" }],
   });
   return ok(exercicios);
 }
@@ -41,11 +43,19 @@ export async function criarExercicio(dados: unknown): Promise<Resultado<Exercici
   const session = await auth();
   if (!session?.user?.id) return erro("Não autenticado");
 
-  const clubeId = await obterClubeIdAtual();
-  if (!clubeId) return erro("Não autenticado");
+  const perm = await exigirCapacidade("EXERCICIOS_GERIR");
+  if (!perm.ok) return erro(perm.erro);
+  const clubeId = perm.ctx.clube.id;
 
   const parsed = exercicioSchema.safeParse(dados);
   if (!parsed.success) return erroDeValidacao(parsed.error);
+
+  if (parsed.data.subcategoriaId) {
+    const sub = await prisma.subcategoriaExercicio.findFirst({
+      where: { id: parsed.data.subcategoriaId, clubeId },
+    });
+    if (!sub) return erro("Subcategoria não encontrada");
+  }
 
   const { diagrama, ...resto } = parsed.data;
   const exercicio = await prisma.exercicio.create({
@@ -64,14 +74,22 @@ export async function atualizarExercicio(
   id: string,
   dados: unknown,
 ): Promise<Resultado<Exercicio>> {
-  const clubeId = await obterClubeIdAtual();
-  if (!clubeId) return erro("Não autenticado");
+  const perm = await exigirCapacidade("EXERCICIOS_GERIR");
+  if (!perm.ok) return erro(perm.erro);
+  const clubeId = perm.ctx.clube.id;
 
   const parsed = exercicioSchema.safeParse(dados);
   if (!parsed.success) return erroDeValidacao(parsed.error);
 
   const existe = await prisma.exercicio.findFirst({ where: { id, clubeId } });
   if (!existe) return erro("Exercício não encontrado");
+
+  if (parsed.data.subcategoriaId) {
+    const sub = await prisma.subcategoriaExercicio.findFirst({
+      where: { id: parsed.data.subcategoriaId, clubeId },
+    });
+    if (!sub) return erro("Subcategoria não encontrada");
+  }
 
   const exercicio = await prisma.exercicio.update({
     where: { id },
@@ -80,7 +98,8 @@ export async function atualizarExercicio(
       descricao: parsed.data.descricao ?? null,
       objetivo: parsed.data.objetivo ?? null,
       duracaoMin: parsed.data.duracaoMin ?? null,
-      categoria: parsed.data.categoria ?? null,
+      categoriaPrincipal: parsed.data.categoriaPrincipal ?? null,
+      subcategoriaId: parsed.data.subcategoriaId ?? null,
       diagrama: parsed.data.diagrama ?? undefined,
     },
   });
@@ -90,8 +109,9 @@ export async function atualizarExercicio(
 }
 
 export async function apagarExercicio(id: string): Promise<Resultado<void>> {
-  const clubeId = await obterClubeIdAtual();
-  if (!clubeId) return erro("Não autenticado");
+  const perm = await exigirCapacidade("EXERCICIOS_GERIR");
+  if (!perm.ok) return erro(perm.erro);
+  const clubeId = perm.ctx.clube.id;
 
   const existe = await prisma.exercicio.findFirst({ where: { id, clubeId } });
   if (!existe) return erro("Exercício não encontrado");
@@ -105,4 +125,34 @@ export async function apagarExercicio(id: string): Promise<Resultado<void>> {
   await prisma.exercicio.delete({ where: { id } });
   revalidatePath(PATH);
   return ok(undefined);
+}
+
+// Instala a biblioteca curada de arranque no clube ativo (Fase 9). Idempotente.
+export async function instalarBibliotecaArranque(): Promise<Resultado<{ criados: number }>> {
+  const session = await auth();
+  if (!session?.user?.id) return erro("Não autenticado");
+
+  const perm = await exigirCapacidade("EXERCICIOS_GERIR");
+  if (!perm.ok) return erro(perm.erro);
+  const clubeId = perm.ctx.clube.id;
+
+  const jaTem = await prisma.exercicio.count({ where: { clubeId, origemSeed: true } });
+  if (jaTem > 0) return erro("A biblioteca de arranque já foi instalada neste clube.");
+
+  const dados: Prisma.ExercicioCreateManyInput[] = BIBLIOTECA_ARRANQUE.map((e) => ({
+    nome: e.nome,
+    descricao: e.descricao,
+    objetivo: e.objetivo,
+    duracaoMin: e.duracaoMin,
+    categoriaPrincipal: e.categoriaPrincipal,
+    diagrama: e.diagrama as unknown as Prisma.InputJsonValue,
+    clubeId,
+    criadorId: session.user!.id!,
+    proprietario: "CLUBE",
+    origemSeed: true,
+  }));
+
+  await prisma.exercicio.createMany({ data: dados });
+  revalidatePath(PATH);
+  return ok({ criados: dados.length });
 }

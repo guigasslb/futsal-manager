@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, AlertTriangle } from "lucide-react";
+import { Plus, AlertTriangle, FileBarChart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { listarAtletas } from "@/lib/actions/atletas";
 import { listarEscaloes } from "@/lib/actions/escaloes";
@@ -45,12 +45,20 @@ export default async function PlantelPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1>Plantel</h1>
-        <Button asChild>
-          <Link href="/plantel/novo">
-            <Plus className="h-4 w-4" />
-            Novo atleta
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link href="/relatorios">
+              <FileBarChart className="h-4 w-4" />
+              Relatórios
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link href="/plantel/novo">
+              <Plus className="h-4 w-4" />
+              Novo atleta
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {escaloes.length > 0 && (
@@ -102,7 +110,7 @@ export default async function PlantelPage({
       ) : (
         <>
           {haDuplicados && (
-            <p className="flex items-center gap-1.5 rounded-md bg-ambar-500/10 px-3 py-2 text-corpo-sec text-ambar-500">
+            <p className="flex items-center gap-1.5 rounded-md bg-ambar-500/10 px-3 py-2 text-corpo-sec text-ambar-600">
               <AlertTriangle className="h-4 w-4 flex-shrink-0" />
               Há atletas do mesmo escalão com o mesmo número (assinalados a laranja).
             </p>
@@ -116,18 +124,18 @@ export default async function PlantelPage({
                 href={`/plantel/${a.id}`}
                 className="flex flex-col items-center gap-3 rounded-lg border border-cinza-200 bg-white p-4 text-center shadow-card transition-all hover:border-azul-300 hover:shadow-md"
               >
-                <AvatarAtleta nome={a.nome} tamanho="lg" />
+                <AvatarAtleta nome={a.nome} tamanho="lg" fotoUrl={a.fotoUrl} />
                 <div className="w-full">
                   <p className="truncate text-corpo font-semibold text-cinza-900">{a.nome}</p>
                   <p className="text-legenda text-cinza-600">
                     {a.numero != null && (
-                      <span className={dup ? "font-semibold text-ambar-500" : ""}>
+                      <span className={dup ? "font-semibold text-ambar-600" : ""}>
                         #{a.numero}
                       </span>
                     )}
-                    {a.numero != null && a.posicao ? " · " : ""}
-                    {a.posicao ? ABREV_POSICAO[a.posicao] : ""}
-                    {a.numero == null && !a.posicao ? "—" : ""}
+                    {a.numero != null && a.posicoes.length ? " · " : ""}
+                    {a.posicoes.map((p) => ABREV_POSICAO[p]).join(", ")}
+                    {a.numero == null && a.posicoes.length === 0 ? "—" : ""}
                   </p>
                 </div>
               </Link>

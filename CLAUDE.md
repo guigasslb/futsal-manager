@@ -28,10 +28,10 @@ Next.js 15 (App Router) · React 19 · TypeScript strict · Prisma + PostgreSQL 
 - Toda a validação com **Zod** em `lib/schemas/` — fonte única, partilhada cliente/servidor.
 - Todas as actions: validam input → verificam `auth()` → obtêm época via `obterEpocaAtiva()` → devolvem `Resultado<T>` (`lib/utils.ts`) → `revalidatePath()`.
 - Todas as queries filtram pelo **clube** do utilizador autenticado e, quando aplicável, pela **época ativa**.
-- Interface 100% em **português de Portugal**, com a terminologia do Anexo A.
-- Sistema de design da secção 19 (tokens de cor, tipografia, alvos de toque ≥44px). Sem dark mode no MVP.
+- Interface 100% em **português de Portugal**, com a terminologia do glossário (secção 2).
+- Sistema de design da secção 12 (tokens de cor, tipografia, alvos de toque ≥44px). Sem dark mode no MVP.
 
-## Estado dos passos (secção 18)
+## Estado dos passos (MVP — concluído)
 
 - [x] **1. Fundações** — config, schema Prisma (16 entidades, 8 enums), Auth.js + middleware, `obterEpocaAtiva()`, seed, login funcional.
 - [x] **2. Layout + Época** — BarraTopo, Navegacao (sidebar+bottom-nav), SeletorEpoca, EstadosUI, stubs de rotas.
@@ -50,14 +50,34 @@ Next.js 15 (App Router) · React 19 · TypeScript strict · Prisma + PostgreSQL 
 
 ### Conformidade adicional com a spec
 - [x] Métricas configuráveis capturadas por jogo (ValorMetrica, input adapta ao tipo).
-- [x] Confirmação ao remover convocado com estatísticas (secção 22.4).
+- [x] Confirmação ao remover convocado com estatísticas (secção 9 — casos-limite).
 - [x] Pesquisa por nome no plantel e exercícios.
 - [x] Toggle lista/calendário mensal nos treinos.
-- [x] Aviso de número duplicado no plantel (secção 22.8).
-- [x] Testes Vitest: schemas Zod, DiagramaCampo e agregações (secção 15) — 33 testes.
+- [x] Aviso de número duplicado no plantel (secção 8 — plantel).
+- [x] Testes Vitest: schemas Zod, DiagramaCampo, agregações, e correções da auditoria — **51 testes**.
+
+## Melhorias pós-MVP (Grupos A–E, 2026-08)
+
+- [x] **A — Modelo do atleta:** posições múltiplas (`posicoes`), escalão secundário, `fotoUrl` (por URL), `dataIngresso`, encarregado de educação.
+- [x] **B — Periodização smart + sessão↔periodização:** `sugerirPlaneamento` (pré-preenchimento), `TipoSessao` (NORMAL/ABERTO/CAPTACAO/EVENTO); só NORMAL liga a planeamento.
+- [x] **C — Equipa técnica:** "Membros" → "Equipa técnica".
+- [x] **D — Exercícios:** `CategoriaExercicioPrincipal` (enum) + `SubcategoriaExercicio` (customizável por clube); `ExercicioForm` redesenhado; CRUD de subcategorias em Definições.
+- [x] **E — Estatística/visualização:** gráficos SVG próprios (`components/graficos/`) — evolução por jogo, presença mensal, rankings; `lib/actions/analise.ts`.
+
+## Auditoria de produção (fases 0–6, 2026-08-02)
+
+Estado: **build de produção verde, `npm audit --omit=dev` = 0 vulnerabilidades, 51 testes.**
+- [x] **0 — Build** desbloqueada.
+- [x] **1 — Segurança:** Next 15.5.x (CVEs), next-auth beta.32; middleware `authorized`; sessão 7d; allowlist YouTube no `videoUrl`; rate-limit de login; headers de segurança (`next.config.js`); seed falha em prod sem passwords; bcrypt cost 12.
+- [x] **3 — Dados:** `dataIngresso` na taxa de presença; ranking por `atletaId`; FK guards (apagar escalão/habilidade); validação de convocatória e reordenação; `erroDeValidacao`; `convidarMembro` em transação.
+- [x] **4 — Ops:** `global-error.tsx`; 10 índices Prisma; `docs/DEPLOY.md`; `.env.example`.
+- [x] **5 — Visual/a11y:** tokens de cor em falta; `ambar-600` (AA); área de toque + focus nos botões de reordenar.
+- [x] **6 — Testes:** `tests/actions-producao.test.ts` (7).
+- **Pendente (ops do utilizador):** rodar password BD Supabase + `AUTH_SECRET`; ligar monitorização de erros (Sentry). Ver `docs/DEPLOY.md` §6.
+- **RGPD:** consentimento tratado pelo clube na inscrição, fora da app (decisão 2026-08-02).
 
 ## Comandos
 
 `npm run dev` · `npm run typecheck` · `npm run lint` · `npm run test` · `npm run db:migrate` · `npm run db:seed` · `npm run db:studio`
 
-Definição de pronto de cada funcionalidade: secção 24.
+Definição de pronto de cada funcionalidade: secção 16.

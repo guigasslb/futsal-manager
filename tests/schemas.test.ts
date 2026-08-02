@@ -29,17 +29,20 @@ describe("atletaSchema", () => {
     );
   });
 
-  it("rejeita posição inválida", () => {
-    const r = atletaSchema.safeParse({ nome: "João", escalaoId: CUID, posicao: "AVANCADO" });
+  it("rejeita posição inválida no array de posições", () => {
+    const r = atletaSchema.safeParse({ nome: "João", escalaoId: CUID, posicoes: ["AVANCADO"] });
     expect(r.success).toBe(false);
   });
 
-  it("aceita as cinco posições válidas", () => {
-    for (const posicao of ["GUARDA_REDES", "FIXO", "ALA", "PIVO", "UNIVERSAL"]) {
-      expect(atletaSchema.safeParse({ nome: "João", escalaoId: CUID, posicao }).success).toBe(
-        true,
-      );
-    }
+  it("aceita múltiplas posições válidas", () => {
+    const r = atletaSchema.safeParse({ nome: "João", escalaoId: CUID, posicoes: ["ALA", "PIVO"] });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.posicoes).toEqual(["ALA", "PIVO"]);
+  });
+
+  it("rejeita escalão secundário igual ao principal", () => {
+    const r = atletaSchema.safeParse({ nome: "João", escalaoId: CUID, escalaoSecundarioId: CUID });
+    expect(r.success).toBe(false);
   });
 });
 
@@ -84,8 +87,17 @@ describe("diagramaSchema", () => {
     expect(diagramaSchema.safeParse(diagrama).success).toBe(true);
   });
 
-  it("rejeita versão diferente de 1", () => {
-    expect(diagramaSchema.safeParse({ versao: 2, elementos: [] }).success).toBe(false);
+  it("aceita versão 2 (com passos de animação)", () => {
+    const d = {
+      versao: 2,
+      elementos: [{ id: "a", tipo: "jogador", x: 100, y: 100, cor: "azul" }],
+      passos: [{ id: "p1", ordem: 0, posicoes: [{ elementoId: "a", x: 120, y: 130 }] }],
+    };
+    expect(diagramaSchema.safeParse(d).success).toBe(true);
+  });
+
+  it("rejeita versão inválida (3)", () => {
+    expect(diagramaSchema.safeParse({ versao: 3, elementos: [] }).success).toBe(false);
   });
 
   it("rejeita coordenadas fora do campo (0-400 / 0-200)", () => {

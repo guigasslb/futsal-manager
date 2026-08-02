@@ -17,19 +17,19 @@ import {
   reordenarExercicios,
 } from "@/lib/actions/treinos";
 import { LABEL_CATEGORIA } from "@/lib/schemas/exercicio";
-import type { CategoriaExercicio } from "@prisma/client";
+import type { CategoriaExercicioPrincipal } from "@prisma/client";
 
 type ExercicioSessao = {
   id: string;
   ordem: number;
   duracaoMin: number | null;
-  exercicio: { id: string; nome: string; categoria: CategoriaExercicio | null };
+  exercicio: { id: string; nome: string; categoriaPrincipal: CategoriaExercicioPrincipal | null };
 };
 
 type ExercicioBiblioteca = {
   id: string;
   nome: string;
-  categoria: CategoriaExercicio | null;
+  categoriaPrincipal: CategoriaExercicioPrincipal | null;
   duracaoMin: number | null;
 };
 
@@ -108,7 +108,7 @@ export function GestorExercicios({
                     <div>
                       <p className="text-corpo font-medium text-cinza-900">{ex.nome}</p>
                       <p className="text-legenda text-cinza-500">
-                        {ex.categoria ? LABEL_CATEGORIA[ex.categoria] : "Sem categoria"}
+                        {ex.categoriaPrincipal ? LABEL_CATEGORIA[ex.categoriaPrincipal] : "Sem categoria"}
                         {ex.duracaoMin ? ` · ${ex.duracaoMin} min` : ""}
                       </p>
                     </div>
@@ -144,7 +144,7 @@ export function GestorExercicios({
                   <button
                     onClick={() => mover(i, -1)}
                     disabled={i === 0 || pending}
-                    className="rounded p-0.5 text-cinza-400 hover:text-cinza-900 disabled:opacity-30"
+                    className="flex h-8 w-8 items-center justify-center rounded text-cinza-400 hover:text-cinza-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-azul-700 disabled:opacity-30"
                     aria-label="Subir"
                   >
                     <ChevronUp className="h-4 w-4" />
@@ -152,7 +152,7 @@ export function GestorExercicios({
                   <button
                     onClick={() => mover(i, 1)}
                     disabled={i === exercicios.length - 1 || pending}
-                    className="rounded p-0.5 text-cinza-400 hover:text-cinza-900 disabled:opacity-30"
+                    className="flex h-8 w-8 items-center justify-center rounded text-cinza-400 hover:text-cinza-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-azul-700 disabled:opacity-30"
                     aria-label="Descer"
                   >
                     <ChevronDown className="h-4 w-4" />
@@ -162,8 +162,8 @@ export function GestorExercicios({
                 <div className="flex-1">
                   <p className="text-corpo font-medium text-cinza-900">{e.exercicio.nome}</p>
                   <p className="text-legenda text-cinza-500">
-                    {e.exercicio.categoria
-                      ? LABEL_CATEGORIA[e.exercicio.categoria]
+                    {e.exercicio.categoriaPrincipal
+                      ? LABEL_CATEGORIA[e.exercicio.categoriaPrincipal]
                       : "Sem categoria"}
                     {e.duracaoMin ? ` · ${e.duracaoMin} min` : ""}
                   </p>

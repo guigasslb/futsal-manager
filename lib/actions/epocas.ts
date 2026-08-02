@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { obterClubeIdAtual, COOKIE_EPOCA } from "@/lib/epoca-context";
+import { exigirCapacidade } from "@/lib/permissoes";
 import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
 import type { Epoca } from "@prisma/client";
 
@@ -29,8 +30,9 @@ export async function listarEpocas(): Promise<Resultado<Epoca[]>> {
 }
 
 export async function criarEpoca(dados: unknown): Promise<Resultado<Epoca>> {
-  const clubeId = await obterClubeIdAtual();
-  if (!clubeId) return erro("Não autenticado");
+  const perm = await exigirCapacidade("CLUBE_EPOCAS");
+  if (!perm.ok) return erro(perm.erro);
+  const clubeId = perm.ctx.clube.id;
 
   const parsed = schemaEpoca.safeParse(dados);
   if (!parsed.success) return erroDeValidacao(parsed.error);
@@ -44,8 +46,9 @@ export async function criarEpoca(dados: unknown): Promise<Resultado<Epoca>> {
 
 // Marca ativa=true na BD e desmarca as outras (secção 12.1) — usada em Definições > Épocas
 export async function definirEpocaAtiva(id: string): Promise<Resultado<void>> {
-  const clubeId = await obterClubeIdAtual();
-  if (!clubeId) return erro("Não autenticado");
+  const perm = await exigirCapacidade("CLUBE_EPOCAS");
+  if (!perm.ok) return erro(perm.erro);
+  const clubeId = perm.ctx.clube.id;
 
   const epoca = await prisma.epoca.findFirst({ where: { id, clubeId } });
   if (!epoca) return erro("Época não encontrada");

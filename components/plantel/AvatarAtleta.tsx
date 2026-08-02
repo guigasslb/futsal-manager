@@ -32,10 +32,22 @@ const TAMANHOS = {
 export function AvatarAtleta({
   nome,
   tamanho = "md",
+  fotoUrl,
 }: {
   nome: string;
   tamanho?: keyof typeof TAMANHOS;
+  fotoUrl?: string | null;
 }) {
+  if (fotoUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={fotoUrl}
+        alt={nome}
+        className={`flex-shrink-0 rounded-full object-cover ${TAMANHOS[tamanho]}`}
+      />
+    );
+  }
   return (
     <div
       className={`flex flex-shrink-0 items-center justify-center rounded-full font-semibold text-white select-none ${corAvatar(nome)} ${TAMANHOS[tamanho]}`}

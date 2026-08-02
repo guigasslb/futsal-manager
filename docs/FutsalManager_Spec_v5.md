@@ -261,19 +261,25 @@ model Escalao {
 }
 
 model Atleta {
-  id             String    @id @default(cuid())
-  nome           String
-  dataNascimento DateTime?
-  posicao        Posicao?  // GUARDA_REDES | FIXO | ALA | PIVO | UNIVERSAL
-  numero         Int?
-  observacoes    String?
-  fotoUrl        String?   // FUTURO
-  ativo          Boolean   @default(true) // soft delete
-  dataIngresso   DateTime? // para taxa de presença (secção 10); default = criadoEm
-  escalaoId      String
-  epocaId        String
-  criadoEm       DateTime  @default(now())
-  atualizadoEm   DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  nome                String
+  dataNascimento      DateTime?
+  posicoes            Posicao[] // um atleta pode ter VÁRIAS posições
+  numero              Int?
+  observacoes         String?
+  fotoUrl             String?   // por URL (sem upload por agora)
+  ativo               Boolean   @default(true) // soft delete
+  dataIngresso        DateTime? // para taxa de presença (secção 10); default = criadoEm
+  // Encarregado de educação (RGPD — minimização)
+  encarregadoNome     String?
+  encarregadoContacto String?
+  encarregadoEmail    String?
+  // Escalão principal + secundário opcional (um atleta joga em 1 ou 2 escalões)
+  escalaoId           String
+  escalaoSecundarioId String?
+  epocaId             String
+  criadoEm            DateTime  @default(now())
+  atualizadoEm        DateTime  @updatedAt
 
   consentimentos Consentimento[] // RGPD (secção 5)
 }
@@ -298,7 +304,11 @@ model Exercicio {
   descricao      String?
   objetivo       String?
   duracaoMin     Int?
-  categoria      CategoriaExercicio?
+  // Classificação em dois níveis (Grupo D): categoria principal (enum fixo) +
+  // subcategoria customizável por clube.
+  categoriaPrincipal CategoriaExercicioPrincipal?
+  subcategoriaId String?
+  subcategoria   SubcategoriaExercicio? @relation(fields: [subcategoriaId], references: [id])
   diagrama       Json?               // DiagramaCampo v2 (com passos/animação) — secção 11
   origemSeed     Boolean @default(false) // exercício da biblioteca curada de arranque
   criadoEm       DateTime @default(now())
@@ -311,9 +321,26 @@ model Exercicio {
 // Determina de quem é o conteúdo criado (exercícios, modelos de jogo). Ver secção 4.
 enum PropriedadeConteudo { CLUBE TREINADOR }
 
-enum CategoriaExercicio {
-  ATIVACAO TECNICA_INDIVIDUAL FINALIZACAO POSSE_BOLA TRANSICOES
-  SITUACOES_JOGO JOGO_REDUZIDO BOLAS_PARADAS FISICO OUTRO
+// Categoria principal do exercício (enum fixo). Grupo D — substitui o antigo CategoriaExercicio.
+enum CategoriaExercicioPrincipal {
+  ATAQUE DEFESA TRANSICAO BOLAS_PARADAS FISICO GUARDA_REDES OUTRO
+}
+
+// Subcategoria customizável por clube (à semelhança de métricas/habilidades).
+// Seed instala ~22 predefinidas (sistema=true, não editáveis/apagáveis).
+model SubcategoriaExercicio {
+  id        String                      @id @default(cuid())
+  clubeId   String
+  clube     Clube                       @relation(fields: [clubeId], references: [id])
+  nome      String
+  categoria CategoriaExercicioPrincipal
+  ordem     Int                         @default(0)
+  sistema   Boolean                     @default(false)
+  criadoEm  DateTime                    @default(now())
+
+  exercicios Exercicio[]
+
+  @@index([clubeId, categoria])
 }
 
 // Exercício partilhado na biblioteca de um clube (o autor mantém sempre o seu).
@@ -353,11 +380,14 @@ enum TipoPlaneamento { SEMANAL MENSAL }
 enum PeriodoEpoca { PREPARATORIO COMPETITIVO TRANSICAO }
 
 model Sessao {
-  id            String   @id @default(cuid())
+  id            String     @id @default(cuid())
   clubeId       String
   escalaoId     String
   epocaId       String
-  planeamentoId String?  // liga ao microciclo
+  // Grupo B: tipo de sessão. NORMAL liga-se a periodização (planeamento); os tipos
+  // "soltos" (ABERTO/CAPTACAO/EVENTO) dispensam planeamento.
+  tipoSessao    TipoSessao @default(NORMAL)
+  planeamentoId String?    // liga ao microciclo (recomendado p/ tipo NORMAL)
   data          DateTime
   duracaoMin    Int?
   objetivo      String?
@@ -375,6 +405,9 @@ model Sessao {
   exercicios SessaoExercicio[]
   presencas  Presenca[]
 }
+
+// Grupo B — tipo de sessão de treino.
+enum TipoSessao { NORMAL ABERTO CAPTACAO EVENTO }
 
 model SessaoExercicio {
   id          String @id @default(cuid())
@@ -723,7 +756,10 @@ Toda a operação corre num contexto resolvido no servidor:
 - **Escalão selecionado** — parâmetro de UI (tabs), nunca fonte de autorização por si só.
 
 ### 5.5 RGPD (dados de menores) — fundação, não opção
-Tratamos dados de **crianças**; o desenho tem de o refletir desde o schema:
+Tratamos dados de **crianças**; o desenho tem de o refletir desde o schema.
+
+> **Estado atual (decisão 2026-08-02):** o **consentimento parental é recolhido pelo clube no ato de inscrição, fora da aplicação** (formulário/papel). A app assume que o consentimento existe para os atletas registados. O modelo `Consentimento` e o hard-delete descritos abaixo são o **alvo futuro** (não implementados; não bloqueadores). Ver `docs/DEPLOY.md` §6.
+
 - **Minimização:** recolher apenas o necessário (nome, data de nascimento, posição, número, observações). Contactos dos pais só quando o portal de pais existir (FUTURO).
 - **Consentimento parental** (`Consentimento`, tipos `DADOS` e `IMAGEM`): registado por atleta, com encarregado de educação e data. **Fotografias de menores** (`fotoUrl`, FUTURO) só com consentimento `IMAGEM` ativo.
 - **Direito ao esquecimento:** por defeito **soft-delete** (`ativo = false`, preserva histórico competitivo agregado). A pedido do titular/encarregado, **hard-delete** dos dados pessoais (apaga o `Atleta` e dados diretamente identificáveis; estatísticas podem ser anonimizadas para não partir agregados de equipa).
@@ -1126,10 +1162,11 @@ O mesmo editor e formato servem **exercícios**, **modelos de jogo** e **quadros
 Prescritivo — sem reinterpretar "cartão" ou "cor primária". Base implementada no MVP (Tailwind + shadcn/ui), estendida com branding dinâmico.
 
 ### 12.1 Tokens de cor (base)
-- **azul:** 900 `#0F1E8A` · 700 `#1A2FD4` (**primária/ação**) · 500 `#3A50E0` · 100 `#E4E8FF` · 50 `#F4F6FF`
-- **cinza:** 900 `#1A1D29` (texto) · 600 `#4A4F63` · 400 `#8A90A6` · 200 `#E2E5EF` · 50 `#F8F9FC`
-- **verde** 600 `#1E9E5A` (sucesso) · **âmbar** 500 `#E0900A` (aviso) · **vermelho** 600 `#D33A3A` (erro/destrutivo)
+- **azul:** 900 `#0F1E8A` · 700 `#1A2FD4` (**primária/ação**) · 500 `#3A50E0` · 300 `#A9B4F5` · 100 `#E4E8FF` · 50 `#F4F6FF`
+- **cinza:** 900 `#1A1D29` (texto) · 700 `#2E3344` · 600 `#4A4F63` · 500 `#676D82` · 400 `#8A90A6` · 300 `#B4B9C9` · 200 `#E2E5EF` · 100 `#EEF0F6` · 50 `#F8F9FC`
+- **verde** 600 `#1E9E5A` (sucesso) · **âmbar** 600 `#8A5A06` (texto de aviso, contraste AA) · 500 `#E0900A` (ícone/borda de aviso) · **vermelho** 600 `#D33A3A` (erro/destrutivo)
 - **amarelo-jsc** `#FFD700` (decorativo, nunca ação)
+- **Regra:** todos os tons usados no código têm de existir em `tailwind.config.ts` (um token indefinido não gera CSS — texto cai para `cinza-900`, bordas ficam invisíveis).
 
 ### 12.2 Branding dinâmico do clube
 - As cores **primária** e **secundária** do `Clube` sobrepõem-se aos tokens base via **variáveis CSS** aplicadas na raiz em tempo de execução (por clube). O azul-700 é o default quando não há clube/cor definida.
@@ -1218,26 +1255,27 @@ A definir (candidato: Vercel + Supabase). PWA servida via HTTPS. Backups da BD e
 
 Cada fase fica **funcional, testada e documentada** antes da seguinte. A doc (esta bíblia) atualiza-se no mesmo passo do código (regra de ouro). "Definição de pronto" por fase: implementado conforme a bíblia · validação Zod + `Resultado<T>` · **permissões verificadas** · estados loading/vazio/erro · responsivo · `typecheck`+`lint`+`test` limpos · secção da bíblia atualizada.
 
-**Fase 1 — Esqueleto (fundação, bloqueia tudo).**
+**Fase 1 — Esqueleto (fundação, bloqueia tudo).** ✅ CONCLUÍDA (2026-07-31)
 Migração do schema MVP → modelo v5: `Utilizador` independente, `Clube`, `MembroClube` (uma adesão ativa), `Perfil` + capacidades, `AtribuicaoEscalao`, propriedade de conteúdo (`proprietario`), `Consentimento`. Auth (registo, criar clube, convites, uma sessão). Contexto de sessão (`obterMembroAtual`, `exigirCapacidade`). Branding dinâmico (cores + logo). RGPD base. UI de membros e perfis.
+Notas transitórias (a completar na Fase 2): `Exercicio` mantém `clubeId` + `criadorId` e `proprietario` default `CLUBE` (portabilidade completa na Fase 2); logótipo por URL (upload Supabase Storage é follow-up); os módulos existentes ainda usam `obterClubeIdAtual` (resolve via adesão ativa) — a verificação de capacidade/âmbito entra na Fase 2.
 
-**Fase 2 — Reconversão dos módulos do MVP** para o novo modelo de contas/permissões/propriedade: plantel, exercícios, treinos, presenças, jogos, convocatória, estatísticas, caderneta, dashboard, definições. Tudo passa a verificar capacidade/âmbito e a filtrar por clube ativo.
+**Fase 2 — Reconversão dos módulos do MVP** para o novo modelo de contas/permissões/propriedade. ✅ Backend concluído (2026-08-01): todas as Server Actions de escrita (escalões, épocas, métricas, habilidades, plantel, treinos, presenças, exercícios, jogos, convocatória, estatísticas, caderneta) verificam `exigirCapacidade(cap, escalaoId?)`; as listagens (plantel, treinos, jogos) filtram por âmbito (`escaloesLegiveis`/`podeLerEscalao`). Falta (polish, Fase 10): **gating de UI** — esconder/desativar ações que o membro não pode executar (segurança já garantida no servidor).
 
-**Fase 3 — Periodização** (planos semanais/mensais, microciclos/mesociclos, grelha anual, ligação a sessões).
+**Fase 3 — Periodização** (planos semanais/mensais, microciclos/mesociclos, grelha anual, ligação a sessões). ✅ CRUD implementado (2026-08-01): modelo `Planeamento` (+ enums `TipoPlaneamento`, `PeriodoEpoca`), `Sessao.planeamentoId`/`microciclo`/`mesociclo`. Actions `periodizacao.ts` (listar/criar/atualizar/apagar com `PERIODIZACAO_GERIR`+âmbito). UI `/treinos/periodizacao`. Falta (enhancement): grelha anual visual e seleção de planeamento no formulário de sessão.
 
-**Fase 4 — Modelo de jogo e quadro tático** (reutiliza o editor de campo).
+**Fase 4 — Modelo de jogo e quadro tático** (reutiliza o editor de campo). ✅ Modelo de jogo implementado (2026-08-01): modelos `ModeloJogo` (autor + proprietario + momento + princípios + diagrama) e `QuadroTatico` + enum `MomentoJogo`. Actions `modeloJogo.ts` (CRUD com MODELO_JOGO_GERIR), UI `/modelo-jogo` (biblioteca por momento, editor de campo reutilizado, detalhe/editar), ligada a partir de Jogos. Falta (Fase 5): UI de `QuadroTatico` no detalhe do jogo (modelo + schema já existem).
 
-**Fase 5 — Jogos avançado:** competições/calendário, **modo ao vivo** (eventos → agregação), scouting do adversário, vídeo (YouTube).
+**Fase 5 — Jogos avançado:** competições/calendário, **modo ao vivo** (eventos → agregação), scouting do adversário, vídeo (YouTube). ✅ Núcleo implementado (2026-08-01): `Jogo` ganha tipo (OFICIAL/AMIGAVEL), faltas por parte, vídeo (link YouTube), `competicaoId`; modelos `Competicao`, `EventoJogo` (+ enums `TipoJogo`, `TipoEventoJogo`), `ObservacaoAdversario`/`ObservacaoJogadorAdversario`. UI: campos no formulário de jogo, vídeo/faltas no detalhe, e **`RegistoAoVivo`** (registo de eventos por parte/atleta/minuto). ✅ Completa: CRUD de **Competições** (`/jogos/competicoes`) e **Scouting** (`/jogos/scouting`), ligados a partir de Jogos. Enhancement futuro: seletor de competição no formulário de jogo e agregação automática eventos→estatísticas.
 
-**Fase 6 — Animação de diagramas** (`DiagramaCampo` v2 com passos: playback + editor de passos).
+**Fase 6 — Animação de diagramas** (`DiagramaCampo` v2 com passos: playback + editor de passos). ✅ Implementada (2026-08-01): `diagramaSchema` estendido (versão 1|2 + `passos`), `CampoAnimado` (playback com interpolação por `requestAnimationFrame`), captura de passos no `EditorCampo` ("Capturar passo"/"Limpar passos"). Usado nos detalhes de exercício e modelo de jogo. Anima elementos-ponto (jogador/bola/cone) A→B; setas/linhas ficam estáticas.
 
-**Fase 7 — Reuniões** (escalão/clube, ata exposta).
+**Fase 7 — Reuniões** (escalão/clube, ata exposta). ✅ Implementada (2026-08-01): modelo `Reuniao` + enum `AmbitoReuniao`, actions `reunioes.ts` (CRUD, REUNIOES_GERIR; reuniões de clube visíveis a todos, de escalão a quem lê o escalão), UI `ReunioesLista` + `/reunioes` (na navegação). Ata exposta na lista.
 
-**Fase 8 — Relatórios e tracking de fim de época + PDF** (equipa e por atleta; templates com branding).
+**Fase 8 — Relatórios e tracking de fim de época + PDF** (equipa e por atleta; templates com branding). ✅ Implementada (2026-08-01): action `relatorios.ts` (`obterRelatorioEquipa`: jogos/V-E-D, golos, sessões, melhores marcadores/assistentes). Páginas `/relatorios` (por escalão, com links para relatórios individuais) e `/plantel/[id]/relatorio` (relatório de desenvolvimento do atleta: stats + caderneta + observações). **PDF via impressão do browser** (`BotaoImprimir` → `window.print()`, sem dependências; barra/nav com `print:hidden`). Sem IA.
 
-**Fase 9 — Biblioteca curada de arranque** (exercícios reais com diagramas, como seed).
+**Fase 9 — Biblioteca curada de arranque** (exercícios reais com diagramas, como seed). ✅ Implementada (2026-08-01): `lib/biblioteca-arranque.ts` com 10 exercícios reais de futsal (ativação, técnica, finalização, posse, transições, situações, jogo reduzido, bolas paradas, físico) com diagramas. Action `instalarBibliotecaArranque` (idempotente, EXERCICIOS_GERIR, marca `origemSeed`) + botão na biblioteca; também incluída no seed do clube demo. Custo zero em runtime (conteúdo autorado, sem IA).
 
-**Fase 10 — PWA/offline (modo jornada) + polish visual + caderneta gamificada.**
+**Fase 10 — PWA/offline (modo jornada) + polish visual + caderneta gamificada.** ✅ Implementada (2026-08-01): **PWA** — `app/manifest.ts` (`/manifest.webmanifest`), ícone SVG, service worker (`public/sw.js`, network-first + cache de estáticos), registo via `RegistarSW` (só em produção), theme-color. **Caderneta gamificada** — barra de progresso + percentagem + celebração ao desbloquear. `print:hidden` na navegação (relatórios limpos). Build de produção verde. Nota: offline **robusto** (sync de escrita beira-campo) e ícones PNG dedicados ficam como afinação futura; a base PWA (instalável) está pronta. **Gating de UI de permissões continua parcial** (segurança garantida no servidor) — afinação futura.
 
 *(FUTURO, fora destas fases: portal de pais/WhatsApp, camada de clube (quotas/material/espaços), IA como plugin pago, APK.)*
 
@@ -1275,6 +1313,41 @@ Valores/tiers, trial gratuito, limites (nº de escalões/atletas), faturação e
 
 Toda a alteração a este documento é registada aqui, com data e descrição. Do mais recente para o mais antigo.
 
+- **2026-08-02** — **Sincronização da bíblia com o código (corpo, não só changelog).** Corrigido drift no modelo de dados (§3) e no sistema de design (§12) que tinham ficado para trás dos Grupos B/D e da auditoria: (§3) `Exercicio.categoria CategoriaExercicio` → `categoriaPrincipal CategoriaExercicioPrincipal` + `subcategoriaId`; enum `CategoriaExercicio` → `CategoriaExercicioPrincipal`; adicionado modelo `SubcategoriaExercicio`; `Sessao` ganha `tipoSessao TipoSessao` + enum `TipoSessao`. (§12.1) tokens de cor completos (cinza-100/300/500/700, azul-300, ambar-600) + regra de tokens definidos. (§5.5) nota do estado atual do RGPD (consentimento pelo clube). Objetivo: cumprir a regra "recriar do zero a 100%".
+
+- **2026-08-02** — **Decisão RGPD — consentimento tratado pelo clube.** O consentimento parental (dados + imagem de menores) é recolhido pelo clube no ato de inscrição, **fora da aplicação**. A app assume que o consentimento existe para os atletas registados. O modelo `Consentimento` fica intencionalmente por ligar; `apagarAtleta` mantém-se soft-delete. Registo de consentimento in-app e hard-delete (direito ao esquecimento) passam a **melhorias futuras não-bloqueadoras**. Ver `docs/DEPLOY.md` §6.
+
+- **2026-08-02** — **Auditoria de produção — Fase 6 (testes).** Novo `tests/actions-producao.test.ts` (7 testes) a cobrir as correções críticas da auditoria: `definirConvocatoria` (rejeita atletas alheios / aceita válidos), `guardarEstatisticas` (ignora não-convocados / rejeita input inválido), `reordenarExercicios` (rejeita ids de outra sessão), `apagarEscalao` (guard de sessões), `apagarHabilidade` (guard de progressos). Total: **51 testes** (era 44). Padrão de mock de Prisma/auth/permissões reutilizado.
+
+- **2026-08-02** — **Auditoria de produção — Fase 5 (polish visual/a11y).** (1) **Tokens de cor em falta** adicionados ao `tailwind.config.ts` — `cinza-100/300/500/700` (95 usos) e `azul-300` (5 usos) não geravam CSS: texto "muted" caía para `cinza-900` (escuro) e bordas `cinza-100/300` ficavam invisíveis. Interpolados na rampa existente. (2) **`ambar-600`** (contraste AA ≥4.5:1) para **texto** de aviso — trocado em `treinos/[id]`, `plantel` (número duplicado), `JogoDetalhe`, `SessaoForm`; `ambar-500` mantém-se para ícones/bordas. (3) **Botões de reordenar** (escalões/métricas/habilidades/exercícios de sessão) com área de toque maior (h-8 w-8) + `focus-visible:ring`. *Follow-up de a11y (não bloqueador): aviso de alterações não guardadas em JogoDetalhe, `loading.tsx` por-rota, teclado no EditorCampo, ícones PNG para PWA.* typecheck+build+44 testes verdes.
+
+- **2026-08-02** — **Auditoria de produção — Fase 4 (robustez/ops).** (1) `app/global-error.tsx` — error boundary raiz (cobre root layout e rotas fora de `(app)`), com ponto de integração de monitorização. (2) **10 índices Prisma** adicionados (`ValorMetrica.estatisticaId`, `Competicao.clubeId/escalaoId`, `Sessao.escalaoId/planeamentoId`, `Jogo.escalaoId`, `Planeamento.escalaoId`, `SessaoExercicio.exercicioId`, `ProgressoHabilidade.habilidadeId`, `MembroClube.perfilId`) — migração `20260802151958_add_indexes_producao` (aplicada via `migrate deploy`). (3) `.env.example` atualizado (`AUTH_TRUST_HOST`, nota de seed obrigatório em produção). (4) Novo `docs/DEPLOY.md` — guia operacional (env, migrações, build, seed, headers, pendências). typecheck+build+44 testes verdes.
+
+- **2026-08-02** — **Auditoria de produção — Fase 3 (integridade de dados).** (1) **`dataIngresso`** passa a ser lido: `obterEstatisticasAtleta` e `obterPresencasMensal` usam `dataIngresso ?? criadoEm` como divisor da taxa de presença (secção 22.3); campo adicionado ao `atletaSchema`, persistido em criar/atualizar, e exposto no `AtletaForm`. (2) **Ranking de equipa** agrega por `atletaId` (não por nome — evita fundir homónimos). (3) **Guards de FK** em `apagarEscalao` (sessões/jogos/planeamentos/competições) e `apagarHabilidade` (progressos) — evitam P2003/500. (4) **`definirConvocatoria`** valida que os atletas pertencem ao clube/época/escalão do jogo. (5) **`reordenarExercicios`** valida que os ids pertencem à sessão. (6) `erroDeValidacao` (erros por campo) em `guardarEstatisticas`/`registarEventoJogo`/`marcarPresencas`; `atualizarProgresso` ganha schema Zod (`lib/schemas/caderneta.ts`). (7) **`convidarMembro`** cria utilizador+adesão em `$transaction` (sem conta órfã). typecheck+lint+build+44 testes verdes.
+
+- **2026-08-02** — **Auditoria de produção — Fase 0 (build) + Fase 1 (segurança).** Corrigido o bloqueador de build (`SessaoForm` usava `<a>` para rota interna → `<Link>`). Segurança: (1) **dependências** — Next.js 15.1.0→15.5.22 (resolve CVE de disclosure de Server Functions), next-auth beta.25→beta.32 + @auth/core patched, `overrides` de `postcss`/`sharp`; resta só vitest/vite/esbuild (dev-only, não vai para produção). (2) **middleware** ganha callback `authorized` (bloqueia rotas sem sessão — defesa em profundidade). (3) **sessão** JWT com `maxAge` 7 dias. (4) **videoUrl** com allowlist YouTube+https (`isVideoUrlValido`) — bloqueia `javascript:`/`data:` que `z.string().url()` aceitava. (5) **rate-limiting** de login (janela deslizante em memória, 5 falhas/15 min). (6) **headers de segurança** em `next.config.js` (CSP, HSTS, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy). (7) **hardening do seed** (falha em produção sem `SEED_PASS_*`) + bcrypt cost 10→12. **Pendente do lado do utilizador (ops):** rodar password da BD Supabase e `AUTH_SECRET`. typecheck+lint+build+44 testes verdes.
+
+- **2026-08-02** — **Grupo E — Estatística, visualização e análise de dados (gráficos).** Novos gráficos SVG puros (sem biblioteca externa) seguindo o sistema de design (paleta azul-700 + ambar-500, validada com `validate_palette.js`; barras finas ≤24px, linhas 2px, dots ≥8px com surface ring, grid hairline, sem eixo duplo). Componentes: `GraficoBarrasH` (barras horizontais para rankings), `GraficoLinhas` (linha com hover crosshair + tooltip, 1–2 séries, legenda se ≥2 séries), `GraficoBarrasV` (barras verticais para taxa de presença mensal). Ação `lib/actions/analise.ts` (`obterEvolucaoAtleta`, `obterPresencasMensal`). Perfil do atleta (aba Estatísticas): gráfico de golos+assistências por jogo + gráfico de presença mensal (exibidos se ≥2 pontos de dados). Relatórios: rankings de marcadores e assistentes visualizados como `GraficoBarrasH`. Todos os gráficos têm vista de tabela acessível (`<table class="sr-only">`). 44 testes verdes.
+
+- **2026-08-02** — **Grupo D — Exercícios: categoria principal + subcategorias customizáveis + UX.** Enum `CategoriaExercicioPrincipal` (ATAQUE/DEFESA/TRANSICAO/BOLAS_PARADAS/FISICO/GUARDA_REDES/OUTRO) substitui `CategoriaExercicio`. Modelo `SubcategoriaExercicio` (por clube, `sistema: Boolean`). `Exercicio.categoriaPrincipal + subcategoriaId`. Migração `20260802112335_grupo_d_subcategorias_exercicio`. `ExercicioForm` redesenhado (2 níveis de classificação). Página Definições > Subcategorias com CRUD completo. `lib/subcategorias-arranque.ts` (22 subcategorias seed, sistema=true). Action `instalarSubcategoriasArranque` idempotente. 44 testes verdes.
+
+- **2026-08-02** — **Grupo B — Periodização smart + sessão ligada a periodização.** Enum `TipoSessao` (NORMAL/ABERTO/CAPTACAO/EVENTO) + campo em `Sessao`. Migração `20260802111351_grupo_b_tipo_sessao`. Action `sugerirPlaneamento(escalaoId, tipo)` infere datas/microciclo/período a partir do último planeamento. `PlaneamentoForm` usa `useEffect` para pré-preencher com a sugestão (chip "Datas preenchidas automaticamente"). `SessaoForm` mostra seletor de tipo; apenas tipo NORMAL mostra seletor de planeamento (aviso suave se sem planeamento quando existem planeamentos). 44 testes verdes.
+
+- **2026-08-01** — **Grupo C — Equipa técnica.** Secção "Membros" em Definições renomeada para "Equipa técnica" (label na UI e navegação). Sem alteração de schema.
+
+- **2026-08-01** — **Melhorias pós-review (dono do produto).** (1) Layout: dashboard redesenhado (fundo com profundidade, `card-base`/`card-hover`/`chip-clube` em globals.css). (2) Fix: `EditorCampo.anular()` fazia setState do pai dentro de updater. (3) **Grupo A — modelo do Atleta:** `posicao` (única) → `posicoes Posicao[]` (posições múltiplas); `escalaoSecundarioId?` (atleta em 1–2 escalões; listagens incluem principal OU secundário); `fotoUrl` (por URL) + avatar com foto; campos do **encarregado de educação** (nome/contacto/email). Migração `20260801153513_grupo_a_atleta`. GR passa a `posicoes.includes(GUARDA_REDES)` em todo o lado. AtletaForm com posições em chips + escalão secundário + encarregado. 44 testes verdes. *(Backlog do review em memória: grupos B periodização/sessão, C equipa técnica, D exercícios, E estatística/visualização.)*
+
+- **2026-08-01** — **Fase 10 (PWA + polish) implementada.** PWA: `app/manifest.ts`, `public/icon.svg`, `public/sw.js` (SW seguro), `RegistarSW` no layout raiz, theme-color/appleWebApp. Caderneta: barra de progresso + celebração ao desbloquear. `print:hidden` na navegação. Build de produção verde. **Todas as 10 fases do produto final implementadas.** Afinações futuras: offline de escrita robusto, ícones PNG, gating de UI de permissões completo.
+- **2026-08-01** — **Fase 9 (Biblioteca curada) implementada.** `lib/biblioteca-arranque.ts` (10 exercícios reais com diagramas). Action `instalarBibliotecaArranque` (idempotente) + `InstalarBibliotecaButton` na biblioteca; incluída no seed do clube demo. Sem IA em runtime. 43 testes verdes.
+- **2026-08-01** — **Fase 8 (Relatórios + PDF) implementada.** Action `relatorios.ts` (relatório de equipa por escalão). Páginas `/relatorios` e `/plantel/[id]/relatorio` (relatório individual). PDF por impressão do browser (`BotaoImprimir`); `print:hidden` na barra/navegação. Links a partir do plantel e do perfil do atleta. Sem dependências novas, sem IA. typecheck+lint+testes verdes.
+- **2026-08-01** — **Fase 7 (Reuniões) implementada.** Modelo `Reuniao` + enum `AmbitoReuniao` (CLUBE/ESCALAO); migração `20260801115157_fase7_reunioes`. Schema `reuniao.ts`, actions `reunioes.ts` (CRUD com REUNIOES_GERIR + visibilidade por âmbito), UI `ReunioesLista` + `/reunioes`, item "Reuniões" na navegação. typecheck+lint+testes verdes.
+- **2026-08-01** — **Fase 6 (Animação de diagramas) implementada.** `diagramaSchema` v2 (versão 1|2 + `passos` com posições por elemento). `CampoAnimado` faz playback interpolado (requestAnimationFrame); `EditorCampo` ganha "Capturar passo"/"Limpar passos" (cada passo = snapshot completo das posições). Integrado nos detalhes de exercício e modelo de jogo. Teste de schema atualizado. 43 testes verdes.
+- **2026-08-01** — **Fase 5 (cauda) implementada.** Actions `competicoes.ts` (CRUD, COMPETICOES_GERIR+âmbito) e `scouting.ts` (CRUD ObservacaoAdversario, SCOUTING_GERIR); schema `competicao.ts`. UI `CompeticoesLista` (`/jogos/competicoes`) e `ScoutingLista` (`/jogos/scouting`), ligadas a partir da página de Jogos. Fase 5 concluída (exceto enhancements: seletor de competição no jogo, agregação eventos→estatísticas).
+- **2026-08-01** — **Fase 5 (núcleo) implementada.** `Jogo`: tipo, faltas1aParte/2aParte, videoUrl, competicaoId. Modelos `Competicao`, `EventoJogo`, `ObservacaoAdversario`, `ObservacaoJogadorAdversario` + enums `TipoJogo`/`TipoEventoJogo`. Migração `20260801113000_fase5_jogos_avancado`. Actions de jogo: campos novos em criar/atualizar, `definirVideo`, `registarEventoJogo`, `apagarEventoJogo` (ESTATISTICAS_GERIR + âmbito). UI: `JogoForm` (tipo/faltas/vídeo), detalhe mostra vídeo/faltas, componente `RegistoAoVivo`. Falta na Fase 5: CRUD de Competições e Scouting + seletor de competição no jogo. typecheck+lint+testes verdes.
+- **2026-08-01** — **Fase 4 (Modelo de jogo) implementada.** Modelos `ModeloJogo` e `QuadroTatico` + enum `MomentoJogo`; `Utilizador.modelosJogo`, `Jogo.quadros`. Migração `20260801112333_fase4_modelo_jogo`. Schema `modeloJogo.ts`, actions `modeloJogo.ts` (CRUD, MODELO_JOGO_GERIR), UI biblioteca `/modelo-jogo` com editor de campo reutilizado. QuadroTatico (por jogo): modelo+schema prontos, UI no detalhe do jogo fica para a Fase 5.
+- **2026-08-01** — **Fase 3 (Periodização) implementada.** Modelo `Planeamento` (clube/escalão/época, tipo SEMANAL/MENSAL, período, meso/microciclo, datas, objetivos) + enums; `Sessao` ganha `planeamentoId`, `microciclo`, `mesociclo`. Migração `20260801075604_fase3_periodizacao`. Schema Zod `planeamento.ts`, actions `periodizacao.ts` (CRUD com PERIODIZACAO_GERIR + âmbito), UI `PlaneamentoLista` + `/treinos/periodizacao` (ligada a partir de Treinos). typecheck+lint+testes verdes.
+- **2026-08-01** — **Fase 2 (backend) implementada.** Todas as Server Actions de escrita passam a verificar capacidade/âmbito via `exigirCapacidade` (escalões→CLUBE_ESCALOES, épocas→CLUBE_EPOCAS, métricas→CATALOGO_METRICAS, habilidades→CATALOGO_HABILIDADES, plantel→PLANTEL_GERIR+escalão, treinos/exercícios-de-sessão→TREINOS_GERIR+escalão, presenças→PRESENCAS_MARCAR+escalão, exercícios→EXERCICIOS_GERIR, jogos→JOGOS_GERIR+escalão, convocatória→CONVOCATORIA_GERIR+escalão, estatísticas→ESTATISTICAS_GERIR+escalão, caderneta→CADERNETA_GERIR+escalão). Listagens de plantel/treinos/jogos e leituras (obter*) filtram por âmbito (`escaloesLegiveis`, `podeLerEscalao`); adicionado `definirVisibilidadeEscalao`. Testes de actions atualizados ao novo modelo (mock de `permissoes`); 42 testes verdes. Gating de UI fica para o polish (Fase 10).
+- **2026-07-31** — **Fase 1 (Esqueleto) implementada.** Schema migrado para o modelo v5 (`Utilizador` independente de clube; `MembroClube`, `Perfil`, `AtribuicaoEscalao`, `Consentimento`; `Escalao.visivelOutrosTreinadores`; `Atleta.dataIngresso`; `Exercicio.proprietario`/`origemSeed`; enums `EstadoMembro`, `AmbitoPerfil`, `TipoConsentimento`, `PropriedadeConteudo`). Migração `20260731191357_fase1_ecossistema` aplicada; seed reescrito (clube + 4 perfis de arranque + membros). Novos helpers `lib/permissoes.ts` (`obterUtilizadorAtual`, `obterMembroAtual`, `obterClubeAtivo`, `exigirCapacidade`, `podeLerEscalao`) e `lib/permissoes-catalogo.ts` (catálogo + perfis de arranque). Novas actions: `membros` (em utilizadores.ts), `perfis`, `onboarding` (registar/criarClube), `clubes` (branding). UI: Membros, Perfis, Clube (branding), /registar, /criar-clube; layout aplica cores do clube via CSS vars e redireciona sem-clube para onboarding. Notas transitórias registadas na secção 16 (Fase 1). typecheck+lint+41 testes verdes; smoke test autenticado OK.
 - **2026-07-31** — **Bíblia completa.** Redigidas todas as secções restantes: 2 (glossário/terminologia pt-PT), 8 (módulos funcionais — onboarding, membros/perfis, branding, definições, plantel, exercícios, treinos, periodização, modelo de jogo, jogos/live/scouting, caderneta, relatórios/PDF, dashboard, carreira), 9 (regras e casos-limite — herdados do MVP + novos do ecossistema), 10 (estatísticas e agregações com fórmulas), 11 (DiagramaCampo v2 com passos/animação), 12 (design + branding dinâmico), 13 (UI/PWA/offline/i18n/NFR), 14 (testes), 15 (stack/setup/deployment), 16 (10 fases com definição de pronto), 17 (modelo de negócio/licenciamento). Documentação pronta para arrancar a Fase 1 (esqueleto).
 - **2026-07-31** — Redigidas as secções fundadoras 5, 6 e 7: **5 (Contas, autenticação, adesão a clube, RGPD)** — Auth.js/credenciais, uma sessão por conta, modos individual/clube, transição de clube, contexto de sessão, RGPD de menores (consentimento, soft/hard-delete, minimização); **6 (Permissões)** — modelo Perfil=âmbito+capacidades, catálogo completo de capacidades, âmbito, leitura de escalões alheios, defaults editáveis, algoritmo de autorização, regras de proteção (nunca sem admin); **7 (Server Actions)** — padrão obrigatório, helpers de contexto e assinaturas por módulo. Fundação documental completa (1,3,4,5,6,7) para arrancar o esqueleto.
 - **2026-07-31** — Validação do modelo de dados (secção 3) e decisões de propriedade:

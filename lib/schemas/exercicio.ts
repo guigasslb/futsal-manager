@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { CategoriaExercicio } from "@prisma/client";
 
 // ─── Diagrama de campo (secção 13.3) ────────────────────────────────────────
 
@@ -72,10 +71,24 @@ export const elementoCampoSchema = z.discriminatedUnion("tipo", [
   textoSchema,
 ]);
 
-export const diagramaSchema = z.object({
-  versao: z.literal(1),
-  elementos: z.array(elementoCampoSchema),
+// Passo de animação (secção 11.2 da bíblia): posições dos elementos neste passo.
+const passoAnimacaoSchema = z.object({
+  id: z.string(),
+  ordem: z.number().int(),
+  posicoes: z.array(
+    z.object({ elementoId: z.string(), x: z.number(), y: z.number() }),
+  ),
+  duracaoMs: z.number().int().min(100).max(10000).optional(),
 });
+
+// Retrocompatível: versão 1 (estático) ou 2 (com passos opcionais).
+export const diagramaSchema = z.object({
+  versao: z.union([z.literal(1), z.literal(2)]),
+  elementos: z.array(elementoCampoSchema),
+  passos: z.array(passoAnimacaoSchema).optional(),
+});
+
+export type PassoAnimacao = z.infer<typeof passoAnimacaoSchema>;
 
 export type CorJogador = z.infer<typeof corJogadorSchema>;
 export type Jogador = z.infer<typeof jogadorSchema>;
@@ -100,36 +113,15 @@ export const exercicioSchema = z.object({
     .min(1, "A duração deve ser pelo menos 1 minuto")
     .max(180, "A duração máxima é 180 minutos")
     .optional(),
-  categoria: z
-    .enum([
-      "ATIVACAO",
-      "TECNICA_INDIVIDUAL",
-      "FINALIZACAO",
-      "POSSE_BOLA",
-      "TRANSICOES",
-      "SITUACOES_JOGO",
-      "JOGO_REDUZIDO",
-      "BOLAS_PARADAS",
-      "FISICO",
-      "OUTRO",
-    ])
+  categoriaPrincipal: z
+    .enum(["ATAQUE", "DEFESA", "TRANSICAO", "BOLAS_PARADAS", "FISICO", "GUARDA_REDES", "OUTRO"])
     .optional(),
+  subcategoriaId: z.string().cuid().nullable().optional(),
   diagrama: diagramaSchema.optional(),
 });
 
 export type ExercicioInput = z.infer<typeof exercicioSchema>;
 
-export const LABEL_CATEGORIA: Record<CategoriaExercicio, string> = {
-  ATIVACAO: "Ativação",
-  TECNICA_INDIVIDUAL: "Técnica individual",
-  FINALIZACAO: "Finalização",
-  POSSE_BOLA: "Posse de bola",
-  TRANSICOES: "Transições",
-  SITUACOES_JOGO: "Situações de jogo",
-  JOGO_REDUZIDO: "Jogo reduzido",
-  BOLAS_PARADAS: "Bolas paradas",
-  FISICO: "Físico",
-  OUTRO: "Outro",
-};
-
-export const CATEGORIAS = Object.keys(LABEL_CATEGORIA) as CategoriaExercicio[];
+// Re-exportado para retrocompatibilidade com imports que usavam LABEL_CATEGORIA/CATEGORIAS.
+// Mapeia para o novo enum CategoriaExercicioPrincipal.
+export { LABEL_CATEGORIA_PRINCIPAL as LABEL_CATEGORIA, CATEGORIAS_PRINCIPAIS as CATEGORIAS } from "@/lib/schemas/subcategoria";

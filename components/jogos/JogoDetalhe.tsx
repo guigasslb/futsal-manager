@@ -30,9 +30,9 @@ import {
   guardarRelatorio,
 } from "@/lib/actions/jogos";
 import { LABEL_UTILIZACAO } from "@/lib/schemas/jogo";
-import type { Posicao, TipoMetrica, Utilizacao } from "@prisma/client";
+import type { TipoMetrica, Utilizacao } from "@prisma/client";
 
-type Atleta = { id: string; nome: string; numero: number | null; posicao: Posicao | null };
+type Atleta = { id: string; nome: string; numero: number | null; eGR: boolean };
 
 type Metrica = { id: string; nome: string; tipo: TipoMetrica; ativa: boolean };
 
@@ -238,7 +238,7 @@ export function JogoDetalhe({
               );
               if (golosMarcados != null && somaGolos !== golosMarcados) {
                 return (
-                  <p className="flex items-center gap-1.5 rounded-md bg-ambar-500/10 px-3 py-2 text-corpo-sec text-ambar-500">
+                  <p className="flex items-center gap-1.5 rounded-md bg-ambar-500/10 px-3 py-2 text-corpo-sec text-ambar-600">
                     <TriangleAlert className="h-4 w-4 flex-shrink-0" />
                     A soma dos golos individuais ({somaGolos}) não coincide com o resultado da
                     equipa ({golosMarcados}). Pode ser normal (autogolos), mas confirma.
@@ -250,7 +250,7 @@ export function JogoDetalhe({
             <div className="space-y-3">
               {convocadosLista.map((a) => {
                 const e = estatDe(a.id);
-                const eGR = atletaPorId.get(a.id)?.posicao === "GUARDA_REDES";
+                const eGR = atletaPorId.get(a.id)?.eGR ?? false;
                 return (
                   <div
                     key={a.id}
