@@ -231,7 +231,7 @@ function GrupoNivel({
                 <button
                   onClick={() => mover(h.id, "subir")}
                   disabled={idx === 0 || pending}
-                  className="flex h-8 w-8 items-center justify-center rounded text-cinza-400 hover:text-cinza-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-azul-700 disabled:opacity-30"
+                  className="flex h-8 w-8 items-center justify-center rounded text-cinza-400 hover:text-cinza-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-30"
                   aria-label="Subir"
                 >
                   <ChevronUp className="h-4 w-4" />
@@ -239,7 +239,7 @@ function GrupoNivel({
                 <button
                   onClick={() => mover(h.id, "descer")}
                   disabled={idx === habilidades.length - 1 || pending}
-                  className="flex h-8 w-8 items-center justify-center rounded text-cinza-400 hover:text-cinza-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-azul-700 disabled:opacity-30"
+                  className="flex h-8 w-8 items-center justify-center rounded text-cinza-400 hover:text-cinza-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-30"
                   aria-label="Descer"
                 >
                   <ChevronDown className="h-4 w-4" />

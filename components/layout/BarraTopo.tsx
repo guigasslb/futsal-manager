@@ -12,20 +12,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { terminarSessao } from "@/lib/actions/auth-actions";
 import { SeletorEpoca } from "@/components/layout/SeletorEpoca";
+import { Logo } from "@/components/layout/Logo";
 import type { Epoca } from "@prisma/client";
-
-const CORES_AVATAR = [
-  "bg-azul-700",
-  "bg-azul-900",
-  "bg-cinza-600",
-  "bg-verde-600",
-  "bg-azul-500",
-];
-
-function corAvatar(nome: string): string {
-  const hash = nome.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  return CORES_AVATAR[hash % CORES_AVATAR.length];
-}
 
 function iniciais(nome: string): string {
   const partes = nome.trim().split(/\s+/);
@@ -37,26 +25,16 @@ interface Props {
   nomeUtilizador: string;
   epocas: Epoca[];
   epocaAtivaId: string | null;
-  nomeClube?: string;
-  logoClube?: string | null;
 }
 
-export function BarraTopo({ nomeUtilizador, epocas, epocaAtivaId, nomeClube, logoClube }: Props) {
+export function BarraTopo({ nomeUtilizador, epocas, epocaAtivaId }: Props) {
   const [pending, startTransition] = useTransition();
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-cinza-200 bg-white px-4 gap-3 print:hidden">
-      {/* Logo / identidade do clube */}
-      <Link
-        href="/dashboard"
-        className="flex items-center gap-2 font-bold text-[15px] shrink-0"
-        style={{ color: "var(--cor-primaria, #1A2FD4)" }}
-      >
-        {logoClube ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={logoClube} alt={nomeClube ?? "Clube"} className="h-8 w-8 rounded object-contain" />
-        ) : null}
-        {nomeClube ?? "FutsalManager"}
+    <header className="topbar-glass sticky top-0 z-30 flex h-16 items-center justify-between border-b border-cinza-200/60 px-4 gap-3 print:hidden md:px-6">
+      {/* Marca FutsalCoach */}
+      <Link href="/dashboard" className="flex items-center shrink-0 transition-transform hover:scale-[1.02]">
+        <Logo size={20} />
       </Link>
 
       {/* Seletor de época + menu do utilizador */}
@@ -67,7 +45,8 @@ export function BarraTopo({ nomeUtilizador, epocas, epocaAtivaId, nomeClube, log
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className={`flex h-9 w-9 items-center justify-center rounded-full text-white text-legenda font-semibold select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-azul-700 ${corAvatar(nomeUtilizador)}`}
+              className="flex h-9 w-9 items-center justify-center rounded-full text-white text-legenda font-semibold select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+              style={{ backgroundColor: "var(--cor-primaria, #F0531E)" }}
               aria-label={`Menu de ${nomeUtilizador}`}
             >
               {iniciais(nomeUtilizador)}

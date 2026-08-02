@@ -1,9 +1,9 @@
 const CORES = [
-  "bg-azul-700",
+  "bg-primary",
   "bg-azul-900",
   "bg-cinza-600",
   "bg-verde-600",
-  "bg-azul-500",
+  "bg-primary/50",
 ];
 
 function corAvatar(nome: string): string {

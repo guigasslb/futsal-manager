@@ -9,7 +9,7 @@ import { GraficoBarrasH } from "@/components/graficos/GraficoBarrasH";
 function Cartao({ valor, label }: { valor: string | number; label: string }) {
   return (
     <div className="flex flex-col items-center rounded-lg border border-cinza-200 bg-white p-4">
-      <span className="text-titulo-pagina font-bold text-azul-700">{valor}</span>
+      <span className="text-titulo-pagina font-bold text-primary">{valor}</span>
       <span className="text-legenda text-cinza-500">{label}</span>
     </div>
   );
@@ -45,7 +45,7 @@ export default async function RelatoriosPage({
               href={`/relatorios?escalaoId=${e.id}`}
               className={`px-4 py-2.5 text-corpo font-medium border-b-2 transition-colors ${
                 selecionado === e.id
-                  ? "border-azul-700 text-azul-700"
+                  ? "border-primary text-primary"
                   : "border-transparent text-cinza-600 hover:text-cinza-900"
               }`}
             >

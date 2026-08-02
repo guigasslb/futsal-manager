@@ -224,7 +224,7 @@ export function UtilizadoresLista({
               className="rounded-md border border-cinza-200 bg-white p-4 shadow-card"
             >
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-azul-700 text-white text-legenda font-semibold select-none">
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary text-white text-legenda font-semibold select-none">
                   {iniciais(m.nome)}
                 </div>
                 <div className="flex-1">
@@ -286,7 +286,7 @@ export function UtilizadoresLista({
                         disabled={pending}
                         className={`rounded-full border px-2.5 py-0.5 text-legenda transition-colors ${
                           ativo
-                            ? "border-azul-700 bg-azul-50 text-azul-700"
+                            ? "border-primary bg-primary/5 text-primary"
                             : "border-cinza-200 text-cinza-500 hover:bg-cinza-50"
                         }`}
                       >

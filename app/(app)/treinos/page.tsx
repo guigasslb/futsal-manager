@@ -76,7 +76,7 @@ export default async function TreinosPage({
             href="/treinos"
             className={`px-4 py-2.5 text-corpo font-medium border-b-2 transition-colors ${
               !escalaoId
-                ? "border-azul-700 text-azul-700"
+                ? "border-primary text-primary"
                 : "border-transparent text-cinza-600 hover:text-cinza-900"
             }`}
           >
@@ -88,7 +88,7 @@ export default async function TreinosPage({
               href={`/treinos?escalaoId=${e.id}`}
               className={`px-4 py-2.5 text-corpo font-medium border-b-2 transition-colors ${
                 escalaoId === e.id
-                  ? "border-azul-700 text-azul-700"
+                  ? "border-primary text-primary"
                   : "border-transparent text-cinza-600 hover:text-cinza-900"
               }`}
             >
@@ -103,7 +103,7 @@ export default async function TreinosPage({
         <Link
           href={hrefLista}
           className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-corpo-sec font-medium transition-colors ${
-            !ehCalendario ? "bg-azul-700 text-white" : "text-cinza-600 hover:bg-cinza-50"
+            !ehCalendario ? "bg-primary text-white" : "text-cinza-600 hover:bg-cinza-50"
           }`}
         >
           <List className="h-4 w-4" />
@@ -112,7 +112,7 @@ export default async function TreinosPage({
         <Link
           href={hrefCalendario}
           className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-corpo-sec font-medium transition-colors ${
-            ehCalendario ? "bg-azul-700 text-white" : "text-cinza-600 hover:bg-cinza-50"
+            ehCalendario ? "bg-primary text-white" : "text-cinza-600 hover:bg-cinza-50"
           }`}
         >
           <CalendarDays className="h-4 w-4" />
@@ -158,7 +158,7 @@ export default async function TreinosPage({
                     <p className="text-corpo font-semibold text-cinza-900 capitalize">
                       {formatarDataHora(s.data)}
                     </p>
-                    <span className="rounded-full bg-azul-50 px-2.5 py-0.5 text-legenda text-azul-700">
+                    <span className="rounded-full bg-primary/5 px-2.5 py-0.5 text-legenda text-primary">
                       {s.escalao.nome}
                     </span>
                   </div>

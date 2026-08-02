@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 export default function NotFound() {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-azul-50">
+      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/5">
         <FileQuestion className="h-8 w-8 text-cinza-400" />
       </div>
       <h3 className="text-subtitulo text-cinza-900">Página não encontrada</h3>

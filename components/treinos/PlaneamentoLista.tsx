@@ -113,7 +113,7 @@ function PlaneamentoForm({
       {erro && <p className="text-corpo-sec text-vermelho-600">{erro}</p>}
 
       {isCreate && (
-        <p className="flex items-center gap-1.5 rounded-md bg-azul-50 px-3 py-2 text-legenda text-azul-700">
+        <p className="flex items-center gap-1.5 rounded-md bg-primary/5 px-3 py-2 text-legenda text-primary">
           <Sparkles className="h-3.5 w-3.5 flex-shrink-0" />
           Datas e ciclos preenchidos automaticamente com base no último planeamento.
         </p>
@@ -296,8 +296,8 @@ export function PlaneamentoLista({
         <ul className="space-y-2">
           {planeamentos.map((p) => (
             <li key={p.id} className="flex items-center gap-3 rounded-md border border-cinza-200 bg-white p-4 shadow-card">
-              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-azul-50">
-                <CalendarRange className="h-5 w-5 text-azul-700" />
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary/5">
+                <CalendarRange className="h-5 w-5 text-primary" />
               </div>
               <div className="flex-1">
                 <p className="text-corpo font-semibold text-cinza-900">

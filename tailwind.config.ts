@@ -10,28 +10,39 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
+        sans: ["var(--font-inter)", "Inter", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "Bricolage Grotesque", "system-ui", "sans-serif"],
       },
       colors: {
-        // ─── Tokens do sistema de design (secção 19.2) ───
+        // ─── Marca FutsalCoach (secção 12) ───
+        // Preto quente (texto/ícone) e laranja (acento da marca / default sem clube).
+        ink: "#141210",
+        laranja: {
+          600: "#C7430F",
+          500: "#F0531E", // acento da marca
+          100: "#FBE4DA",
+          50: "#FDF1EB",
+        },
+        // Azul legado (mantido; = cor default do clube demo JSC).
         azul: {
           900: "#0F1E8A",
-          700: "#1A2FD4", // PRIMÁRIA
+          700: "#1A2FD4",
           500: "#3A50E0",
           300: "#A9B4F5",
           100: "#E4E8FF",
           50: "#F4F6FF",
         },
+        // Neutros QUENTES da marca (paper/ink/cremes).
         cinza: {
-          900: "#1A1D29",
-          700: "#2E3344",
-          600: "#4A4F63",
-          500: "#676D82",
-          400: "#8A90A6",
-          300: "#B4B9C9",
-          200: "#E2E5EF",
-          100: "#EEF0F6",
-          50: "#F8F9FC",
+          900: "#141210", // ink (texto principal)
+          700: "#2E2A25",
+          600: "#57514A", // texto secundário
+          500: "#6C665F",
+          400: "#98938D", // muted (eixos/legendas)
+          300: "#C7C1B8",
+          200: "#E4E1DB", // bordas
+          100: "#EEEBE6",
+          50: "#F7F5F2", // superfície de cartão
         },
         verde: { 600: "#1E9E5A" },
         // ambar-500: acento/ícone/borda. ambar-600: texto de aviso (contraste AA ≥4.5:1).

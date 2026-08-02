@@ -181,8 +181,8 @@ export function ReunioesLista({
           {reunioes.map((r) => (
             <li key={r.id} className="rounded-md border border-cinza-200 bg-white p-4 shadow-card">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-azul-50">
-                  <Users2 className="h-5 w-5 text-azul-700" />
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary/5">
+                  <Users2 className="h-5 w-5 text-primary" />
                 </div>
                 <div className="flex-1">
                   <p className="text-corpo font-semibold text-cinza-900">{r.titulo}</p>

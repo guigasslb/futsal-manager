@@ -1159,18 +1159,20 @@ O mesmo editor e formato servem **exercícios**, **modelos de jogo** e **quadros
 
 ## 12. Sistema de design
 
-Prescritivo — sem reinterpretar "cartão" ou "cor primária". Base implementada no MVP (Tailwind + shadcn/ui), estendida com branding dinâmico.
+Prescritivo — sem reinterpretar "cartão" ou "cor primária". Base Tailwind + shadcn/ui. **Marca do produto: FutsalCoach** (guia completo em `docs/BRAND.md`). Princípio: **a marca é fixa; a cor do clube é dinâmica**.
 
-### 12.1 Tokens de cor (base)
-- **azul:** 900 `#0F1E8A` · 700 `#1A2FD4` (**primária/ação**) · 500 `#3A50E0` · 300 `#A9B4F5` · 100 `#E4E8FF` · 50 `#F4F6FF`
-- **cinza:** 900 `#1A1D29` (texto) · 700 `#2E3344` · 600 `#4A4F63` · 500 `#676D82` · 400 `#8A90A6` · 300 `#B4B9C9` · 200 `#E2E5EF` · 100 `#EEF0F6` · 50 `#F8F9FC`
-- **verde** 600 `#1E9E5A` (sucesso) · **âmbar** 600 `#8A5A06` (texto de aviso, contraste AA) · 500 `#E0900A` (ícone/borda de aviso) · **vermelho** 600 `#D33A3A` (erro/destrutivo)
-- **amarelo-jsc** `#FFD700` (decorativo, nunca ação)
-- **Regra:** todos os tons usados no código têm de existir em `tailwind.config.ts` (um token indefinido não gera CSS — texto cai para `cinza-900`, bordas ficam invisíveis).
+### 12.1 Tokens de cor (marca FutsalCoach — neutros quentes + laranja)
+- **ink** `#141210` (texto/ícone/preto quente) · **laranja** 500 `#F0531E` (acento da marca / default) · 600 `#C7430F` · 100 `#FBE4DA` · 50 `#FDF1EB`
+- **cinza (neutros quentes):** 900 `#141210` (ink) · 700 `#2E2A25` · 600 `#57514A` · 500 `#6C665F` · 400 `#98938D` · 300 `#C7C1B8` · 200 `#E4E1DB` (bordas) · 100 `#EEEBE6` · 50 `#F7F5F2` (superfície). Fundo da página = papel `#EDEBE7`.
+- **verde** 600 `#1E9E5A` (sucesso) · **âmbar** 600 `#8A5A06` (texto de aviso, AA) · 500 `#E0900A` (ícone/borda) · **vermelho** 600 `#D33A3A` (erro)
+- **azul** (legado, = cor default do clube demo JSC): 900/700/500/300/100/50.
+- **Tipografia:** display **Bricolage Grotesque** (`font-display`) nos títulos/wordmark; **Inter** (`font-sans`) no corpo — ambas via `next/font`.
+- **Regra:** todos os tons usados no código têm de existir em `tailwind.config.ts`.
 
 ### 12.2 Branding dinâmico do clube
-- As cores **primária** e **secundária** do `Clube` sobrepõem-se aos tokens base via **variáveis CSS** aplicadas na raiz em tempo de execução (por clube). O azul-700 é o default quando não há clube/cor definida.
-- **Logótipo** do clube (Supabase Storage) na barra de topo e nos PDF. Fallback: nome do clube.
+- A cor **primária** do `Clube` (escolhida no criar clube) alimenta **todos os acentos**: aplicada como `--cor-primaria` e convertida para HSL em `--primary`/`--ring` (shadcn) para os **botões** seguirem o clube. Usada no herói, navegação ativa, botões, chips, avatar, links/tabs (`text-primary`/`bg-primary`), focus e cor da marca de água. **Default** (sem clube) = laranja da marca.
+- **Logótipo do produto** (`components/layout/Logo.tsx`) na barra de topo/login — **só a marca FutsalCoach** (o clube não fica ao lado).
+- **Logótipo do clube** (`Clube.logoUrl`) como **marca de água centrada a preencher a página** (`.club-watermark`), visível em desktop e mobile; o nome do clube fica no contexto da página. Ver `docs/BRAND.md`.
 - Garantir contraste AA independentemente da cor escolhida (validar/escurecer texto quando necessário).
 
 ### 12.3 Tipografia (Inter)
@@ -1312,6 +1314,8 @@ Valores/tiers, trial gratuito, limites (nº de escalões/atletas), faturação e
 ## 19. Changelog da documentação
 
 Toda a alteração a este documento é registada aqui, com data e descrição. Do mais recente para o mais antigo.
+
+- **2026-08-02** — **Rebranding: FutsalManager → FutsalCoach + nova identidade visual.** Projeto renomeado para **FutsalCoach** (package, manifest, títulos, favicon `public/icon.svg`, login/registar). Nova marca (guia em `docs/BRAND.md`): logótipo do quadro tático (`components/layout/Logo.tsx`) — preto + laranja `#F0531E`; tipografia **Bricolage Grotesque** (display) + Inter, via `next/font`; **neutros quentes** (papel `#EDEBE7`, superfície `#F7F5F2`, tinta `#141210`) — retunados nos tokens `cinza-*`; laranja como primária default. **Arquitetura de cor:** marca fixa + **cor do clube dinâmica** — `Clube.corPrimaria` convertida hex→HSL para `--primary`/`--ring` (botões seguem o clube) e usada em todos os acentos (herói, nav, chips, avatar, tabs/links via `text-primary`). Barra de topo mostra **só a marca FutsalCoach**; o clube identifica-se por **marca de água centrada a preencher a página** (`.club-watermark`, logótipo do clube) visível em todos os tamanhos + nome no cabeçalho de identidade da página (treinador · papel / clube · escalões · época). Migração de acentos `azul-*`→`primary` em 35 ficheiros. Bíblia §12 atualizada. typecheck+build+51 testes verdes.
 
 - **2026-08-02** — **Fix: sessão obsoleta em `criarClube`.** Um JWT que referencie um utilizador inexistente (BD reseeded / conta apagada) fazia o insert de `MembroClube` rebentar com erro de FK (500). `criarClube` passa a validar que o utilizador da sessão existe e devolve erro limpo ("sessão inválida, volta a entrar") em vez de crashar.
 

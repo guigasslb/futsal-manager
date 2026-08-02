@@ -106,7 +106,7 @@ export default async function DetalheJogoPage({
             )}
             {LABEL_CASA_FORA[j.casaFora]}
           </span>
-          <span className="rounded-full bg-azul-50 px-2.5 py-0.5 text-legenda text-azul-700">
+          <span className="rounded-full bg-primary/5 px-2.5 py-0.5 text-legenda text-primary">
             {j.escalao.nome}
           </span>
         </div>
@@ -126,7 +126,7 @@ export default async function DetalheJogoPage({
           </p>
         )}
         {j.videoUrl && (
-          <a href={j.videoUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-corpo-sec text-azul-700 underline">
+          <a href={j.videoUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-corpo-sec text-primary underline">
             <Video className="h-4 w-4" /> Ver vídeo do jogo
           </a>
         )}

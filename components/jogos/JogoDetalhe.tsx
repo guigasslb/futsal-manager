@@ -203,7 +203,7 @@ export function JogoDetalhe({
                     id={`conv-${a.id}`}
                     checked={convocados.has(a.id)}
                     onChange={() => alternarConvocado(a.id)}
-                    className="h-5 w-5 accent-azul-700"
+                    className="h-5 w-5 accent-primary"
                   />
                   <label htmlFor={`conv-${a.id}`} className="flex-1 text-corpo text-cinza-900">
                     {a.numero != null && <span className="mr-1 text-cinza-400">#{a.numero}</span>}

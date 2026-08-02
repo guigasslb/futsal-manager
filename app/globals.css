@@ -9,33 +9,35 @@
 */
 @layer base {
   :root {
-    --background: 228 60% 98%; /* cinza-50 aproximado */
-    --foreground: 228 22% 13%; /* cinza-900 */
+    /* Marca FutsalCoach — neutros quentes + laranja como primária default.
+       A cor do clube sobrepõe --primary/--ring em tempo de execução (ver layout). */
+    --background: 40 16% 92%; /* paper #EDEBE7 */
+    --foreground: 30 11% 7%; /* ink #141210 */
 
-    --card: 0 0% 100%; /* branco */
-    --card-foreground: 228 22% 13%;
+    --card: 40 24% 96%; /* surface #F7F5F2 */
+    --card-foreground: 30 11% 7%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 228 22% 13%;
+    --popover: 40 30% 98%;
+    --popover-foreground: 30 11% 7%;
 
-    --primary: 230 79% 47%; /* azul-700 #1A2FD4 */
+    --primary: 14 87% 53%; /* laranja da marca #F0531E */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 228 40% 96%; /* azul-50 */
-    --secondary-foreground: 228 22% 13%;
+    --secondary: 40 20% 92%;
+    --secondary-foreground: 30 11% 7%;
 
-    --muted: 228 40% 96%;
-    --muted-foreground: 228 15% 47%; /* cinza-600 */
+    --muted: 40 20% 92%;
+    --muted-foreground: 28 6% 40%; /* cinza-600 quente */
 
-    --accent: 231 100% 95%; /* azul-100 */
-    --accent-foreground: 230 79% 30%;
+    --accent: 22 71% 95%; /* laranja-50 */
+    --accent-foreground: 18 87% 42%; /* laranja-600 */
 
     --destructive: 0 62% 53%; /* vermelho-600 */
     --destructive-foreground: 0 0% 100%;
 
-    --border: 228 27% 91%; /* cinza-200 */
-    --input: 228 27% 91%;
-    --ring: 230 79% 47%; /* azul-700 */
+    --border: 40 17% 88%; /* cinza-200 quente #E4E1DB */
+    --input: 40 17% 88%;
+    --ring: 14 87% 53%; /* laranja */
 
     --radius: 8px;
   }
@@ -45,20 +47,23 @@
   }
 
   body {
-    @apply bg-cinza-50 text-cinza-900;
-    font-family: Inter, system-ui, sans-serif;
+    @apply text-cinza-900;
+    background-color: #edebe7; /* paper */
+    font-family: var(--font-inter), Inter, system-ui, sans-serif;
     font-size: 14px;
     line-height: 1.5;
   }
 
   h1 {
-    @apply text-[24px] font-bold text-cinza-900;
+    @apply font-display text-[24px] font-bold text-cinza-900;
+    letter-spacing: -0.02em;
   }
   h2 {
-    @apply text-[18px] font-semibold text-cinza-900;
+    @apply font-display text-[18px] font-semibold text-cinza-900;
+    letter-spacing: -0.01em;
   }
   h3 {
-    @apply text-[15px] font-semibold text-cinza-900;
+    @apply font-display text-[15px] font-semibold text-cinza-900;
   }
 }
 
@@ -70,10 +75,10 @@
 @layer components {
   /* Cartão com profundidade (sombra em duas camadas, cantos suaves) */
   .card-base {
-    @apply rounded-xl border border-cinza-200/80 bg-white;
+    @apply rounded-xl border border-cinza-200/70 bg-white;
     box-shadow:
       0 1px 2px rgba(16, 24, 40, 0.04),
-      0 6px 20px -8px rgba(16, 24, 40, 0.12);
+      0 6px 20px -8px rgba(16, 24, 40, 0.1);
   }
 
   .card-hover {
@@ -82,13 +87,104 @@
   .card-hover:hover {
     box-shadow:
       0 2px 4px rgba(16, 24, 40, 0.05),
-      0 12px 28px -8px rgba(26, 47, 212, 0.2);
-    transform: translateY(-2px);
+      0 14px 32px -10px color-mix(in srgb, var(--cor-primaria, #f0531e) 30%, transparent);
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--cor-primaria, #f0531e) 30%, #e2e5ef);
   }
 
   /* Chip de ícone com a cor do clube (usa a variável de branding) */
   .chip-clube {
-    background-color: color-mix(in srgb, var(--cor-primaria, #1a2fd4) 12%, white);
-    color: var(--cor-primaria, #1a2fd4);
+    background-color: color-mix(in srgb, var(--cor-primaria, #f0531e) 12%, white);
+    color: var(--cor-primaria, #f0531e);
+  }
+
+  /* ── Superfície da app: papel quente + brilho subtil da cor do clube ───── */
+  .app-surface {
+    position: relative;
+    background-color: #edebe7; /* paper */
+    background-image: radial-gradient(
+      120% 60% at 100% -8%,
+      color-mix(in srgb, var(--cor-primaria, #f0531e) 9%, transparent) 0%,
+      transparent 55%
+    );
+  }
+
+  /* Marca de água do clube (logótipo) — centrada, a preencher 100% da página */
+  .club-watermark {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center;
+    padding: 24px;
+    opacity: 0.14;
+    pointer-events: none;
+    z-index: 0;
+    user-select: none;
+  }
+  .app-content {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── Barra de topo em vidro fosco ─────────────────────────────────────── */
+  .topbar-glass {
+    background-color: rgba(255, 255, 255, 0.78);
+    backdrop-filter: saturate(180%) blur(14px);
+    -webkit-backdrop-filter: saturate(180%) blur(14px);
+  }
+
+  /* ── Item de navegação (acento na cor do clube quando ativo) ──────────── */
+  .nav-item {
+    @apply relative flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-corpo font-medium text-cinza-600 transition-all duration-150;
+  }
+  .nav-item:hover {
+    @apply bg-cinza-100 text-cinza-900;
+  }
+  .nav-item-active {
+    background-color: color-mix(in srgb, var(--cor-primaria, #f0531e) 12%, white);
+    color: var(--cor-primaria, #f0531e);
+  }
+  .nav-item-active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 22%;
+    bottom: 22%;
+    width: 3px;
+    border-radius: 0 4px 4px 0;
+    background: var(--cor-primaria, #f0531e);
+  }
+
+  /* ── Cartão-herói com gradiente da cor do clube ───────────────────────── */
+  .hero-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1rem;
+    color: #fff;
+    background: linear-gradient(
+      135deg,
+      var(--cor-primaria, #f0531e) 0%,
+      color-mix(in srgb, var(--cor-primaria, #f0531e) 72%, #000) 100%
+    );
+    box-shadow: 0 18px 40px -16px color-mix(in srgb, var(--cor-primaria, #f0531e) 60%, transparent);
+  }
+
+  /* Botão pequeno "de vidro" sobre o cartão-herói */
+  .hero-btn {
+    @apply inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-corpo-sec font-semibold transition-colors;
+    background-color: rgba(255, 255, 255, 0.16);
+    color: #fff;
+  }
+  .hero-btn:hover {
+    background-color: rgba(255, 255, 255, 0.26);
+  }
+  .hero-btn-solid {
+    @apply inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-corpo-sec font-semibold transition-transform;
+    color: var(--cor-primaria, #f0531e);
+  }
+  .hero-btn-solid:hover {
+    transform: translateY(-1px);
   }
 }

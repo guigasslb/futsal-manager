@@ -107,7 +107,7 @@ export function CalendarioTreinos({
             <div
               key={dia}
               className={`min-h-[72px] rounded-md border p-1 ${
-                ehHoje(dia) ? "border-azul-700 bg-azul-50" : "border-cinza-200 bg-white"
+                ehHoje(dia) ? "border-primary bg-primary/5" : "border-cinza-200 bg-white"
               }`}
             >
               <span className="text-legenda text-cinza-500">{dia}</span>
@@ -116,7 +116,7 @@ export function CalendarioTreinos({
                   <Link
                     key={s.id}
                     href={`/treinos/${s.id}`}
-                    className="block truncate rounded bg-azul-700 px-1 py-0.5 text-legenda text-white hover:bg-azul-900"
+                    className="block truncate rounded bg-primary px-1 py-0.5 text-legenda text-white hover:bg-azul-900"
                     title={s.escalaoNome}
                   >
                     {new Date(s.data).toLocaleTimeString("pt-PT", {
