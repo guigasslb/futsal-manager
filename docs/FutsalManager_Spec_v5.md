@@ -304,7 +304,11 @@ model Exercicio {
   descricao      String?
   objetivo       String?
   duracaoMin     Int?
-  categoria      CategoriaExercicio?
+  // Classificação em dois níveis (Grupo D): categoria principal (enum fixo) +
+  // subcategoria customizável por clube.
+  categoriaPrincipal CategoriaExercicioPrincipal?
+  subcategoriaId String?
+  subcategoria   SubcategoriaExercicio? @relation(fields: [subcategoriaId], references: [id])
   diagrama       Json?               // DiagramaCampo v2 (com passos/animação) — secção 11
   origemSeed     Boolean @default(false) // exercício da biblioteca curada de arranque
   criadoEm       DateTime @default(now())
@@ -317,9 +321,26 @@ model Exercicio {
 // Determina de quem é o conteúdo criado (exercícios, modelos de jogo). Ver secção 4.
 enum PropriedadeConteudo { CLUBE TREINADOR }
 
-enum CategoriaExercicio {
-  ATIVACAO TECNICA_INDIVIDUAL FINALIZACAO POSSE_BOLA TRANSICOES
-  SITUACOES_JOGO JOGO_REDUZIDO BOLAS_PARADAS FISICO OUTRO
+// Categoria principal do exercício (enum fixo). Grupo D — substitui o antigo CategoriaExercicio.
+enum CategoriaExercicioPrincipal {
+  ATAQUE DEFESA TRANSICAO BOLAS_PARADAS FISICO GUARDA_REDES OUTRO
+}
+
+// Subcategoria customizável por clube (à semelhança de métricas/habilidades).
+// Seed instala ~22 predefinidas (sistema=true, não editáveis/apagáveis).
+model SubcategoriaExercicio {
+  id        String                      @id @default(cuid())
+  clubeId   String
+  clube     Clube                       @relation(fields: [clubeId], references: [id])
+  nome      String
+  categoria CategoriaExercicioPrincipal
+  ordem     Int                         @default(0)
+  sistema   Boolean                     @default(false)
+  criadoEm  DateTime                    @default(now())
+
+  exercicios Exercicio[]
+
+  @@index([clubeId, categoria])
 }
 
 // Exercício partilhado na biblioteca de um clube (o autor mantém sempre o seu).
@@ -359,11 +380,14 @@ enum TipoPlaneamento { SEMANAL MENSAL }
 enum PeriodoEpoca { PREPARATORIO COMPETITIVO TRANSICAO }
 
 model Sessao {
-  id            String   @id @default(cuid())
+  id            String     @id @default(cuid())
   clubeId       String
   escalaoId     String
   epocaId       String
-  planeamentoId String?  // liga ao microciclo
+  // Grupo B: tipo de sessão. NORMAL liga-se a periodização (planeamento); os tipos
+  // "soltos" (ABERTO/CAPTACAO/EVENTO) dispensam planeamento.
+  tipoSessao    TipoSessao @default(NORMAL)
+  planeamentoId String?    // liga ao microciclo (recomendado p/ tipo NORMAL)
   data          DateTime
   duracaoMin    Int?
   objetivo      String?
@@ -381,6 +405,9 @@ model Sessao {
   exercicios SessaoExercicio[]
   presencas  Presenca[]
 }
+
+// Grupo B — tipo de sessão de treino.
+enum TipoSessao { NORMAL ABERTO CAPTACAO EVENTO }
 
 model SessaoExercicio {
   id          String @id @default(cuid())
@@ -729,7 +756,10 @@ Toda a operação corre num contexto resolvido no servidor:
 - **Escalão selecionado** — parâmetro de UI (tabs), nunca fonte de autorização por si só.
 
 ### 5.5 RGPD (dados de menores) — fundação, não opção
-Tratamos dados de **crianças**; o desenho tem de o refletir desde o schema:
+Tratamos dados de **crianças**; o desenho tem de o refletir desde o schema.
+
+> **Estado atual (decisão 2026-08-02):** o **consentimento parental é recolhido pelo clube no ato de inscrição, fora da aplicação** (formulário/papel). A app assume que o consentimento existe para os atletas registados. O modelo `Consentimento` e o hard-delete descritos abaixo são o **alvo futuro** (não implementados; não bloqueadores). Ver `docs/DEPLOY.md` §6.
+
 - **Minimização:** recolher apenas o necessário (nome, data de nascimento, posição, número, observações). Contactos dos pais só quando o portal de pais existir (FUTURO).
 - **Consentimento parental** (`Consentimento`, tipos `DADOS` e `IMAGEM`): registado por atleta, com encarregado de educação e data. **Fotografias de menores** (`fotoUrl`, FUTURO) só com consentimento `IMAGEM` ativo.
 - **Direito ao esquecimento:** por defeito **soft-delete** (`ativo = false`, preserva histórico competitivo agregado). A pedido do titular/encarregado, **hard-delete** dos dados pessoais (apaga o `Atleta` e dados diretamente identificáveis; estatísticas podem ser anonimizadas para não partir agregados de equipa).
@@ -1132,10 +1162,11 @@ O mesmo editor e formato servem **exercícios**, **modelos de jogo** e **quadros
 Prescritivo — sem reinterpretar "cartão" ou "cor primária". Base implementada no MVP (Tailwind + shadcn/ui), estendida com branding dinâmico.
 
 ### 12.1 Tokens de cor (base)
-- **azul:** 900 `#0F1E8A` · 700 `#1A2FD4` (**primária/ação**) · 500 `#3A50E0` · 100 `#E4E8FF` · 50 `#F4F6FF`
-- **cinza:** 900 `#1A1D29` (texto) · 600 `#4A4F63` · 400 `#8A90A6` · 200 `#E2E5EF` · 50 `#F8F9FC`
-- **verde** 600 `#1E9E5A` (sucesso) · **âmbar** 500 `#E0900A` (aviso) · **vermelho** 600 `#D33A3A` (erro/destrutivo)
+- **azul:** 900 `#0F1E8A` · 700 `#1A2FD4` (**primária/ação**) · 500 `#3A50E0` · 300 `#A9B4F5` · 100 `#E4E8FF` · 50 `#F4F6FF`
+- **cinza:** 900 `#1A1D29` (texto) · 700 `#2E3344` · 600 `#4A4F63` · 500 `#676D82` · 400 `#8A90A6` · 300 `#B4B9C9` · 200 `#E2E5EF` · 100 `#EEF0F6` · 50 `#F8F9FC`
+- **verde** 600 `#1E9E5A` (sucesso) · **âmbar** 600 `#8A5A06` (texto de aviso, contraste AA) · 500 `#E0900A` (ícone/borda de aviso) · **vermelho** 600 `#D33A3A` (erro/destrutivo)
 - **amarelo-jsc** `#FFD700` (decorativo, nunca ação)
+- **Regra:** todos os tons usados no código têm de existir em `tailwind.config.ts` (um token indefinido não gera CSS — texto cai para `cinza-900`, bordas ficam invisíveis).
 
 ### 12.2 Branding dinâmico do clube
 - As cores **primária** e **secundária** do `Clube` sobrepõem-se aos tokens base via **variáveis CSS** aplicadas na raiz em tempo de execução (por clube). O azul-700 é o default quando não há clube/cor definida.
@@ -1281,6 +1312,8 @@ Valores/tiers, trial gratuito, limites (nº de escalões/atletas), faturação e
 ## 19. Changelog da documentação
 
 Toda a alteração a este documento é registada aqui, com data e descrição. Do mais recente para o mais antigo.
+
+- **2026-08-02** — **Sincronização da bíblia com o código (corpo, não só changelog).** Corrigido drift no modelo de dados (§3) e no sistema de design (§12) que tinham ficado para trás dos Grupos B/D e da auditoria: (§3) `Exercicio.categoria CategoriaExercicio` → `categoriaPrincipal CategoriaExercicioPrincipal` + `subcategoriaId`; enum `CategoriaExercicio` → `CategoriaExercicioPrincipal`; adicionado modelo `SubcategoriaExercicio`; `Sessao` ganha `tipoSessao TipoSessao` + enum `TipoSessao`. (§12.1) tokens de cor completos (cinza-100/300/500/700, azul-300, ambar-600) + regra de tokens definidos. (§5.5) nota do estado atual do RGPD (consentimento pelo clube). Objetivo: cumprir a regra "recriar do zero a 100%".
 
 - **2026-08-02** — **Decisão RGPD — consentimento tratado pelo clube.** O consentimento parental (dados + imagem de menores) é recolhido pelo clube no ato de inscrição, **fora da aplicação**. A app assume que o consentimento existe para os atletas registados. O modelo `Consentimento` fica intencionalmente por ligar; `apagarAtleta` mantém-se soft-delete. Registo de consentimento in-app e hard-delete (direito ao esquecimento) passam a **melhorias futuras não-bloqueadoras**. Ver `docs/DEPLOY.md` §6.
 
