@@ -50,7 +50,7 @@ Configurados em `next.config.js` (`headers()`): CSP, HSTS, X-Frame-Options, X-Co
 
 - **Monitorização de erros** — integrar Sentry (ou equivalente). Ponto de ligação já preparado em `app/global-error.tsx` (`console.error` a substituir pela captura). Sem isto, erros de produção não deixam rasto.
 - **Backups da BD** — confirmar backups automáticos + teste de restauro no plano Supabase.
-- **RGPD (menores)** — consentimento parental de imagem e hard-delete ainda por implementar (ver backlog). Bloqueadores legais antes de recolher dados reais de menores.
+- **RGPD (menores) — consentimento tratado pelo clube (decisão 2026-08-02).** O consentimento parental (dados + imagem) é **recolhido pelo clube no ato de inscrição**, fora da aplicação (formulário/papel). A app assume que esse consentimento existe para os atletas registados. *Melhorias futuras (não bloqueadoras):* registo do consentimento na app (modelo `Consentimento` já existe no schema, por ligar) e hard-delete de dados pessoais (direito ao esquecimento) — atualmente `apagarAtleta` é soft-delete.
 - **Rate-limiting de login** — atual é em memória (single-instance). Para multi-instância, migrar para store partilhado.
 
 ## 7. Dependências
