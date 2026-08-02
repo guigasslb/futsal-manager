@@ -63,7 +63,7 @@ export async function convidarMembro(dados: unknown): Promise<Resultado<void>> {
   });
   if (!perfil) return erro("O perfil selecionado não existe");
 
-  let utilizador = await prisma.utilizador.findUnique({
+  const utilizador = await prisma.utilizador.findUnique({
     where: { email: parsed.data.email },
   });
 
@@ -81,24 +81,37 @@ export async function convidarMembro(dados: unknown): Promise<Resultado<void>> {
       where: { utilizadorId: utilizador.id, estado: "ATIVO" },
     });
     if (outraAtiva) return erro("Este utilizador já tem uma adesão ativa noutro clube");
-  } else {
-    utilizador = await prisma.utilizador.create({
+    // Utilizador existente — cria só a adesão.
+    await prisma.membroClube.create({
       data: {
-        nome: parsed.data.nome,
-        email: parsed.data.email,
-        passwordHash: await bcrypt.hash(parsed.data.passwordInicial, BCRYPT_COST),
+        utilizadorId: utilizador.id,
+        clubeId: perm.ctx.clube.id,
+        perfilId: perfil.id,
+        estado: "ATIVO",
       },
+    });
+  } else {
+    // Utilizador novo — cria conta + adesão atomicamente (evita conta órfã se falhar).
+    const passwordHash = await bcrypt.hash(parsed.data.passwordInicial, BCRYPT_COST);
+    await prisma.$transaction(async (tx) => {
+      const novo = await tx.utilizador.create({
+        data: {
+          nome: parsed.data.nome,
+          email: parsed.data.email,
+          passwordHash,
+        },
+      });
+      await tx.membroClube.create({
+        data: {
+          utilizadorId: novo.id,
+          clubeId: perm.ctx.clube.id,
+          perfilId: perfil.id,
+          estado: "ATIVO",
+        },
+      });
     });
   }
 
-  await prisma.membroClube.create({
-    data: {
-      utilizadorId: utilizador.id,
-      clubeId: perm.ctx.clube.id,
-      perfilId: perfil.id,
-      estado: "ATIVO",
-    },
-  });
   revalidatePath(PATH);
   return ok(undefined);
 }

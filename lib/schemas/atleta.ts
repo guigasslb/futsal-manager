@@ -8,6 +8,9 @@ export const atletaSchema = z.object({
   escalaoId: z.string().cuid("Escalão inválido"),
   escalaoSecundarioId: z.string().cuid().nullable().optional(),
   dataNascimento: z.coerce.date().optional(),
+  // Data de ingresso no escalão (secção 10/22.3): divisor da taxa de presença.
+  // Se ausente, usa-se criadoEm.
+  dataIngresso: z.coerce.date().optional(),
   posicoes: z.array(posicaoEnum).default([]),
   numero: z
     .number()

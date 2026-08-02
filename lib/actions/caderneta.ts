@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { obterEpocaAtiva, obterClubeIdAtual } from "@/lib/epoca-context";
 import { exigirCapacidade, podeLerEscalao } from "@/lib/permissoes";
-import { ok, erro, type Resultado } from "@/lib/utils";
+import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
+import { atualizarProgressoSchema } from "@/lib/schemas/caderneta";
 import type { EstadoHabilidade, Habilidade, ProgressoHabilidade } from "@prisma/client";
 
 export interface HabilidadeComProgresso extends Habilidade {
@@ -64,6 +65,9 @@ export async function atualizarProgresso(
 ): Promise<Resultado<void>> {
   const clubeId = await obterClubeIdAtual();
   if (!clubeId) return erro("Não autenticado");
+
+  const parsed = atualizarProgressoSchema.safeParse({ atletaId, habilidadeId, estado, notas });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
 
   const epoca = await obterEpocaAtiva();
   if (!epoca) return erro("Nenhuma época ativa");

@@ -41,7 +41,7 @@ export async function obterRelatorioEquipa(
     prisma.atleta.count({ where: { epocaId: epoca.id, escalaoId, ativo: true } }),
     prisma.estatisticaAtleta.findMany({
       where: { jogo: { epocaId: epoca.id, escalaoId } },
-      include: { atleta: { select: { nome: true } } },
+      include: { atleta: { select: { id: true, nome: true } } },
     }),
   ]);
 
@@ -59,19 +59,25 @@ export async function obterRelatorioEquipa(
     else empates++;
   }
 
-  const porGolos = new Map<string, number>();
-  const porAssist = new Map<string, number>();
+  // Agregação por atletaId (não por nome — evita fundir homónimos, secção 10.2).
+  const porGolos = new Map<string, { nome: string; golos: number }>();
+  const porAssist = new Map<string, { nome: string; assistencias: number }>();
   for (const e of estatisticas) {
-    if (e.golos > 0) porGolos.set(e.atleta.nome, (porGolos.get(e.atleta.nome) ?? 0) + e.golos);
-    if (e.assistencias > 0)
-      porAssist.set(e.atleta.nome, (porAssist.get(e.atleta.nome) ?? 0) + e.assistencias);
+    if (e.golos > 0) {
+      const atual = porGolos.get(e.atletaId) ?? { nome: e.atleta.nome, golos: 0 };
+      atual.golos += e.golos;
+      porGolos.set(e.atletaId, atual);
+    }
+    if (e.assistencias > 0) {
+      const atual = porAssist.get(e.atletaId) ?? { nome: e.atleta.nome, assistencias: 0 };
+      atual.assistencias += e.assistencias;
+      porAssist.set(e.atletaId, atual);
+    }
   }
-  const marcadores = [...porGolos.entries()]
-    .map(([nome, golos]) => ({ nome, golos }))
+  const marcadores = [...porGolos.values()]
     .sort((a, b) => b.golos - a.golos)
     .slice(0, 10);
-  const assistentes = [...porAssist.entries()]
-    .map(([nome, assistencias]) => ({ nome, assistencias }))
+  const assistentes = [...porAssist.values()]
     .sort((a, b) => b.assistencias - a.assistencias)
     .slice(0, 10);
 

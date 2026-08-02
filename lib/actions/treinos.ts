@@ -254,6 +254,17 @@ export async function reordenarExercicios(
   const perm = await exigirCapacidade("TREINOS_GERIR", sessao.escalaoId);
   if (!perm.ok) return erro(perm.erro);
 
+  // Validação: todos os ids têm de pertencer a esta sessão (impede reordenar/corromper
+  // SessaoExercicio de outra sessão via id forjado).
+  const ids = ordens.map((o) => o.id);
+  if (ids.length > 0) {
+    const validos = await prisma.sessaoExercicio.count({
+      where: { id: { in: ids }, sessaoId },
+    });
+    if (validos !== ids.length)
+      return erro("Um ou mais exercícios não pertencem a esta sessão.");
+  }
+
   // Evita colisões no unique [sessaoId, ordem]: desloca para offset alto, depois assenta.
   await prisma.$transaction([
     ...ordens.map((o, i) =>
@@ -283,7 +294,7 @@ export async function marcarPresencas(
   if (!perm.ok) return erro(perm.erro);
 
   const parsed = marcarPresencasSchema.safeParse(presencas);
-  if (!parsed.success) return erro("Dados de presença inválidos");
+  if (!parsed.success) return erroDeValidacao(parsed.error);
 
   await prisma.$transaction(
     parsed.data.map((p) =>

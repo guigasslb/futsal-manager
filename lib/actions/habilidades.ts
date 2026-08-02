@@ -69,6 +69,13 @@ export async function apagarHabilidade(id: string): Promise<Resultado<void>> {
   const existe = await prisma.habilidade.findFirst({ where: { id, clubeId: perm.ctx.clube.id } });
   if (!existe) return erro("Habilidade não encontrada");
 
+  // ProgressoHabilidade é Restrict — apagar com progressos lançaria P2003 (500).
+  const totalProgressos = await prisma.progressoHabilidade.count({ where: { habilidadeId: id } });
+  if (totalProgressos > 0)
+    return erro(
+      `Não é possível apagar: esta habilidade tem ${totalProgressos} registo(s) de progresso na caderneta.`,
+    );
+
   await prisma.habilidade.delete({ where: { id } });
   revalidatePath(PATH);
   return ok(undefined);

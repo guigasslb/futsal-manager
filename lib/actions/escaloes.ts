@@ -83,9 +83,26 @@ export async function apagarEscalao(id: string): Promise<Resultado<void>> {
   const existe = await prisma.escalao.findFirst({ where: { id, clubeId: perm.ctx.clube.id } });
   if (!existe) return erro("Escalão não encontrado");
 
-  const totalAtletas = await prisma.atleta.count({ where: { escalaoId: id } });
+  // Guardas de integridade: as relações Sessao/Jogo/Planeamento/Competicao são
+  // Restrict — apagar com dependentes lançaria P2003 (500). Bloquear com mensagem.
+  const [totalAtletas, totalSessoes, totalJogos, totalPlaneamentos, totalCompeticoes] =
+    await Promise.all([
+      prisma.atleta.count({ where: { escalaoId: id } }),
+      prisma.sessao.count({ where: { escalaoId: id } }),
+      prisma.jogo.count({ where: { escalaoId: id } }),
+      prisma.planeamento.count({ where: { escalaoId: id } }),
+      prisma.competicao.count({ where: { escalaoId: id } }),
+    ]);
   if (totalAtletas > 0)
     return erro(`Não é possível apagar: este escalão tem ${totalAtletas} atleta(s) associado(s).`);
+  if (totalSessoes > 0)
+    return erro(`Não é possível apagar: este escalão tem ${totalSessoes} sessão(ões) associada(s).`);
+  if (totalJogos > 0)
+    return erro(`Não é possível apagar: este escalão tem ${totalJogos} jogo(s) associado(s).`);
+  if (totalPlaneamentos > 0)
+    return erro(`Não é possível apagar: este escalão tem ${totalPlaneamentos} planeamento(s) associado(s).`);
+  if (totalCompeticoes > 0)
+    return erro(`Não é possível apagar: este escalão tem ${totalCompeticoes} competição(ões) associada(s).`);
 
   await prisma.escalao.delete({ where: { id } });
   revalidatePath(PATH);

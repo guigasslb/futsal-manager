@@ -35,6 +35,7 @@ type AtletaParaEdicao = Pick<
   | "escalaoId"
   | "escalaoSecundarioId"
   | "dataNascimento"
+  | "dataIngresso"
   | "posicoes"
   | "numero"
   | "observacoes"
@@ -81,6 +82,7 @@ export function AtletaForm({
     const val = (k: string) => String(fd.get(k) ?? "").trim();
     const numeroRaw = val("numero");
     const dataRaw = val("dataNascimento");
+    const ingressoRaw = val("dataIngresso");
 
     const dados = {
       nome: String(fd.get("nome")),
@@ -90,6 +92,7 @@ export function AtletaForm({
       posicoes: [...posicoes],
       numero: numeroRaw !== "" ? Number(numeroRaw) : undefined,
       dataNascimento: dataRaw !== "" ? dataRaw : undefined,
+      dataIngresso: ingressoRaw !== "" ? ingressoRaw : undefined,
       observacoes: val("observacoes") || undefined,
       fotoUrl: val("fotoUrl"),
       encarregadoNome: val("encarregadoNome") || undefined,
@@ -139,6 +142,14 @@ export function AtletaForm({
             <Label htmlFor="dataNascimento">Data de nascimento</Label>
             <Input id="dataNascimento" name="dataNascimento" type="date" defaultValue={formatDateForInput(atleta?.dataNascimento)} />
           </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="dataIngresso">Data de ingresso</Label>
+          <Input id="dataIngresso" name="dataIngresso" type="date" defaultValue={formatDateForInput(atleta?.dataIngresso)} />
+          <p className="text-legenda text-cinza-400">
+            Se o atleta entrou a meio da época, a taxa de presença conta a partir desta data.
+          </p>
         </div>
 
         <div className="space-y-1.5">

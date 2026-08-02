@@ -195,6 +195,22 @@ export async function definirConvocatoria(
   const perm = await exigirCapacidade("CONVOCATORIA_GERIR", jogo.escalaoId);
   if (!perm.ok) return erro(perm.erro);
 
+  // Validação: só atletas do clube, da época do jogo, e do escalão (principal ou
+  // secundário) do jogo podem ser convocados. Impede convocar atletas alheios via id forjado.
+  const idsPedidos = [...new Set(atletaIds)];
+  if (idsPedidos.length > 0) {
+    const validos = await prisma.atleta.count({
+      where: {
+        id: { in: idsPedidos },
+        epocaId: jogo.epocaId,
+        escalao: { clubeId },
+        OR: [{ escalaoId: jogo.escalaoId }, { escalaoSecundarioId: jogo.escalaoId }],
+      },
+    });
+    if (validos !== idsPedidos.length)
+      return erro("Um ou mais atletas não pertencem a este escalão/época.");
+  }
+
   const convocadosAtuais = await prisma.convocatoria.findMany({
     where: { jogoId },
     select: { atletaId: true },
@@ -237,7 +253,7 @@ export async function guardarEstatisticas(
   if (!perm.ok) return erro(perm.erro);
 
   const parsed = guardarEstatisticasSchema.safeParse(estatisticas);
-  if (!parsed.success) return erro("Dados de estatísticas inválidos");
+  if (!parsed.success) return erroDeValidacao(parsed.error);
 
   // Só atletas convocados podem ter estatísticas (secção 12.5)
   const convocados = await prisma.convocatoria.findMany({
@@ -349,7 +365,7 @@ export async function registarEventoJogo(
   if (!perm.ok) return erro(perm.erro);
 
   const parsed = eventoJogoSchema.safeParse(dados);
-  if (!parsed.success) return erro("Evento inválido");
+  if (!parsed.success) return erroDeValidacao(parsed.error);
 
   await prisma.eventoJogo.create({
     data: {

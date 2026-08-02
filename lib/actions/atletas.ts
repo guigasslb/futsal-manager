@@ -98,6 +98,7 @@ export async function criarAtleta(dados: unknown): Promise<Resultado<Atleta>> {
       posicoes: parsed.data.posicoes,
       numero: parsed.data.numero ?? null,
       dataNascimento: parsed.data.dataNascimento ?? null,
+      dataIngresso: parsed.data.dataIngresso ?? null,
       observacoes: parsed.data.observacoes ?? null,
       fotoUrl: parsed.data.fotoUrl ? parsed.data.fotoUrl : null,
       encarregadoNome: parsed.data.encarregadoNome ?? null,
@@ -161,6 +162,7 @@ export async function atualizarAtleta(
       posicoes: parsed.data.posicoes,
       numero: parsed.data.numero ?? null,
       dataNascimento: parsed.data.dataNascimento ?? null,
+      dataIngresso: parsed.data.dataIngresso ?? null,
       observacoes: parsed.data.observacoes ?? null,
       fotoUrl: parsed.data.fotoUrl ? parsed.data.fotoUrl : null,
       encarregadoNome: parsed.data.encarregadoNome ?? null,
@@ -203,12 +205,14 @@ export async function obterEstatisticasAtleta(
 
   const atleta = await prisma.atleta.findFirst({
     where: { id, escalao: { clubeId } },
-    select: { id: true, escalaoId: true, posicoes: true, criadoEm: true, epocaId: true },
+    select: { id: true, escalaoId: true, posicoes: true, criadoEm: true, dataIngresso: true, epocaId: true },
   });
   if (!atleta) return erro("Atleta não encontrado");
   if (!(await podeLerEscalao(atleta.escalaoId))) return erro("Sem permissão neste escalão");
 
   const eGR = atleta.posicoes.includes("GUARDA_REDES");
+  // Divisor da taxa de presença: sessões desde o ingresso (secção 22.3).
+  const ingresso = atleta.dataIngresso ?? atleta.criadoEm;
 
   // Jogos: convocatórias e estatísticas da época
   const [jogosConvocado, estatisticas, sessoesTotais, presencas] = await Promise.all([
@@ -223,7 +227,7 @@ export async function obterEstatisticasAtleta(
       where: {
         epocaId: epoca.id,
         escalaoId: atleta.escalaoId,
-        data: { gte: atleta.criadoEm },
+        data: { gte: ingresso },
       },
     }),
     prisma.presenca.count({

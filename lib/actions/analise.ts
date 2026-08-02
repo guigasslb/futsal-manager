@@ -66,17 +66,20 @@ export async function obterPresencasMensal(
 
   const atleta = await prisma.atleta.findFirst({
     where: { id: atletaId, escalao: { clubeId } },
-    select: { escalaoId: true, criadoEm: true },
+    select: { escalaoId: true, criadoEm: true, dataIngresso: true },
   });
   if (!atleta) return erro("Atleta não encontrado");
   if (!(await podeLerEscalao(atleta.escalaoId))) return erro("Sem permissão neste escalão");
+
+  // Divisor da taxa de presença: sessões desde o ingresso (secção 22.3).
+  const ingresso = atleta.dataIngresso ?? atleta.criadoEm;
 
   const [sessoes, presencas] = await Promise.all([
     prisma.sessao.findMany({
       where: {
         epocaId: epoca.id,
         escalaoId: atleta.escalaoId,
-        data: { gte: atleta.criadoEm },
+        data: { gte: ingresso },
       },
       select: { id: true, data: true },
       orderBy: { data: "asc" },
