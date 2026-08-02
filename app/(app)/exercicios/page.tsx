@@ -49,7 +49,7 @@ export default async function ExerciciosPage({
           href="/exercicios"
           className={`whitespace-nowrap px-4 py-2.5 text-corpo font-medium border-b-2 transition-colors ${
             !categoria
-              ? "border-azul-700 text-azul-700"
+              ? "border-primary text-primary"
               : "border-transparent text-cinza-600 hover:text-cinza-900"
           }`}
         >
@@ -61,7 +61,7 @@ export default async function ExerciciosPage({
             href={`/exercicios?categoria=${c}`}
             className={`whitespace-nowrap px-4 py-2.5 text-corpo font-medium border-b-2 transition-colors ${
               categoria === c
-                ? "border-azul-700 text-azul-700"
+                ? "border-primary text-primary"
                 : "border-transparent text-cinza-600 hover:text-cinza-900"
             }`}
           >

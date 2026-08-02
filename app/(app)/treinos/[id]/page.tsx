@@ -69,7 +69,7 @@ export default async function DetalheSessaoPage({
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="capitalize">{formatarDataHora(s.data)}</h1>
-          <span className="rounded-full bg-azul-50 px-2.5 py-0.5 text-legenda text-azul-700">
+          <span className="rounded-full bg-primary/5 px-2.5 py-0.5 text-legenda text-primary">
             {s.escalao.nome}
           </span>
         </div>

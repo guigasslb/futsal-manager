@@ -18,13 +18,13 @@ export default async function RegistarPage() {
     <Card className="w-full max-w-sm">
       <CardHeader className="text-center">
         <CardTitle className="text-titulo-pagina">Criar conta</CardTitle>
-        <CardDescription>Regista-te para começares a usar o FutsalManager</CardDescription>
+        <CardDescription>Regista-te para começares a usar o FutsalCoach</CardDescription>
       </CardHeader>
       <CardContent>
         <RegistarForm />
         <p className="mt-4 text-center text-legenda text-cinza-500">
           Já tens conta?{" "}
-          <Link href="/login" className="font-medium text-azul-700 underline">
+          <Link href="/login" className="font-medium text-laranja-600 underline">
             Inicia sessão
           </Link>
         </p>

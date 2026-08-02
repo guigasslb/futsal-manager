@@ -51,7 +51,7 @@ interface EstadoVazioProps {
 export function EstadoVazio({ titulo, descricao, acao, className }: EstadoVazioProps) {
   return (
     <div className={cn("flex flex-col items-center justify-center py-16 text-center", className)}>
-      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-azul-50">
+      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/5">
         <Inbox className="h-8 w-8 text-cinza-400" />
       </div>
       <h3 className="text-subtitulo text-cinza-900">{titulo}</h3>

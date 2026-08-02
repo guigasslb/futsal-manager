@@ -6,7 +6,7 @@ import { GraficoBarrasV } from "@/components/graficos/GraficoBarrasV";
 function Cartao({ valor, label }: { valor: string | number; label: string }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-lg border border-cinza-200 bg-white p-4 shadow-card">
-      <span className="text-titulo-pagina font-bold text-azul-700">{valor}</span>
+      <span className="text-titulo-pagina font-bold text-primary">{valor}</span>
       <span className="text-legenda text-cinza-500">{label}</span>
     </div>
   );

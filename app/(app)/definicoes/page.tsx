@@ -21,10 +21,10 @@ export default function DefinicoesPage() {
           <Link
             key={href}
             href={href}
-            className="flex min-h-[44px] items-center gap-4 rounded-md border border-cinza-200 bg-white p-4 shadow-card hover:border-azul-100 hover:bg-azul-50 transition-colors"
+            className="flex min-h-[44px] items-center gap-4 rounded-md border border-cinza-200 bg-white p-4 shadow-card hover:border-primary/25 hover:bg-primary/5 transition-colors"
           >
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-azul-50">
-              <Icon className="h-5 w-5 text-azul-700" />
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-primary/5">
+              <Icon className="h-5 w-5 text-primary" />
             </div>
             <div>
               <p className="text-corpo font-semibold text-cinza-900">{label}</p>

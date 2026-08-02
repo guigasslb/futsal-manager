@@ -329,7 +329,7 @@ export function EditorCampo({
             }}
             className={`flex items-center gap-2 rounded-md border px-3 py-2 text-corpo-sec transition-colors ${
               ferramenta === id
-                ? "border-azul-700 bg-azul-50 text-azul-700"
+                ? "border-primary bg-primary/5 text-primary"
                 : "border-cinza-200 text-cinza-700 hover:bg-cinza-50"
             }`}
           >
@@ -416,7 +416,7 @@ export function EditorCampo({
           {textoInline && (
             <input
               autoFocus
-              className="absolute rounded border border-azul-700 bg-white px-2 py-1 text-corpo-sec shadow"
+              className="absolute rounded border border-primary bg-white px-2 py-1 text-corpo-sec shadow"
               style={{
                 left: `${(textoInline.x / CAMPO_W) * 100}%`,
                 top: `${(textoInline.y / CAMPO_H) * 100}%`,
@@ -468,7 +468,7 @@ export function EditorCampo({
                   onClick={() => setEstiloSeta(o.v)}
                   className={`rounded border px-2 py-1 ${
                     estiloSeta === o.v
-                      ? "border-azul-700 bg-azul-50 text-azul-700"
+                      ? "border-primary bg-primary/5 text-primary"
                       : "border-cinza-200"
                   }`}
                 >
@@ -493,7 +493,7 @@ export function EditorCampo({
                   onClick={() => setOrientacaoBaliza(o.v)}
                   className={`rounded border px-2 py-1 ${
                     orientacaoBaliza === o.v
-                      ? "border-azul-700 bg-azul-50 text-azul-700"
+                      ? "border-primary bg-primary/5 text-primary"
                       : "border-cinza-200"
                   }`}
                 >

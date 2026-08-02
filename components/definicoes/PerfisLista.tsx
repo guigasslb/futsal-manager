@@ -124,7 +124,7 @@ function PerfilForm({
                 type="checkbox"
                 checked={caps.has(cap)}
                 onChange={() => alternar(cap)}
-                className="h-4 w-4 accent-azul-700"
+                className="h-4 w-4 accent-primary"
               />
               <span className={CAPACIDADES_ESTRUTURA.includes(cap) ? "font-medium" : ""}>
                 {LABEL_CAPACIDADE[cap]}
@@ -204,8 +204,8 @@ export function PerfisLista({ perfis }: { perfis: Perfil[] }) {
             key={p.id}
             className="flex items-center gap-3 rounded-md border border-cinza-200 bg-white p-4 shadow-card"
           >
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-azul-50">
-              <ShieldCheck className="h-5 w-5 text-azul-700" />
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary/5">
+              <ShieldCheck className="h-5 w-5 text-primary" />
             </div>
             <div className="flex-1">
               <p className="text-corpo font-semibold text-cinza-900">

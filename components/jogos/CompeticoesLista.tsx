@@ -134,8 +134,8 @@ export function CompeticoesLista({
         <ul className="space-y-2">
           {competicoes.map((c) => (
             <li key={c.id} className="flex items-center gap-3 rounded-md border border-cinza-200 bg-white p-4 shadow-card">
-              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-azul-50">
-                <Trophy className="h-5 w-5 text-azul-700" />
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary/5">
+                <Trophy className="h-5 w-5 text-primary" />
               </div>
               <div className="flex-1">
                 <p className="text-corpo font-semibold text-cinza-900">{c.nome}</p>

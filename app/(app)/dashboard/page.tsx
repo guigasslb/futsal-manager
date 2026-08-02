@@ -9,32 +9,65 @@ import {
   CalendarPlus,
   ChevronRight,
   Dumbbell,
+  MapPin,
+  ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { obterEpocaAtiva, obterClubeIdAtual } from "@/lib/epoca-context";
-import { obterClubeAtivo } from "@/lib/permissoes";
+import { obterClubeAtivo, obterMembroAtual } from "@/lib/permissoes";
 import { EstadoVazio } from "@/components/layout/EstadosUI";
 
-function formatarDataHora(data: Date): string {
+function dataLonga(data: Date): string {
   return new Date(data).toLocaleString("pt-PT", {
     weekday: "long",
     day: "2-digit",
-    month: "short",
+    month: "long",
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
-function formatarData(data: Date): string {
+function dataCurta(data: Date): string {
   return new Date(data).toLocaleDateString("pt-PT", {
-    weekday: "long",
+    weekday: "short",
     day: "2-digit",
     month: "short",
   });
 }
 
+function diasAte(data: Date): string {
+  const ms = new Date(data).getTime() - Date.now();
+  const dias = Math.ceil(ms / 86_400_000);
+  if (dias <= 0) return "hoje";
+  if (dias === 1) return "amanhã";
+  return `faltam ${dias} dias`;
+}
+
+/** Motivo subtil de campo de futsal para o cartão-herói. */
+function MotivoCampo() {
+  return (
+    <svg
+      viewBox="0 0 400 200"
+      className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.13]"
+      preserveAspectRatio="xMidYMid slice"
+      aria-hidden
+    >
+      <g fill="none" stroke="#fff" strokeWidth="2">
+        <rect x="8" y="8" width="384" height="184" rx="6" />
+        <line x1="200" y1="8" x2="200" y2="192" />
+        <circle cx="200" cy="100" r="34" />
+        <circle cx="200" cy="100" r="3" fill="#fff" />
+        <path d="M8 62 A60 60 0 0 1 8 138" />
+        <path d="M392 62 A60 60 0 0 0 392 138" />
+      </g>
+    </svg>
+  );
+}
+
 export default async function DashboardPage() {
+  const session = await auth();
   const clubeId = await obterClubeIdAtual();
   const epoca = await obterEpocaAtiva();
 
@@ -74,109 +107,160 @@ export default async function DashboardPage() {
     prisma.jogo.count({ where: { epocaId: epoca.id, escalao: { clubeId } } }),
   ]);
 
+  // Qual evento é o mais próximo → vai para o herói; o outro fica como secundário.
+  const sessaoT = proximaSessao ? new Date(proximaSessao.data).getTime() : Infinity;
+  const jogoT = proximoJogo ? new Date(proximoJogo.data).getTime() : Infinity;
+  const heroiEhJogo = jogoT < sessaoT;
+
+  // Identidade: nome + papel (perfil) / clube · escalões · época.
+  const membro = await obterMembroAtual();
+  const perfilNome = membro?.perfil.nome ?? "Treinador";
+  const escaloesAtribuidos = membro?.escaloesAtribuidos ?? [];
+  const escaloesNomes = escaloesAtribuidos.length
+    ? (
+        await prisma.escalao.findMany({
+          where: { id: { in: escaloesAtribuidos } },
+          select: { nome: true },
+          orderBy: { ordem: "asc" },
+        })
+      ).map((e) => e.nome)
+    : [];
+
   return (
     <div className="space-y-8">
-      {/* Cabeçalho */}
+      {/* Identidade (compacto — pensado para tablet) */}
       <div>
-        <h1>Início</h1>
-        <p className="mt-1 text-corpo-sec text-cinza-500">
-          {clube?.nome ?? "Clube"} · Época {epoca.nome}
+        <p className="font-display text-[18px] font-bold leading-tight tracking-[-0.01em] text-cinza-900">
+          {session?.user?.name ?? "Treinador"}{" "}
+          <span className="font-medium text-cinza-500">· {perfilNome}</span>
+        </p>
+        <p className="mt-0.5 text-corpo-sec text-cinza-500">
+          <span className="font-semibold text-cinza-900">{clube?.nome ?? "Clube"}</span>
+          {escaloesNomes.length > 0 && ` · ${escaloesNomes.join(" · ")}`}
+          {` · Época ${epoca.nome}`}
         </p>
       </div>
 
-      {/* Próximos eventos */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        {/* Próximo treino */}
-        <div className="card-base p-5">
-          <div className="mb-3 flex items-center gap-2.5">
-            <span className="chip-clube flex h-9 w-9 items-center justify-center rounded-lg">
-              <Calendar className="h-5 w-5" />
-            </span>
-            <p className="text-legenda font-semibold uppercase tracking-wide text-cinza-500">
-              Próximo treino
-            </p>
-          </div>
-          {proximaSessao ? (
-            <>
-              <p className="text-titulo-seccao font-semibold text-cinza-900 first-letter:uppercase">
-                {formatarDataHora(proximaSessao.data)}
-              </p>
-              <p className="mt-0.5 text-corpo-sec text-cinza-600">
-                {proximaSessao.escalao.nome}
-                {proximaSessao.local ? ` · ${proximaSessao.local}` : ""}
-              </p>
-              <div className="mt-4 flex gap-2">
-                <Button asChild size="sm">
-                  <Link href={`/treinos/${proximaSessao.id}`}>Ver sessão</Link>
-                </Button>
-                <Button asChild size="sm" variant="outline">
-                  <Link href={`/treinos/${proximaSessao.id}`}>
-                    <ClipboardCheck className="h-4 w-4" />
-                    Presenças
+      {/* Herói + secundário */}
+      <div className="grid gap-5 lg:grid-cols-3">
+        {/* Cartão-herói: próximo evento mais próximo */}
+        <div className="lg:col-span-2">
+          {heroiEhJogo && proximoJogo ? (
+            <div className="hero-card court-motif p-6 sm:p-7">
+              <MotivoCampo />
+              <div className="relative">
+                <div className="flex items-center gap-2 text-corpo-sec font-semibold uppercase tracking-wide text-white/80">
+                  <Trophy className="h-4 w-4" /> Próximo jogo · {diasAte(proximoJogo.data)}
+                </div>
+                <p className="mt-3 text-[26px] font-bold leading-tight">
+                  vs {proximoJogo.adversario}
+                </p>
+                <p className="mt-1 text-corpo text-white/85">
+                  {dataLonga(proximoJogo.data)} · {proximoJogo.escalao.nome} ·{" "}
+                  {proximoJogo.casaFora === "CASA" ? "Casa" : "Fora"}
+                </p>
+                <div className="mt-6 flex flex-wrap gap-2">
+                  <Link href={`/jogos/${proximoJogo.id}`} className="hero-btn-solid">
+                    <Users className="h-4 w-4" /> Convocatória
                   </Link>
-                </Button>
+                  <Link href={`/jogos/${proximoJogo.id}`} className="hero-btn">
+                    Ver jogo <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </div>
               </div>
-            </>
+            </div>
+          ) : proximaSessao ? (
+            <div className="hero-card court-motif p-6 sm:p-7">
+              <MotivoCampo />
+              <div className="relative">
+                <div className="flex items-center gap-2 text-corpo-sec font-semibold uppercase tracking-wide text-white/80">
+                  <Calendar className="h-4 w-4" /> Próximo treino · {diasAte(proximaSessao.data)}
+                </div>
+                <p className="mt-3 text-[26px] font-bold capitalize leading-tight">
+                  {dataLonga(proximaSessao.data)}
+                </p>
+                <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-corpo text-white/85">
+                  <span>{proximaSessao.escalao.nome}</span>
+                  {proximaSessao.local && (
+                    <span className="inline-flex items-center gap-1">
+                      <MapPin className="h-3.5 w-3.5" /> {proximaSessao.local}
+                    </span>
+                  )}
+                </p>
+                <div className="mt-6 flex flex-wrap gap-2">
+                  <Link href={`/treinos/${proximaSessao.id}`} className="hero-btn-solid">
+                    <ClipboardCheck className="h-4 w-4" /> Marcar presenças
+                  </Link>
+                  <Link href={`/treinos/${proximaSessao.id}`} className="hero-btn">
+                    Ver sessão <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </div>
+              </div>
+            </div>
           ) : (
-            <div className="flex flex-col items-start gap-3 py-2">
-              <p className="text-corpo-sec text-cinza-500">Sem treinos agendados.</p>
-              <Button asChild size="sm" variant="outline">
-                <Link href="/treinos/novo">
-                  <Plus className="h-4 w-4" />
-                  Agendar treino
-                </Link>
-              </Button>
+            /* Sem eventos futuros */
+            <div className="hero-card court-motif p-6 sm:p-7">
+              <MotivoCampo />
+              <div className="relative">
+                <p className="text-corpo-sec font-semibold uppercase tracking-wide text-white/80">
+                  Agenda
+                </p>
+                <p className="mt-3 text-[22px] font-bold leading-tight">
+                  Sem treinos ou jogos agendados
+                </p>
+                <p className="mt-1 text-corpo text-white/85">
+                  Planeia o próximo passo da época.
+                </p>
+                <div className="mt-6 flex flex-wrap gap-2">
+                  <Link href="/treinos/novo" className="hero-btn-solid">
+                    <Plus className="h-4 w-4" /> Agendar treino
+                  </Link>
+                  <Link href="/jogos/novo" className="hero-btn">
+                    Registar jogo <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </div>
+              </div>
             </div>
           )}
         </div>
 
-        {/* Próximo jogo */}
-        <div className="card-base p-5">
-          <div className="mb-3 flex items-center gap-2.5">
-            <span className="chip-clube flex h-9 w-9 items-center justify-center rounded-lg">
-              <Trophy className="h-5 w-5" />
-            </span>
-            <p className="text-legenda font-semibold uppercase tracking-wide text-cinza-500">
-              Próximo jogo
-            </p>
-          </div>
-          {proximoJogo ? (
-            <>
-              <p className="text-titulo-seccao font-semibold text-cinza-900 first-letter:uppercase">
-                {formatarData(proximoJogo.data)}
-              </p>
-              <p className="mt-0.5 text-corpo-sec text-cinza-600">
-                vs {proximoJogo.adversario} ({proximoJogo.casaFora === "CASA" ? "Casa" : "Fora"})
-              </p>
-              <div className="mt-4 flex gap-2">
-                <Button asChild size="sm">
-                  <Link href={`/jogos/${proximoJogo.id}`}>Ver jogo</Link>
-                </Button>
-                <Button asChild size="sm" variant="outline">
-                  <Link href={`/jogos/${proximoJogo.id}`}>
-                    <Users className="h-4 w-4" />
-                    Convocatória
-                  </Link>
-                </Button>
-              </div>
-            </>
+        {/* Coluna secundária: o outro evento */}
+        <div className="space-y-4">
+          {heroiEhJogo ? (
+            <EventoSecundario
+              tipo="treino"
+              titulo={proximaSessao ? dataCurta(proximaSessao.data) : null}
+              sub={proximaSessao ? proximaSessao.escalao.nome : null}
+              href={proximaSessao ? `/treinos/${proximaSessao.id}` : "/treinos/novo"}
+              vazio="Sem treinos agendados"
+            />
           ) : (
-            <div className="flex flex-col items-start gap-3 py-2">
-              <p className="text-corpo-sec text-cinza-500">Sem jogos agendados.</p>
-              <Button asChild size="sm" variant="outline">
-                <Link href="/jogos/novo">
-                  <Plus className="h-4 w-4" />
-                  Registar jogo
-                </Link>
-              </Button>
-            </div>
+            <EventoSecundario
+              tipo="jogo"
+              titulo={proximoJogo ? `vs ${proximoJogo.adversario}` : null}
+              sub={proximoJogo ? dataCurta(proximoJogo.data) : null}
+              href={proximoJogo ? `/jogos/${proximoJogo.id}` : "/jogos/novo"}
+              vazio="Sem jogos agendados"
+            />
           )}
+
+          {/* Mini-resumo */}
+          <div className="card-base p-4">
+            <p className="text-legenda font-semibold uppercase tracking-wide text-cinza-400">
+              Época {epoca.nome}
+            </p>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+              <MiniStat valor={nAtletas} label="atletas" />
+              <MiniStat valor={nSessoes} label="sessões" />
+              <MiniStat valor={nJogos} label="jogos" />
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Ações rápidas */}
       <div className="space-y-3">
-        <p className="text-legenda font-semibold uppercase tracking-wide text-cinza-500">
+        <p className="text-legenda font-semibold uppercase tracking-wide text-cinza-400">
           Ações rápidas
         </p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -185,18 +269,51 @@ export default async function DashboardPage() {
           <AcaoRapida href="/plantel/novo" icon={UserPlus} titulo="Novo atleta" desc="Adicionar ao plantel" />
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Resumo */}
-      <div className="space-y-3">
-        <p className="text-legenda font-semibold uppercase tracking-wide text-cinza-500">
-          Resumo — {epoca.nome}
-        </p>
-        <div className="grid grid-cols-3 gap-3">
-          <StatTile valor={nAtletas} label="atletas" icon={Users} />
-          <StatTile valor={nSessoes} label="sessões" icon={Dumbbell} />
-          <StatTile valor={nJogos} label="jogos" icon={Trophy} />
-        </div>
+function EventoSecundario({
+  tipo,
+  titulo,
+  sub,
+  href,
+  vazio,
+}: {
+  tipo: "treino" | "jogo";
+  titulo: string | null;
+  sub: string | null;
+  href: string;
+  vazio: string;
+}) {
+  const Icon = tipo === "jogo" ? Trophy : Calendar;
+  const label = tipo === "jogo" ? "Próximo jogo" : "Próximo treino";
+  return (
+    <Link href={href} className="card-base card-hover group block p-4">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="chip-clube flex h-8 w-8 items-center justify-center rounded-lg">
+          <Icon className="h-4 w-4" />
+        </span>
+        <p className="text-legenda font-semibold uppercase tracking-wide text-cinza-400">{label}</p>
+        <ChevronRight className="ml-auto h-4 w-4 text-cinza-300 transition-transform group-hover:translate-x-0.5" />
       </div>
+      {titulo ? (
+        <>
+          <p className="text-corpo font-semibold capitalize text-cinza-900">{titulo}</p>
+          {sub && <p className="text-legenda text-cinza-500">{sub}</p>}
+        </>
+      ) : (
+        <p className="text-corpo-sec text-cinza-500">{vazio}</p>
+      )}
+    </Link>
+  );
+}
+
+function MiniStat({ valor, label }: { valor: number; label: string }) {
+  return (
+    <div>
+      <p className="text-[22px] font-bold leading-none tabular-nums text-cinza-900">{valor}</p>
+      <p className="mt-1 text-legenda text-cinza-500">{label}</p>
     </div>
   );
 }
@@ -214,7 +331,7 @@ function AcaoRapida({
 }) {
   return (
     <Link href={href} className="card-base card-hover group flex items-center gap-3 p-4">
-      <span className="chip-clube flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg">
+      <span className="chip-clube flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl">
         <Icon className="h-5 w-5" />
       </span>
       <div className="flex-1">
@@ -223,23 +340,5 @@ function AcaoRapida({
       </div>
       <ChevronRight className="h-4 w-4 text-cinza-300 transition-transform group-hover:translate-x-0.5 group-hover:text-cinza-400" />
     </Link>
-  );
-}
-
-function StatTile({
-  valor,
-  label,
-  icon: Icon,
-}: {
-  valor: number;
-  label: string;
-  icon: typeof Plus;
-}) {
-  return (
-    <div className="card-base flex flex-col gap-1 p-4">
-      <Icon className="h-4 w-4 text-cinza-300" />
-      <span className="text-[28px] font-bold leading-none text-cinza-900 tabular-nums">{valor}</span>
-      <span className="text-legenda text-cinza-500">{label}</span>
-    </div>
   );
 }

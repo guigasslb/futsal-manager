@@ -8,13 +8,13 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // Ações principais — azul-700 (secção 19.2/19.6)
-        default: "bg-azul-700 text-white hover:bg-azul-500",
+        // Ações principais — cor primária (marca/clube via --primary)
+        default: "bg-primary text-white hover:bg-primary/50",
         outline:
-          "border border-cinza-200 bg-white text-cinza-900 hover:bg-azul-50",
+          "border border-cinza-200 bg-white text-cinza-900 hover:bg-primary/5",
         destructive: "bg-vermelho-600 text-white hover:bg-vermelho-600/90",
-        ghost: "hover:bg-azul-50 text-cinza-900",
-        link: "text-azul-700 underline-offset-4 hover:underline",
+        ghost: "hover:bg-primary/5 text-cinza-900",
+        link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
         // Alvo de toque mínimo 44px (secção 19.5)

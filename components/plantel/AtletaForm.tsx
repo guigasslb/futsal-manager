@@ -164,7 +164,7 @@ export function AtletaForm({
                   onClick={() => alternarPosicao(p)}
                   className={`rounded-full border px-3 py-1.5 text-corpo-sec transition-colors ${
                     ativo
-                      ? "border-azul-700 bg-azul-50 text-azul-700"
+                      ? "border-primary bg-primary/5 text-primary"
                       : "border-cinza-200 text-cinza-600 hover:bg-cinza-50"
                   }`}
                 >

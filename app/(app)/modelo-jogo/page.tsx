@@ -38,7 +38,7 @@ export default async function ModeloJogoPage({
       <div className="-mb-px flex flex-wrap border-b border-cinza-200">
         <Link
           href="/modelo-jogo"
-          className={`px-4 py-2.5 text-corpo font-medium border-b-2 transition-colors ${!momento ? "border-azul-700 text-azul-700" : "border-transparent text-cinza-600 hover:text-cinza-900"}`}
+          className={`px-4 py-2.5 text-corpo font-medium border-b-2 transition-colors ${!momento ? "border-primary text-primary" : "border-transparent text-cinza-600 hover:text-cinza-900"}`}
         >
           Todos
         </Link>
@@ -46,7 +46,7 @@ export default async function ModeloJogoPage({
           <Link
             key={m}
             href={`/modelo-jogo?momento=${m}`}
-            className={`whitespace-nowrap px-4 py-2.5 text-corpo font-medium border-b-2 transition-colors ${momento === m ? "border-azul-700 text-azul-700" : "border-transparent text-cinza-600 hover:text-cinza-900"}`}
+            className={`whitespace-nowrap px-4 py-2.5 text-corpo font-medium border-b-2 transition-colors ${momento === m ? "border-primary text-primary" : "border-transparent text-cinza-600 hover:text-cinza-900"}`}
           >
             {LABEL_MOMENTO[m]}
           </Link>
