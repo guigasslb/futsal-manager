@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { obterAtleta, obterEstatisticasAtleta } from "@/lib/actions/atletas";
 import { obterCadernetaAtleta } from "@/lib/actions/caderneta";
+import { obterEvolucaoAtleta, obterPresencasMensal } from "@/lib/actions/analise";
 import { AvatarAtleta } from "@/components/plantel/AvatarAtleta";
 import { EstatisticasAtleta } from "@/components/plantel/EstatisticasAtleta";
 import { CadernetaAtleta } from "@/components/plantel/CadernetaAtleta";
@@ -39,9 +40,11 @@ export default async function PerfilAtletaPage({
   const a = res.dados;
   const eGR = a.posicoes.includes("GUARDA_REDES");
 
-  const [resStats, resCaderneta] = await Promise.all([
+  const [resStats, resCaderneta, resEvolucao, resPresencas] = await Promise.all([
     obterEstatisticasAtleta(id),
     obterCadernetaAtleta(id),
+    obterEvolucaoAtleta(id),
+    obterPresencasMensal(id),
   ]);
 
   const metaPartes: string[] = [];
@@ -99,7 +102,12 @@ export default async function PerfilAtletaPage({
         <TabsContent value="estatisticas" className="space-y-3">
           <p className="text-corpo-sec text-cinza-500">Estatísticas de {a.epoca.nome}</p>
           {resStats.sucesso ? (
-            <EstatisticasAtleta stats={resStats.dados} eGR={eGR} />
+            <EstatisticasAtleta
+              stats={resStats.dados}
+              eGR={eGR}
+              evolucao={resEvolucao.sucesso ? resEvolucao.dados : undefined}
+              presencas={resPresencas.sucesso ? resPresencas.dados : undefined}
+            />
           ) : (
             <p className="text-corpo-sec text-vermelho-600">{resStats.erro}</p>
           )}
