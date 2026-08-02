@@ -41,6 +41,16 @@ export async function criarClube(dados: unknown): Promise<Resultado<{ clubeId: s
   const parsed = criarClubeSchema.safeParse(dados);
   if (!parsed.success) return erroDeValidacao(parsed.error);
 
+  // A sessão (JWT) pode referenciar um utilizador que já não existe (ex.: BD
+  // reseeded, conta apagada). Sem este guard, o insert de MembroClube rebenta
+  // com um erro de FK (500). Devolver erro limpo a pedir novo login.
+  const utilizador = await prisma.utilizador.findUnique({
+    where: { id: session.user.id },
+    select: { id: true },
+  });
+  if (!utilizador)
+    return erro("A tua sessão é inválida ou expirou. Termina sessão e volta a entrar.");
+
   // Regra: uma adesão ativa de cada vez
   const jaAtivo = await prisma.membroClube.findFirst({
     where: { utilizadorId: session.user.id, estado: "ATIVO" },

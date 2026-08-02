@@ -1313,6 +1313,8 @@ Valores/tiers, trial gratuito, limites (nº de escalões/atletas), faturação e
 
 Toda a alteração a este documento é registada aqui, com data e descrição. Do mais recente para o mais antigo.
 
+- **2026-08-02** — **Fix: sessão obsoleta em `criarClube`.** Um JWT que referencie um utilizador inexistente (BD reseeded / conta apagada) fazia o insert de `MembroClube` rebentar com erro de FK (500). `criarClube` passa a validar que o utilizador da sessão existe e devolve erro limpo ("sessão inválida, volta a entrar") em vez de crashar.
+
 - **2026-08-02** — **Sincronização da bíblia com o código (corpo, não só changelog).** Corrigido drift no modelo de dados (§3) e no sistema de design (§12) que tinham ficado para trás dos Grupos B/D e da auditoria: (§3) `Exercicio.categoria CategoriaExercicio` → `categoriaPrincipal CategoriaExercicioPrincipal` + `subcategoriaId`; enum `CategoriaExercicio` → `CategoriaExercicioPrincipal`; adicionado modelo `SubcategoriaExercicio`; `Sessao` ganha `tipoSessao TipoSessao` + enum `TipoSessao`. (§12.1) tokens de cor completos (cinza-100/300/500/700, azul-300, ambar-600) + regra de tokens definidos. (§5.5) nota do estado atual do RGPD (consentimento pelo clube). Objetivo: cumprir a regra "recriar do zero a 100%".
 
 - **2026-08-02** — **Decisão RGPD — consentimento tratado pelo clube.** O consentimento parental (dados + imagem de menores) é recolhido pelo clube no ato de inscrição, **fora da aplicação**. A app assume que o consentimento existe para os atletas registados. O modelo `Consentimento` fica intencionalmente por ligar; `apagarAtleta` mantém-se soft-delete. Registo de consentimento in-app e hard-delete (direito ao esquecimento) passam a **melhorias futuras não-bloqueadoras**. Ver `docs/DEPLOY.md` §6.
