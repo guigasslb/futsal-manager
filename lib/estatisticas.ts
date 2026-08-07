@@ -1,4 +1,26 @@
-import type { Utilizacao } from "@prisma/client";
+import type { BlocoTempo, Utilizacao } from "@prisma/client";
+
+/**
+ * Conversão de cada bloco de tempo em minutos (secção 10.1 da bíblia).
+ * O registo do tempo de jogo é por bloco (não minuto-a-minuto); o tempo
+ * acumulado da época soma estes valores. `NAO_JOGOU` = 0.
+ */
+export const MINUTOS_POR_BLOCO: Record<BlocoTempo, number> = {
+  JOGO_COMPLETO: 40,
+  MEIA_PARTE: 20,
+  BLOCO_10MIN: 10,
+  BLOCO_5MIN: 5,
+  NAO_JOGOU: 0,
+};
+
+/**
+ * Minutos correspondentes a um bloco de tempo. `null`/`undefined` (bloco não
+ * registado) conta como 0 para o tempo acumulado. Função pura.
+ */
+export function blocoParaMinutos(bloco: BlocoTempo | null | undefined): number {
+  if (bloco == null) return 0;
+  return MINUTOS_POR_BLOCO[bloco];
+}
 
 export interface EstatisticasAgregadas {
   jogosConvocado: number;
@@ -7,6 +29,8 @@ export interface EstatisticasAgregadas {
   totalGolos: number;
   totalAssistencias: number;
   totalMinutos: number | null;
+  /** Σ dos blocos de tempo convertidos em minutos (secção 10.1). Sempre numérico. */
+  tempoJogoAcumulado: number;
   totalDefesas: number | null;
   totalGolosSofridos: number | null;
   sessoesTotais: number;
@@ -17,6 +41,8 @@ export interface EstatisticasAgregadas {
 export interface LinhaEstatistica {
   utilizacao: Utilizacao;
   minutos: number | null;
+  /** Bloco de tempo de jogo (F5). Ausente/null = não registado (0 minutos). */
+  blocoTempo?: BlocoTempo | null;
   golos: number;
   assistencias: number;
   defesas: number | null;
@@ -59,6 +85,13 @@ export function agregarEstatisticas(entrada: EntradaAgregacao): EstatisticasAgre
     ? minutosRegistados.reduce((acc, m) => acc + m, 0)
     : null;
 
+  // Tempo de jogo acumulado a partir dos blocos (secção 10.1). Ao contrário de
+  // `totalMinutos` (que distingue "não registado" de zero), este é sempre numérico.
+  const tempoJogoAcumulado = estatisticas.reduce(
+    (acc, e) => acc + blocoParaMinutos(e.blocoTempo ?? null),
+    0,
+  );
+
   const totalDefesas = eGR
     ? estatisticas.reduce((acc, e) => acc + (e.defesas ?? 0), 0)
     : null;
@@ -75,6 +108,7 @@ export function agregarEstatisticas(entrada: EntradaAgregacao): EstatisticasAgre
     totalGolos,
     totalAssistencias,
     totalMinutos,
+    tempoJogoAcumulado,
     totalDefesas,
     totalGolosSofridos,
     sessoesTotais,

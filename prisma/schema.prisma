@@ -28,15 +28,30 @@ model Clube {
   telefone      String?
   criadoEm      DateTime @default(now())
 
-  membros      MembroClube[]
-  perfis       Perfil[]
-  epocas       Epoca[]
-  escaloes     Escalao[]
+  // F10 — flag de onboarding concluído (assistente de arranque).
+  onboardingConcluido Boolean @default(false)
+
+  membros       MembroClube[]
+  perfis        Perfil[]
+  epocas        Epoca[]
+  escaloes      Escalao[]
   exercicios    Exercicio[]
   metricas      MetricaConfig[]
   habilidades   Habilidade[]
   reunioes      Reuniao[]
   subcategorias SubcategoriaExercicio[]
+  atletas       Atleta[]
+
+  // F3 (expand): propriedade explícita e partilha da biblioteca de exercícios.
+  exerciciosProprietario Exercicio[]              @relation("ExercicioClube")
+  partilhasExercicio     PartilhaExercicioClube[]
+  modelosSessao          ModeloSessao[]
+
+  // F7 (M11): templates de comunicação personalizados do clube.
+  modelosComunicacao ModeloComunicacao[]
+
+  // F11 (§3.11): licença de clube (se real). Titular exclusivo (clubeId @unique em Licenca).
+  licenca Licenca? @relation("LicencaClube")
 }
 
 // ─────────────────────────────────────────────
@@ -57,12 +72,55 @@ model Reuniao {
   criadorId      String
   criadoEm       DateTime      @default(now())
 
+  // F8 (§3.12): id do evento correspondente no Google Calendar (idempotência da sincronização).
+  googleEventId String?
+
   @@index([clubeId])
 }
 
 enum AmbitoReuniao {
   CLUBE
   ESCALAO
+}
+
+// ─────────────────────────────────────────────
+// COMUNICAÇÃO (gerador de texto para WhatsApp)
+// ─────────────────────────────────────────────
+
+// Template de comunicação. A app GERA texto formatado (bíblia §3.9, §8.12);
+// não envia nem integra APIs de mensagens.
+//
+// O seed instala um modelo global por tipo (clubeId = null, origemSeed = true),
+// disponível a todos os clubes. Um clube pode criar a sua variante personalizada
+// (clubeId preenchido), que prevalece sobre a global para esse tipo.
+model ModeloComunicacao {
+  id       String          @id @default(cuid())
+  tipo     TipoComunicacao
+  nome     String // ex: "Convocatória padrão"
+  template String          @db.Text // texto com placeholders ex: {{nomeAtleta}}, {{data}}, {{local}}
+
+  // null = seed global (disponível a todos); preenchido = personalizado pelo clube
+  clubeId String?
+  clube   Clube?  @relation(fields: [clubeId], references: [id], onDelete: Cascade)
+
+  origemSeed Boolean @default(false) // true = foi instalado pelo seed
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([clubeId, tipo]) // um modelo por tipo por clube (NOTA: em Postgres, NULLs são distintos — a unicidade dos globais é garantida pelo upsert idempotente do seed)
+  @@index([tipo])
+  @@index([clubeId])
+}
+
+enum TipoComunicacao {
+  CONVOCATORIA
+  CANCELAMENTO
+  MUDANCA_HORARIO
+  MUDANCA_LOCAL
+  RESULTADO
+  AVISO_GERAL
+  CALENDARIO_MENSAL
 }
 
 // O utilizador existe independentemente de qualquer clube (modo individual + portabilidade).
@@ -76,10 +134,21 @@ model Utilizador {
   atualizadoEm DateTime @updatedAt
 
   membros           MembroClube[]
-  sessoesCriadas    Sessao[]     @relation("SessaoCriador")
-  jogosCriados      Jogo[]       @relation("JogoCriador")
-  exerciciosCriados Exercicio[]  @relation("ExercicioCriador")
-  modelosJogo       ModeloJogo[] @relation("ModeloJogoAutor")
+  sessoesCriadas    Sessao[]      @relation("SessaoCriador")
+  jogosCriados      Jogo[]        @relation("JogoCriador")
+  exerciciosCriados Exercicio[]   @relation("ExercicioCriador")
+  modelosJogo       ModeloJogo[]  @relation("ModeloJogoAutor")
+
+  // F3 (expand): autoria humana explícita, independente do clube.
+  exerciciosAutor    Exercicio[]    @relation("ExercicioAutor")
+  modelosSessaoAutor ModeloSessao[] @relation("ModeloSessaoAutor")
+
+  // F8 (§3.12): integração com calendário externo (Google Calendar) do treinador.
+  integracaoCalendario IntegracaoCalendario?
+
+  // F11 (§3.11): licença Individual (se ativa) e carteira de crédito (🎒 portátil).
+  licencaIndividual Licenca?  @relation("LicencaIndividual")
+  carteira          Carteira?
 }
 
 // ─────────────────────────────────────────────
@@ -100,8 +169,22 @@ model ModeloJogo {
   criadoEm            DateTime            @default(now())
   atualizadoEm        DateTime            @updatedAt
 
+  // ── F4 (M8) — documento vivo por escalão/época ────────────────────────────
+  // Ambos nullable: null/null = metodologia genérica portátil do treinador
+  // (biblioteca pessoal, viaja com ele). Preenchidos = documento da equipa.
+  escalaoId String?
+  escalao   Escalao? @relation("ModeloJogoEscalao", fields: [escalaoId], references: [id], onDelete: SetNull)
+  epocaId   String?
+  epoca     Epoca?   @relation("ModeloJogoEpoca", fields: [epocaId], references: [id], onDelete: SetNull)
+
+  // Subprincípios do momento (array JSON de strings ou objectos {titulo, detalhe}).
+  subprincipios Json?
+
   @@index([clubeProprietarioId])
   @@index([autorId])
+  @@index([clubeProprietarioId, escalaoId, epocaId])
+  @@index([escalaoId])
+  @@index([epocaId])
 }
 
 enum MomentoJogo {
@@ -114,14 +197,21 @@ enum MomentoJogo {
 
 // Quadro tático específico de um jogo (do clube).
 model QuadroTatico {
-  id       String  @id @default(cuid())
+  id       String           @id @default(cuid())
   jogoId   String
-  jogo     Jogo    @relation(fields: [jogoId], references: [id], onDelete: Cascade)
+  jogo     Jogo             @relation(fields: [jogoId], references: [id], onDelete: Cascade)
   nome     String
+  tipo     TipoQuadroTatico @default(GERAL) // F4 (M8): GERAL | BOLA_PARADA
   diagrama Json?
-  notas    String? @db.Text
+  notas    String?          @db.Text
 
   @@index([jogoId])
+}
+
+// Natureza do quadro tático (bíblia §3.6).
+enum TipoQuadroTatico {
+  GERAL
+  BOLA_PARADA
 }
 
 // Adesão utilizador↔clube. REGRA (lógica): no máximo UMA adesão ATIVA por utilizador.
@@ -136,6 +226,10 @@ model MembroClube {
   estado       EstadoMembro @default(ATIVO)
   dataEntrada  DateTime     @default(now())
   dataSaida    DateTime?
+
+  // Overrides de capacidades sobre o perfil base (F0). Chaves de capacidade (secção 6 da bíblia).
+  capacidadesExtra     String[] @default([])
+  capacidadesRevogadas String[] @default([])
 
   atribuicoes AtribuicaoEscalao[]
 
@@ -199,12 +293,14 @@ model Epoca {
   clube      Clube    @relation(fields: [clubeId], references: [id])
   criadoEm   DateTime @default(now())
 
-  atletas      Atleta[]
-  sessoes      Sessao[]
-  jogos        Jogo[]
-  progressos   ProgressoHabilidade[]
-  planeamentos Planeamento[]
-  competicoes  Competicao[]
+  atletas       Atleta[]
+  sessoes       Sessao[]
+  jogos         Jogo[]
+  progressos    ProgressoHabilidade[]
+  planeamentos  Planeamento[]
+  competicoes   Competicao[]
+  participacoes AtletaEscalao[]
+  modelosJogo   ModeloJogo[]          @relation("ModeloJogoEpoca")
 
   @@index([clubeId])
 }
@@ -231,6 +327,9 @@ model Escalao {
   atribuicoes        AtribuicaoEscalao[]
   planeamentos       Planeamento[]
   competicoes        Competicao[]
+  participacoes      AtletaEscalao[]
+  presencas          Presenca[]          @relation("PresencaEscalao")
+  modelosJogo        ModeloJogo[]        @relation("ModeloJogoEscalao")
 
   @@index([clubeId])
 }
@@ -251,8 +350,14 @@ model Atleta {
   encarregadoContacto String?
   encarregadoEmail    String?
 
+  // Clube do atleta. Nullable nesta fase (expand); passará a NOT NULL em M4.
+  // Historicamente derivado via escalao.clubeId.
+  clubeId String?
+  clube   Clube?  @relation(fields: [clubeId], references: [id])
+
   // Um atleta pertence a um escalão principal NUMA época, podendo jogar
   // também num escalão secundário (opcional).
+  // LEGADO (fase expand): mantido até M4 substituir por AtletaEscalao.
   escalaoId           String
   escalao             Escalao  @relation("AtletaEscalaoPrincipal", fields: [escalaoId], references: [id])
   escalaoSecundarioId String?
@@ -268,7 +373,9 @@ model Atleta {
   estatisticas   EstatisticaAtleta[]
   progressos     ProgressoHabilidade[]
   consentimentos Consentimento[]
+  participacoes  AtletaEscalao[]
 
+  @@index([clubeId])
   @@index([escalaoId])
   @@index([escalaoSecundarioId])
   @@index([epocaId])
@@ -302,47 +409,185 @@ enum Posicao {
   UNIVERSAL
 }
 
+// Participação de um atleta num escalão durante uma época.
+// Substitui gradualmente os campos legados escalaoId/escalaoSecundarioId do Atleta.
+// Fase expand (M2): coexiste com os campos legados; backfill em M3; switch em M4.
+model AtletaEscalao {
+  id String @id @default(cuid())
+
+  atletaId String
+  atleta   Atleta @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+
+  escalaoId String
+  escalao   Escalao @relation(fields: [escalaoId], references: [id], onDelete: Restrict)
+
+  epocaId String
+  epoca   Epoca  @relation(fields: [epocaId], references: [id], onDelete: Restrict)
+
+  tipo   TipoParticipacao   @default(PRINCIPAL)
+  estado EstadoParticipacao @default(ATIVO)
+
+  numero     Int?
+  dataInicio DateTime  @default(now())
+  dataFim    DateTime?
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([atletaId, escalaoId, epocaId])
+  @@index([escalaoId, epocaId, estado])
+  @@index([atletaId, epocaId])
+}
+
+enum TipoParticipacao {
+  PRINCIPAL
+  SIMULTANEA
+  OCASIONAL
+}
+
+enum EstadoParticipacao {
+  ATIVO
+  TRANSICAO_PERMANENTE
+  INATIVO
+}
+
 // ─────────────────────────────────────────────
 // EXERCÍCIOS
 // ─────────────────────────────────────────────
 
 model Exercicio {
-  id                String                       @id @default(cuid())
-  nome              String
-  descricao         String?                      @db.Text
-  objetivo          String?                      @db.Text
-  duracaoMin        Int?
+  id                 String                       @id @default(cuid())
+  nome               String
+  descricao          String?                      @db.Text
+  objetivo           String?                      @db.Text
+  duracaoMin         Int?
   categoriaPrincipal CategoriaExercicioPrincipal?
-  subcategoriaId    String?
-  subcategoria      SubcategoriaExercicio?       @relation(fields: [subcategoriaId], references: [id])
-  diagrama          Json? // DiagramaCampo (ver secção 11 da bíblia)
-  clubeId           String
-  clube             Clube                        @relation(fields: [clubeId], references: [id])
-  criadorId         String
-  criador           Utilizador                   @relation("ExercicioCriador", fields: [criadorId], references: [id])
-  proprietario      PropriedadeConteudo          @default(CLUBE)
-  origemSeed        Boolean                      @default(false)
-  criadoEm          DateTime                     @default(now())
-  atualizadoEm      DateTime                     @updatedAt
+  subcategoriaId     String?
+  subcategoria       SubcategoriaExercicio?       @relation(fields: [subcategoriaId], references: [id])
+  diagrama           Json? // DiagramaCampo (ver secção 11 da bíblia)
+  clubeId            String
+  clube              Clube                        @relation(fields: [clubeId], references: [id])
+  criadorId          String
+  criador            Utilizador                   @relation("ExercicioCriador", fields: [criadorId], references: [id])
+  proprietario       PropriedadeConteudo          @default(CLUBE)
+  origemSeed         Boolean                      @default(false)
+  criadoEm           DateTime                     @default(now())
+  atualizadoEm       DateTime                     @updatedAt
 
-  sessoes SessaoExercicio[]
+  // ── F3 (fase expand) ─────────────────────────
+  // Autor humano do exercício (sempre registado). Substitui semanticamente
+  // criadorId, mas coexiste com ele nesta fase; backfill em M6.
+  autorId String?
+  autor   Utilizador? @relation("ExercicioAutor", fields: [autorId], references: [id])
+
+  // Clube proprietário — só preenchido quando proprietario = CLUBE.
+  // Coexiste com o clubeId legado nesta fase; backfill em M6.
+  clubeProprietarioId String?
+  clubeProprietario   Clube?  @relation("ExercicioClube", fields: [clubeProprietarioId], references: [id])
+
+  // Parte do treino onde o exercício se aplica.
+  parteTreino ParteTreino?
+
+  // Escalão-alvo (texto livre, para filtros da biblioteca).
+  escalaoAlvo String?
+
+  sessoes        SessaoExercicio[]
+  partilhasClube PartilhaExercicioClube[]
+  modelosSessao  ModeloSessaoExercicio[]
 
   // Exercícios não são filtrados por época — a biblioteca é reutilizável entre épocas.
   @@index([clubeId])
   @@index([clubeId, categoriaPrincipal])
   @@index([subcategoriaId])
+  @@index([autorId])
+  @@index([clubeProprietarioId])
+  @@index([parteTreino])
+}
+
+// Parte do treino (organização da biblioteca de exemplo e dos templates de sessão).
+// Valores conforme a bíblia §3.3.
+enum ParteTreino {
+  AQUECIMENTO
+  PRINCIPAL
+  JOGO_REDUZIDO
+  RETORNO_CALMA
+}
+
+// Toggle explícito de contribuição de um exercício para a biblioteca de um clube.
+// Permite que um exercício pessoal (proprietario = TREINADOR) seja partilhado
+// com um ou mais clubes sem transferir a propriedade.
+model PartilhaExercicioClube {
+  id          String    @id @default(cuid())
+  exercicioId String
+  exercicio   Exercicio @relation(fields: [exercicioId], references: [id], onDelete: Cascade)
+  clubeId     String
+  clube       Clube     @relation(fields: [clubeId], references: [id], onDelete: Cascade)
+  criadoEm    DateTime  @default(now())
+
+  @@unique([exercicioId, clubeId])
+  @@index([clubeId])
+}
+
+// ─────────────────────────────────────────────
+// MODELOS DE SESSÃO (templates de treino)
+// ─────────────────────────────────────────────
+
+// Sessão completa pré-construída e reutilizável (bíblia §3.4).
+model ModeloSessao {
+  id String @id @default(cuid())
+
+  autorId String
+  autor   Utilizador @relation("ModeloSessaoAutor", fields: [autorId], references: [id])
+
+  // Propriedade: TREINADOR (pessoal, portátil) ou CLUBE — toggle na criação.
+  proprietario PropriedadeConteudo @default(TREINADOR)
+
+  clubeProprietarioId String?
+  clubeProprietario   Clube?  @relation(fields: [clubeProprietarioId], references: [id])
+
+  origemSeed     Boolean       @default(false) // template da biblioteca curada de arranque
+  nome           String // ex: "Pressing defensivo, 60 min, sub-10"
+  objetivoTatico String?
+  faseEpoca      PeriodoEpoca? // PREPARATORIO | COMPETITIVO | TRANSICAO
+  escalaoAlvo    String? // "sub-10" / faixa etária
+  duracaoMin     Int?
+  descricao      String?       @db.Text
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  exercicios ModeloSessaoExercicio[]
+
+  @@index([clubeProprietarioId])
+  @@index([autorId])
+}
+
+model ModeloSessaoExercicio {
+  id             String       @id @default(cuid())
+  modeloSessaoId String
+  modeloSessao   ModeloSessao @relation(fields: [modeloSessaoId], references: [id], onDelete: Cascade)
+  exercicioId    String
+  exercicio      Exercicio    @relation(fields: [exercicioId], references: [id], onDelete: Restrict)
+  ordem          Int          @default(0)
+  duracaoMin     Int?
+  parteTreino    ParteTreino?
+  notas          String?      @db.Text
+
+  @@unique([modeloSessaoId, ordem])
+  @@index([modeloSessaoId])
+  @@index([exercicioId])
 }
 
 // Subcategoria de exercício, customizável por clube (ex: "Finalização", "1x1", "Contra-ataque").
 model SubcategoriaExercicio {
-  id         String                       @id @default(cuid())
-  clubeId    String
-  clube      Clube                        @relation(fields: [clubeId], references: [id], onDelete: Cascade)
-  nome       String
-  categoria  CategoriaExercicioPrincipal
-  ordem      Int                          @default(0)
-  sistema    Boolean                      @default(false) // instalada por seed, não apagável pelo utilizador
-  criadoEm   DateTime                     @default(now())
+  id        String                      @id @default(cuid())
+  clubeId   String
+  clube     Clube                       @relation(fields: [clubeId], references: [id], onDelete: Cascade)
+  nome      String
+  categoria CategoriaExercicioPrincipal
+  ordem     Int                         @default(0)
+  sistema   Boolean                     @default(false) // instalada por seed, não apagável pelo utilizador
+  criadoEm  DateTime                    @default(now())
 
   exercicios Exercicio[]
 
@@ -427,6 +672,9 @@ model Sessao {
   criadoEm      DateTime     @default(now())
   atualizadoEm  DateTime     @updatedAt
 
+  // F8 (§3.12): id do evento correspondente no Google Calendar (idempotência da sincronização).
+  googleEventId String?
+
   exercicios SessaoExercicio[]
   presencas  Presenca[]
 
@@ -456,11 +704,16 @@ model Presenca {
   sessao       Sessao         @relation(fields: [sessaoId], references: [id], onDelete: Cascade)
   atletaId     String
   atleta       Atleta         @relation(fields: [atletaId], references: [id])
+  // Escalão da presença. Nullable nesta fase (expand); passará a NOT NULL em M4.
+  escalaoId    String?
+  escalao      Escalao?       @relation("PresencaEscalao", fields: [escalaoId], references: [id])
   estado       EstadoPresenca @default(PRESENTE)
+  motivo       MotivoFalta?
   justificacao String?
 
   @@unique([sessaoId, atletaId])
   @@index([atletaId])
+  @@index([escalaoId])
 }
 
 enum EstadoPresenca {
@@ -469,6 +722,13 @@ enum EstadoPresenca {
   FALTA_JUSTIFICADA
   LESIONADO
   ATRASADO
+}
+
+enum MotivoFalta {
+  LESAO
+  DOENCA
+  OUTRO
+  SEM_JUSTIFICACAO
 }
 
 enum TipoSessao {
@@ -507,10 +767,15 @@ model Jogo {
   criadoEm      DateTime    @default(now())
   atualizadoEm  DateTime    @updatedAt
 
+  // F8 (§3.12): id do evento correspondente no Google Calendar (idempotência da sincronização).
+  googleEventId String?
+
   convocatorias Convocatoria[]
   estatisticas  EstatisticaAtleta[]
   quadros       QuadroTatico[]
   eventos       EventoJogo[]
+  // F5 (M15): scouting contextualizado no jogo (dia de jogo).
+  observacoes   ObservacaoAdversario[]
 
   @@index([epocaId, escalaoId, data])
   @@index([competicaoId])
@@ -528,21 +793,52 @@ enum TipoJogo {
 }
 
 model Competicao {
-  id        String   @id @default(cuid())
+  id        String            @id @default(cuid())
   clubeId   String
   escalaoId String
-  escalao   Escalao  @relation(fields: [escalaoId], references: [id], onDelete: Cascade)
+  escalao   Escalao           @relation(fields: [escalaoId], references: [id], onDelete: Cascade)
   epocaId   String
-  epoca     Epoca    @relation(fields: [epocaId], references: [id], onDelete: Cascade)
+  epoca     Epoca             @relation(fields: [epocaId], references: [id], onDelete: Cascade)
   nome      String
-  tipo      TipoJogo @default(OFICIAL)
-  criadoEm  DateTime @default(now())
+  tipo      TipoJogo          @default(OFICIAL) // OFICIAL | AMIGAVEL
+  // F6 (M16): formato da prova, para o cálculo da classificação (bíblia §3.7).
+  formato   FormatoCompeticao @default(LIGA) // LIGA | TORNEIO | TACA
+  criadoEm  DateTime          @default(now())
 
   jogos Jogo[]
+
+  // F6 (M16): resultados de todas as equipas, inseridos manualmente, para a classificação.
+  resultados ResultadoCompeticao[]
 
   @@index([epocaId, escalaoId])
   @@index([clubeId])
   @@index([escalaoId])
+}
+
+// Formato da competição, determina como a classificação é apresentada (bíblia §3.7).
+enum FormatoCompeticao {
+  LIGA
+  TORNEIO
+  TACA
+}
+
+// Resultados dos jogos da competição, INSERIDOS MANUALMENTE pelo treinador (decisão 2026-08-05).
+// O treinador insere os resultados de TODAS as equipas da competição para construir a classificação.
+// Os jogos da própria equipa também podem alimentar a partir de `Jogo`. A tabela de classificação
+// é CALCULADA (obterClassificacao), não armazenada. Sem integração automática na v1
+// (integração com APIs de competições oficiais = FUTURO, bíblia §18).
+model ResultadoCompeticao {
+  id           String     @id @default(cuid())
+  competicaoId String
+  competicao   Competicao @relation(fields: [competicaoId], references: [id], onDelete: Cascade)
+  data         DateTime?
+  equipaCasa   String
+  equipaFora   String
+  golosCasa    Int
+  golosFora    Int
+  criadoEm     DateTime   @default(now())
+
+  @@index([competicaoId])
 }
 
 // Registo ao vivo (beira-campo). Agrega para as estatísticas.
@@ -553,6 +849,8 @@ model EventoJogo {
   parte              Int // 1 | 2
   minuto             Int?
   tipo               TipoEventoJogo
+  // F5 (M15): bloco de tempo associado (útil em substituições / tempos por blocos).
+  bloco              BlocoTempo?
   atletaId           String?
   atletaSecundarioId String?
   criadoEm           DateTime       @default(now())
@@ -577,6 +875,9 @@ model ObservacaoAdversario {
   id            String   @id @default(cuid())
   clubeId       String
   escalaoId     String?
+  // F5 (M15): scouting pode ser contextualizado num jogo (dia de jogo) ou avulso.
+  jogoId        String?
+  jogo          Jogo?    @relation(fields: [jogoId], references: [id], onDelete: SetNull)
   equipa        String
   jogoObservado String?
   competicao    String?
@@ -590,6 +891,7 @@ model ObservacaoAdversario {
   jogadores ObservacaoJogadorAdversario[]
 
   @@index([clubeId])
+  @@index([jogoId])
 }
 
 model ObservacaoJogadorAdversario {
@@ -612,6 +914,10 @@ model Convocatoria {
   atleta    Atleta  @relation(fields: [atletaId], references: [id])
   convocado Boolean @default(true)
 
+  // F5 (M15): plano de dia de jogo — posição/titularidade prevista.
+  posicaoPrevista Posicao?
+  titularPrevisto Boolean  @default(false)
+
   @@unique([jogoId, atletaId])
   @@index([atletaId])
 }
@@ -625,7 +931,9 @@ model EstatisticaAtleta {
 
   // Utilização (adaptado às rotações do futsal)
   utilizacao Utilizacao @default(NAO_UTILIZADO)
-  minutos    Int? // aproximado, opcional (null = não registado)
+  // F5 (M15): tempo de jogo por bloco pré-definido (alternativa/complemento a `minutos`).
+  blocoTempo BlocoTempo?
+  minutos    Int? // aproximado, opcional (derivável do bloco; null = não registado)
 
   // Métricas de jogador de campo
   golos        Int @default(0)
@@ -647,6 +955,15 @@ enum Utilizacao {
   TITULAR
   UTILIZADO // entrou durante o jogo
   NAO_UTILIZADO // convocado mas não jogou
+}
+
+// F5 (M15): tempo de jogo por blocos pré-definidos (decisão 2026-08-05). NAO_JOGOU = 0.
+enum BlocoTempo {
+  JOGO_COMPLETO
+  MEIA_PARTE
+  BLOCO_10MIN
+  BLOCO_5MIN
+  NAO_JOGOU
 }
 
 // ─────────────────────────────────────────────
@@ -731,4 +1048,142 @@ enum EstadoHabilidade {
   NAO_INICIADO
   EM_PROGRESSO
   DESBLOQUEADO
+}
+
+// ─────────────────────────────────────────────
+// RELATÓRIO DE ÉPOCA PARTILHÁVEL (F9 — bíblia §3.10, §8.15, §16 fase 19)
+// ─────────────────────────────────────────────
+
+// Link partilhável (público via token) de um relatório de época. Inclui identidade do clube.
+// O `dadosSnapshot` guarda uma cópia IMUTÁVEL dos dados no momento de gerar (bíblia §10.6):
+// o link continua a mostrar o que existia quando foi criado, mesmo que os dados mudem depois.
+model RelatorioPartilhado {
+  id            String        @id @default(cuid())
+  clubeId       String
+  token         String        @unique // segmento de URL não-adivinhável
+  tipo          TipoRelatorio // EPOCA_ATLETA | EPOCA_EQUIPA | EPOCA_CLUBE
+  epocaId       String
+  escalaoId     String? // p/ EPOCA_EQUIPA
+  atletaId      String? // p/ EPOCA_ATLETA
+  dadosSnapshot Json? // snapshot dos dados no momento de gerar (imutável)
+  expiraEm      DateTime?
+  criadorId     String
+  criadoEm      DateTime      @default(now())
+
+  @@index([clubeId])
+}
+
+enum TipoRelatorio {
+  EPOCA_ATLETA
+  EPOCA_EQUIPA
+  EPOCA_CLUBE
+}
+
+// ─────────────────────────────────────────────
+// F8 — INTEGRAÇÃO COM CALENDÁRIO EXTERNO (Google Calendar, §3.12)
+// ─────────────────────────────────────────────
+
+// Integração de terceiros (Google Calendar), DISTINTA do login/autenticação da app.
+// Sincroniza treinos, jogos e reuniões. Guarda tokens OAuth do Google por utilizador.
+model IntegracaoCalendario {
+  id           String     @id @default(cuid())
+  utilizadorId String     @unique
+  utilizador   Utilizador @relation(fields: [utilizadorId], references: [id], onDelete: Cascade)
+  provedor     String     @default("google")
+  refreshToken String // encriptado at-rest
+  calendarioId String? // calendário destino
+  ativa        Boolean    @default(true)
+  criadoEm     DateTime   @default(now())
+  atualizadoEm DateTime   @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// F11 — LICENCIAMENTO, SUBSCRIÇÃO E CARTEIRA (§3.11)
+// ─────────────────────────────────────────────
+
+// Modelo desenhado para suportar a integração futura com Paddle (Merchant of Record).
+// O enforcement de licença (bloqueio pós-expiração) e o billing são DEFERIDOS; a
+// arquitetura de dados fica pronta.
+//
+// Licença ativa de um utilizador (Individual) OU de um clube (Clube).
+// Um titular tem no máximo uma ativa (utilizadorId @unique OU clubeId @unique).
+model Licenca {
+  id            String        @id @default(cuid())
+  tipo          TipoLicenca // INDIVIDUAL | CLUBE
+  tier          TierClube? // só se tipo=CLUBE: PEQUENO | MEDIO | GRANDE | PARCEIRO
+  estado        EstadoLicenca  @default(ATIVA) // ATIVA | EXPIRADA | CANCELADA | SUSPENSA
+  ciclo         CicloFaturacao // MENSAL | ANUAL
+  precoCentimos Int? // preço praticado (cêntimos)
+
+  // Titular (exatamente um dos dois preenchido)
+  utilizadorId String?     @unique
+  utilizador   Utilizador? @relation("LicencaIndividual", fields: [utilizadorId], references: [id])
+  clubeId      String?     @unique
+  clube        Clube?      @relation("LicencaClube", fields: [clubeId], references: [id])
+
+  // Datas
+  dataInicio    DateTime  @default(now())
+  dataRenovacao DateTime?
+  dataFim       DateTime?
+
+  // Integração Paddle (futura)
+  paddleSubscriptionId String?
+  paddleCustomerId     String?
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+}
+
+enum TipoLicenca {
+  INDIVIDUAL
+  CLUBE
+}
+
+enum TierClube {
+  PEQUENO
+  MEDIO
+  GRANDE
+  PARCEIRO
+}
+
+enum EstadoLicenca {
+  ATIVA
+  EXPIRADA
+  CANCELADA
+  SUSPENSA
+}
+
+enum CicloFaturacao {
+  MENSAL
+  ANUAL
+}
+
+// Carteira (wallet) do treinador — crédito de absorção usado em compras futuras.
+model Carteira {
+  id            String     @id @default(cuid())
+  utilizadorId  String     @unique
+  utilizador    Utilizador @relation(fields: [utilizadorId], references: [id], onDelete: Cascade)
+  saldoCentimos Int        @default(0)
+  atualizadoEm  DateTime   @updatedAt
+
+  movimentos MovimentoCarteira[]
+}
+
+model MovimentoCarteira {
+  id            String        @id @default(cuid())
+  carteiraId    String
+  carteira      Carteira      @relation(fields: [carteiraId], references: [id], onDelete: Cascade)
+  tipo          TipoMovimento // CREDITO_ABSORCAO | DEBITO_COMPRA | REEMBOLSO | AJUSTE
+  valorCentimos Int // positivo = crédito; negativo = débito
+  descricao     String
+  criadoEm      DateTime      @default(now())
+
+  @@index([carteiraId])
+}
+
+enum TipoMovimento {
+  CREDITO_ABSORCAO
+  DEBITO_COMPRA
+  REEMBOLSO
+  AJUSTE
 }

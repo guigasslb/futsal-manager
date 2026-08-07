@@ -9,10 +9,11 @@ import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
 import {
   jogoSchema,
   guardarEstatisticasSchema,
-  eventoJogoSchema,
+  registarEventoJogoSchema,
+  planoTaticoSchema,
   isVideoUrlValido,
 } from "@/lib/schemas/jogo";
-import { Prisma, type Epoca, type Jogo } from "@prisma/client";
+import { Prisma, type Epoca, type Jogo, type EventoJogo } from "@prisma/client";
 
 const PATH = "/jogos";
 
@@ -20,19 +21,55 @@ const INCLUDE_LISTA = {
   escalao: { select: { id: true, nome: true } },
 } as const;
 
+// F5 (M15): eventos ordenados por minuto e depois por ordem de registo.
+// Tipado à parte para não colidir com o `as const` do include (tuplo readonly).
+const ORDER_EVENTOS: Prisma.EventoJogoOrderByWithRelationInput[] = [
+  { minuto: "asc" },
+  { criadoEm: "asc" },
+];
+
 const INCLUDE_DETALHE = {
   escalao: { select: { id: true, nome: true } },
   convocatorias: {
     include: {
-      atleta: { select: { id: true, nome: true, numero: true, posicoes: true } },
+      atleta: { select: { id: true, nome: true, posicoes: true } },
     },
   },
   estatisticas: { include: { valoresMetricas: true } },
-  eventos: { orderBy: { criadoEm: "asc" } },
+  eventos: { orderBy: ORDER_EVENTOS },
+  // F5 (M15): scouting contextualizado neste jogo (dia de jogo).
+  observacoes: {
+    include: { jogadores: true },
+    orderBy: { criadoEm: "desc" },
+  },
 } as const;
 
 export type JogoLista = Prisma.JogoGetPayload<{ include: typeof INCLUDE_LISTA }>;
-export type JogoDetalhe = Prisma.JogoGetPayload<{ include: typeof INCLUDE_DETALHE }>;
+
+/**
+ * Detalhe do jogo. O número de camisola já não vive no Atleta (F1) — é resolvido
+ * a partir da participação (AtletaEscalao) no escalão/época do jogo.
+ */
+export type JogoDetalhe = Prisma.JogoGetPayload<{ include: typeof INCLUDE_DETALHE }> & {
+  numeroPorAtleta: Record<string, number | null>;
+};
+
+/** Números de camisola dos atletas indicados, no escalão/época dados. */
+async function resolverNumeros(
+  escalaoId: string,
+  epocaId: string,
+  atletaIds: string[],
+): Promise<Record<string, number | null>> {
+  if (atletaIds.length === 0) return {};
+  const participacoes = await prisma.atletaEscalao.findMany({
+    where: { escalaoId, epocaId, atletaId: { in: atletaIds } },
+    select: { atletaId: true, numero: true },
+  });
+  const numeroPorAtleta: Record<string, number | null> = {};
+  for (const id of atletaIds) numeroPorAtleta[id] = null;
+  for (const p of participacoes) numeroPorAtleta[p.atletaId] = p.numero;
+  return numeroPorAtleta;
+}
 
 type Contexto =
   | { estado: "erro"; erro: string }
@@ -81,7 +118,13 @@ export async function obterJogo(id: string): Promise<Resultado<JogoDetalhe>> {
   });
   if (!jogo) return erro("Jogo não encontrado");
   if (!(await podeLerEscalao(jogo.escalaoId))) return erro("Sem permissão neste escalão");
-  return ok(jogo);
+
+  const numeroPorAtleta = await resolverNumeros(
+    jogo.escalaoId,
+    jogo.epocaId,
+    jogo.convocatorias.map((c) => c.atletaId),
+  );
+  return ok({ ...jogo, numeroPorAtleta });
 }
 
 export async function criarJogo(dados: unknown): Promise<Resultado<Jogo>> {
@@ -101,6 +144,20 @@ export async function criarJogo(dados: unknown): Promise<Resultado<Jogo>> {
     where: { id: parsed.data.escalaoId, clubeId: ctx.clubeId },
   });
   if (!escalao) return erro("O escalão selecionado não existe");
+
+  // A competição (se indicada) tem de pertencer ao clube e ao escalão do jogo.
+  if (parsed.data.competicaoId) {
+    const comp = await prisma.competicao.findFirst({
+      where: {
+        id: parsed.data.competicaoId,
+        clubeId: ctx.clubeId,
+        escalaoId: parsed.data.escalaoId,
+      },
+      select: { id: true },
+    });
+    if (!comp)
+      return erro("A competição selecionada não existe ou não pertence a este escalão");
+  }
 
   const jogo = await prisma.jogo.create({
     data: {
@@ -140,6 +197,20 @@ export async function atualizarJogo(id: string, dados: unknown): Promise<Resulta
   if (parsed.data.escalaoId !== existe.escalaoId) {
     const permDestino = await exigirCapacidade("JOGOS_GERIR", parsed.data.escalaoId);
     if (!permDestino.ok) return erro(permDestino.erro);
+  }
+
+  // A competição (se indicada) tem de pertencer ao clube e ao escalão do jogo.
+  if (parsed.data.competicaoId) {
+    const comp = await prisma.competicao.findFirst({
+      where: {
+        id: parsed.data.competicaoId,
+        clubeId,
+        escalaoId: parsed.data.escalaoId,
+      },
+      select: { id: true },
+    });
+    if (!comp)
+      return erro("A competição selecionada não existe ou não pertence a este escalão");
   }
 
   const jogo = await prisma.jogo.update({
@@ -195,16 +266,17 @@ export async function definirConvocatoria(
   const perm = await exigirCapacidade("CONVOCATORIA_GERIR", jogo.escalaoId);
   if (!perm.ok) return erro(perm.erro);
 
-  // Validação: só atletas do clube, da época do jogo, e do escalão (principal ou
-  // secundário) do jogo podem ser convocados. Impede convocar atletas alheios via id forjado.
+  // Validação (F1): convocável = atleta do clube com participação ATIVA no escalão
+  // do jogo, na época do jogo. Impede convocar atletas alheios via id forjado.
   const idsPedidos = [...new Set(atletaIds)];
   if (idsPedidos.length > 0) {
-    const validos = await prisma.atleta.count({
+    const validos = await prisma.atletaEscalao.count({
       where: {
-        id: { in: idsPedidos },
+        atletaId: { in: idsPedidos },
+        escalaoId: jogo.escalaoId,
         epocaId: jogo.epocaId,
-        escalao: { clubeId },
-        OR: [{ escalaoId: jogo.escalaoId }, { escalaoSecundarioId: jogo.escalaoId }],
+        estado: "ATIVO",
+        atleta: { clubeId, ativo: true },
       },
     });
     if (validos !== idsPedidos.length)
@@ -275,6 +347,7 @@ export async function guardarEstatisticas(
     for (const e of validos) {
       const dados = {
         utilizacao: e.utilizacao,
+        blocoTempo: e.blocoTempo ?? null,
         minutos: e.minutos ?? null,
         golos: e.golos,
         assistencias: e.assistencias,
@@ -349,11 +422,18 @@ export async function definirVideo(jogoId: string, videoUrl: string): Promise<Re
   return ok(undefined);
 }
 
-// ─── Modo ao vivo (registo de eventos) ───────────────────────────────────────
+// ─── Plano de dia de jogo (F5 — M15) ─────────────────────────────────────────
 
-export async function registarEventoJogo(
+/**
+ * Define o plano tático de dia de jogo: posição e titularidade previstas por
+ * convocado. Faz upsert em lote na tabela `Convocatoria` (chave [jogoId,
+ * atletaId]). Só aceita atletas com participação ATIVA no escalão/época do jogo
+ * (evita forjar ids). Guardado sob `CONVOCATORIA_GERIR` — a mesma capacidade que
+ * gere as linhas de convocatória que este plano altera.
+ */
+export async function definirPlanoTatico(
   jogoId: string,
-  dados: unknown,
+  plano: unknown[],
 ): Promise<Resultado<void>> {
   const clubeId = await obterClubeIdAtual();
   if (!clubeId) return erro("Não autenticado");
@@ -361,27 +441,119 @@ export async function registarEventoJogo(
   const jogo = await prisma.jogo.findFirst({ where: { id: jogoId, escalao: { clubeId } } });
   if (!jogo) return erro("Jogo não encontrado");
 
-  const perm = await exigirCapacidade("ESTATISTICAS_GERIR", jogo.escalaoId);
+  const perm = await exigirCapacidade("CONVOCATORIA_GERIR", jogo.escalaoId);
   if (!perm.ok) return erro(perm.erro);
 
-  const parsed = eventoJogoSchema.safeParse(dados);
+  const parsed = planoTaticoSchema.safeParse(plano);
   if (!parsed.success) return erroDeValidacao(parsed.error);
 
-  await prisma.eventoJogo.create({
-    data: {
-      jogoId,
-      parte: parsed.data.parte,
-      minuto: parsed.data.minuto ?? null,
-      tipo: parsed.data.tipo,
-      atletaId: parsed.data.atletaId ?? null,
-      atletaSecundarioId: parsed.data.atletaSecundarioId ?? null,
+  // Deduplica por convocado (última entrada prevalece).
+  const porAtleta = new Map<string, (typeof parsed.data)[number]>();
+  for (const entrada of parsed.data) porAtleta.set(entrada.convocadoId, entrada);
+  const entradas = [...porAtleta.values()];
+  if (entradas.length === 0) return ok(undefined);
+
+  const idsPedidos = [...porAtleta.keys()];
+  const validos = await prisma.atletaEscalao.count({
+    where: {
+      atletaId: { in: idsPedidos },
+      escalaoId: jogo.escalaoId,
+      epocaId: jogo.epocaId,
+      estado: "ATIVO",
+      atleta: { clubeId, ativo: true },
     },
   });
+  if (validos !== idsPedidos.length)
+    return erro("Um ou mais atletas não pertencem a este escalão/época.");
+
+  await prisma.$transaction(
+    entradas.map((e) => {
+      const posicaoPrevista = e.posicaoPrevista ?? null;
+      const titularPrevisto = e.titularPrevisto ?? false;
+      return prisma.convocatoria.upsert({
+        where: { jogoId_atletaId: { jogoId, atletaId: e.convocadoId } },
+        create: {
+          jogoId,
+          atletaId: e.convocadoId,
+          convocado: true,
+          posicaoPrevista,
+          titularPrevisto,
+        },
+        update: { posicaoPrevista, titularPrevisto },
+      });
+    }),
+  );
   revalidatePath(`${PATH}/${jogoId}`);
   return ok(undefined);
 }
 
-export async function apagarEventoJogo(eventoId: string): Promise<Resultado<void>> {
+// ─── Modo ao vivo (registo de eventos) ───────────────────────────────────────
+
+/**
+ * Regista um evento ao vivo (golo, cartão, substituição com bloco, timeout…).
+ * O `jogoId` vem no próprio payload (`registarEventoJogoSchema`).
+ */
+export async function registarEventoJogo(
+  dados: unknown,
+): Promise<Resultado<EventoJogo>> {
+  const clubeId = await obterClubeIdAtual();
+  if (!clubeId) return erro("Não autenticado");
+
+  const parsed = registarEventoJogoSchema.safeParse(dados);
+  if (!parsed.success) return erroDeValidacao(parsed.error);
+
+  const jogo = await prisma.jogo.findFirst({
+    where: { id: parsed.data.jogoId, escalao: { clubeId } },
+  });
+  if (!jogo) return erro("Jogo não encontrado");
+
+  const perm = await exigirCapacidade("ESTATISTICAS_GERIR", jogo.escalaoId);
+  if (!perm.ok) return erro(perm.erro);
+
+  // Valida que cada atleta referido pertence a este jogo: ou está na
+  // convocatória, ou tem participação ATIVA no escalão/época do jogo.
+  const pertenceAoJogo = async (atletaId: string): Promise<boolean> => {
+    const convocado = await prisma.convocatoria.findFirst({
+      where: { jogoId: jogo.id, atletaId },
+    });
+    if (convocado) return true;
+    const participacaoAtiva = await prisma.atletaEscalao.count({
+      where: {
+        atletaId,
+        escalaoId: jogo.escalaoId,
+        epocaId: jogo.epocaId,
+        estado: "ATIVO",
+        atleta: { clubeId, ativo: true },
+      },
+    });
+    return participacaoAtiva > 0;
+  };
+
+  if (parsed.data.atletaId && !(await pertenceAoJogo(parsed.data.atletaId)))
+    return erro("O atleta não pertence à convocatória deste jogo.");
+
+  if (
+    parsed.data.atletaSecundarioId &&
+    !(await pertenceAoJogo(parsed.data.atletaSecundarioId))
+  )
+    return erro("O atleta secundário não pertence à convocatória deste jogo.");
+
+  const evento = await prisma.eventoJogo.create({
+    data: {
+      jogoId: parsed.data.jogoId,
+      parte: parsed.data.parte,
+      minuto: parsed.data.minuto ?? null,
+      tipo: parsed.data.tipo,
+      bloco: parsed.data.bloco ?? null,
+      atletaId: parsed.data.atletaId ?? null,
+      atletaSecundarioId: parsed.data.atletaSecundarioId ?? null,
+    },
+  });
+  revalidatePath(`${PATH}/${parsed.data.jogoId}`);
+  return ok(evento);
+}
+
+export async function removerEventoJogo(eventoId: string): Promise<Resultado<void>> {
   const clubeId = await obterClubeIdAtual();
   if (!clubeId) return erro("Não autenticado");
 
@@ -397,4 +569,20 @@ export async function apagarEventoJogo(eventoId: string): Promise<Resultado<void
   await prisma.eventoJogo.delete({ where: { id: eventoId } });
   revalidatePath(`${PATH}/${evento.jogoId}`);
   return ok(undefined);
+}
+
+/** Eventos de um jogo, ordenados por minuto e depois por ordem de registo. */
+export async function listarEventosJogo(jogoId: string): Promise<Resultado<EventoJogo[]>> {
+  const clubeId = await obterClubeIdAtual();
+  if (!clubeId) return erro("Não autenticado");
+
+  const jogo = await prisma.jogo.findFirst({ where: { id: jogoId, escalao: { clubeId } } });
+  if (!jogo) return erro("Jogo não encontrado");
+  if (!(await podeLerEscalao(jogo.escalaoId))) return erro("Sem permissão neste escalão");
+
+  const eventos = await prisma.eventoJogo.findMany({
+    where: { jogoId },
+    orderBy: ORDER_EVENTOS,
+  });
+  return ok(eventos);
 }

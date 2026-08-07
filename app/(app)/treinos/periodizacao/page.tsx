@@ -1,9 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { listarPlaneamentos } from "@/lib/actions/periodizacao";
 import { listarEscaloes } from "@/lib/actions/escaloes";
 import { PlaneamentoLista } from "@/components/treinos/PlaneamentoLista";
 import { EstadoErro } from "@/components/layout/EstadosUI";
+
+export const metadata: Metadata = { title: "Periodização" };
 
 export default async function PeriodizacaoPage() {
   const [resPlan, resEsc] = await Promise.all([listarPlaneamentos(), listarEscaloes()]);

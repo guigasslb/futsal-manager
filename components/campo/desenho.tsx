@@ -1,4 +1,5 @@
 import type { ElementoCampo } from "@/lib/schemas/exercicio";
+import { ancoraElemento, rotuloElemento } from "./animacao";
 
 // Dimensões internas do campo (secção 13.1): 1 unidade = 10 cm, campo 400×200.
 export const CAMPO_W = 400;
@@ -118,14 +119,25 @@ function pontosParaPath(pontos: { x: number; y: number }[]): string {
 export function ElementoSVG({
   elemento,
   selecionado,
+  focado,
+  raioHit = 0,
+  onFocarHit,
 }: {
   elemento: ElementoCampo;
   selecionado?: boolean;
+  focado?: boolean;
+  // Raio (em unidades) do círculo de hit/toque invisível. 0 = read-only.
+  raioHit?: number;
+  onFocarHit?: (id: string) => void;
 }) {
+  // B3: para setas/linhas o anel usa o primeiro ponto do trajecto (não (0,0)).
+  const ancora = ancoraElemento(elemento);
+  const temPonto = "x" in elemento && "y" in elemento;
+
   const anelSelecao = selecionado ? (
     <circle
-      cx={"x" in elemento ? elemento.x : 0}
-      cy={"y" in elemento ? elemento.y : 0}
+      cx={ancora.x}
+      cy={ancora.y}
       r={12}
       fill="none"
       stroke="#F5C518"
@@ -134,11 +146,48 @@ export function ElementoSVG({
     />
   ) : null;
 
+  // Anel de foco de teclado — distinto do anel de selecção (cor do clube).
+  const anelFoco = focado ? (
+    <circle
+      cx={ancora.x}
+      cy={ancora.y}
+      r={15}
+      fill="none"
+      stroke="var(--cor-primaria, #F0531E)"
+      strokeWidth={1.5}
+      strokeDasharray="2 3"
+    />
+  ) : null;
+
+  // Círculo de hit/toque invisível (só no editor) — alvo ≥32px e foco de teclado.
+  const hit =
+    temPonto && raioHit > 0 ? (
+      <circle
+        cx={ancora.x}
+        cy={ancora.y}
+        r={raioHit}
+        fill="transparent"
+        tabIndex={0}
+        role="button"
+        aria-label={rotuloElemento(elemento)}
+        style={{ cursor: "grab", outline: "none" }}
+        onFocus={onFocarHit ? () => onFocarHit(elemento.id) : undefined}
+      />
+    ) : null;
+
+  const decoracoes = (
+    <>
+      {hit}
+      {anelSelecao}
+      {anelFoco}
+    </>
+  );
+
   switch (elemento.tipo) {
     case "jogador":
       return (
         <g>
-          {anelSelecao}
+          {decoracoes}
           <circle
             cx={elemento.x}
             cy={elemento.y}
@@ -166,7 +215,7 @@ export function ElementoSVG({
     case "bola":
       return (
         <g>
-          {anelSelecao}
+          {decoracoes}
           <circle
             cx={elemento.x}
             cy={elemento.y}
@@ -182,7 +231,7 @@ export function ElementoSVG({
     case "cone":
       return (
         <g>
-          {anelSelecao}
+          {decoracoes}
           <polygon
             points={`${elemento.x},${elemento.y - 7} ${elemento.x - 5},${elemento.y + 5} ${elemento.x + 5},${elemento.y + 5}`}
             fill="#F97316"
@@ -198,7 +247,7 @@ export function ElementoSVG({
       const h = horizontal ? 6 : 30;
       return (
         <g>
-          {anelSelecao}
+          {decoracoes}
           <rect
             x={elemento.x - w / 2}
             y={elemento.y - h / 2}
@@ -227,7 +276,7 @@ export function ElementoSVG({
       const cor = corParaHex(elemento.cor);
       return (
         <g>
-          {anelSelecao}
+          {decoracoes}
           <defs>
             <marker
               id={markerId}
@@ -255,7 +304,7 @@ export function ElementoSVG({
     case "linha":
       return (
         <g>
-          {anelSelecao}
+          {decoracoes}
           <path
             d={pontosParaPath(elemento.pontos)}
             fill="none"
@@ -268,7 +317,7 @@ export function ElementoSVG({
     case "texto":
       return (
         <g>
-          {anelSelecao}
+          {decoracoes}
           <text
             x={elemento.x}
             y={elemento.y}

@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { listarEscaloes } from "@/lib/actions/escaloes";
 import { AtletaForm } from "@/components/plantel/AtletaForm";
 import { EstadoErro } from "@/components/layout/EstadosUI";
+
+export const metadata: Metadata = { title: "Novo atleta" };
 
 export default async function NovoAtletaPage() {
   const resEscaloes = await listarEscaloes();

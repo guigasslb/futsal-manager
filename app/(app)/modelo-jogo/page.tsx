@@ -1,27 +1,45 @@
+import type { Metadata } from "next";
 import Link from "next/link";
-import { Plus, ClipboardList } from "lucide-react";
+import { Plus, ClipboardList, ListChecks, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { listarModelosJogo } from "@/lib/actions/modeloJogo";
+import { listarEscaloes } from "@/lib/actions/escaloes";
 import { EstadoErro, EstadoVazio } from "@/components/layout/EstadosUI";
-import { LABEL_MOMENTO, MOMENTOS } from "@/lib/schemas/modeloJogo";
+import { LABEL_MOMENTO, MOMENTOS, lerSubprincipios } from "@/lib/schemas/modeloJogo";
 import { diagramaSchema } from "@/lib/schemas/exercicio";
 import { MiniaturaCampo } from "@/components/campo/MiniaturaCampo";
+import { FiltroEscalaoModelo } from "@/components/modelo-jogo/FiltroEscalaoModelo";
 import type { MomentoJogo } from "@prisma/client";
+
+function hrefMomento(m: MomentoJogo | null, escalaoId?: string): string {
+  const params = new URLSearchParams();
+  if (escalaoId) params.set("escalaoId", escalaoId);
+  if (m) params.set("momento", m);
+  const qs = params.toString();
+  return qs ? `/modelo-jogo?${qs}` : "/modelo-jogo";
+}
+
+export const metadata: Metadata = { title: "Modelo de jogo" };
 
 export default async function ModeloJogoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ momento?: string }>;
+  searchParams: Promise<{ momento?: string; escalaoId?: string }>;
 }) {
-  const { momento: momentoParam } = await searchParams;
+  const { momento: momentoParam, escalaoId } = await searchParams;
   const momento = MOMENTOS.includes(momentoParam as MomentoJogo)
     ? (momentoParam as MomentoJogo)
     : undefined;
 
-  const res = await listarModelosJogo(momento);
+  const [resEscaloes, res] = await Promise.all([
+    listarEscaloes(),
+    listarModelosJogo(escalaoId, momento),
+  ]);
+
   if (!res.sucesso) return <EstadoErro mensagem={res.erro} />;
   const modelos = res.dados;
+  const escaloes = resEscaloes.sucesso ? resEscaloes.dados : [];
 
   return (
     <div className="space-y-6">
@@ -35,9 +53,10 @@ export default async function ModeloJogoPage({
         </Button>
       </div>
 
+      {/* Tabs por momento de jogo */}
       <div className="-mb-px flex flex-wrap border-b border-cinza-200">
         <Link
-          href="/modelo-jogo"
+          href={hrefMomento(null, escalaoId)}
           className={`px-4 py-2.5 text-corpo font-medium border-b-2 transition-colors ${!momento ? "border-primary text-primary" : "border-transparent text-cinza-600 hover:text-cinza-900"}`}
         >
           Todos
@@ -45,7 +64,7 @@ export default async function ModeloJogoPage({
         {MOMENTOS.map((m) => (
           <Link
             key={m}
-            href={`/modelo-jogo?momento=${m}`}
+            href={hrefMomento(m, escalaoId)}
             className={`whitespace-nowrap px-4 py-2.5 text-corpo font-medium border-b-2 transition-colors ${momento === m ? "border-primary text-primary" : "border-transparent text-cinza-600 hover:text-cinza-900"}`}
           >
             {LABEL_MOMENTO[m]}
@@ -53,13 +72,31 @@ export default async function ModeloJogoPage({
         ))}
       </div>
 
+      {escaloes.length > 0 && (
+        <div className="space-y-1.5">
+          <FiltroEscalaoModelo
+            escaloes={escaloes}
+            escalaoId={escalaoId}
+            momento={momento}
+          />
+          {escalaoId && (
+            <p className="text-legenda text-cinza-500">
+              Inclui também a metodologia genérica (sem escalão).
+            </p>
+          )}
+        </div>
+      )}
+
       {modelos.length === 0 ? (
         <EstadoVazio
           titulo="Define o teu modelo de jogo"
           descricao="Cria representações por momento (organização, transições, bolas paradas)."
           acao={
             <Button asChild>
-              <Link href="/modelo-jogo/novo"><Plus className="h-4 w-4" />Criar</Link>
+              <Link href="/modelo-jogo/novo">
+                <Plus className="h-4 w-4" />
+                Criar
+              </Link>
             </Button>
           }
         />
@@ -68,13 +105,14 @@ export default async function ModeloJogoPage({
           {modelos.map((m) => {
             const diag = diagramaSchema.safeParse(m.diagrama);
             const temDiagrama = diag.success && diag.data.elementos.length > 0;
+            const subprincipios = lerSubprincipios(m.subprincipios);
             return (
               <Link
                 key={m.id}
                 href={`/modelo-jogo/${m.id}`}
                 className="flex flex-col gap-3 rounded-lg border border-cinza-200 bg-white p-4 shadow-card transition-all hover:border-azul-300 hover:shadow-md"
               >
-                {temDiagrama ? (
+                {temDiagrama && diag.success ? (
                   <div className="overflow-hidden rounded">
                     <MiniaturaCampo diagrama={diag.data} largura={400} className="w-full" />
                   </div>
@@ -83,8 +121,35 @@ export default async function ModeloJogoPage({
                     <ClipboardList className="h-8 w-8 text-cinza-300" />
                   </div>
                 )}
-                <p className="text-corpo font-semibold text-cinza-900 line-clamp-2">{m.nome}</p>
-                <Badge variant="secondary" className="w-fit">{LABEL_MOMENTO[m.momento]}</Badge>
+
+                <p className="text-corpo font-semibold text-cinza-900 line-clamp-2">
+                  {m.nome}
+                </p>
+
+                {m.principios && (
+                  <p className="text-corpo-sec text-cinza-600 line-clamp-2">
+                    {m.principios}
+                  </p>
+                )}
+
+                <div className="mt-auto flex flex-wrap items-center gap-1.5">
+                  <Badge variant="secondary">{LABEL_MOMENTO[m.momento]}</Badge>
+                  {m.escalao ? (
+                    <Badge variant="outline">{m.escalao.nome}</Badge>
+                  ) : (
+                    <Badge variant="outline" className="gap-1">
+                      <User className="h-3 w-3" />
+                      Metodologia
+                    </Badge>
+                  )}
+                  {m.epoca && <Badge variant="outline">{m.epoca.nome}</Badge>}
+                  {subprincipios.length > 0 && (
+                    <Badge variant="outline" className="gap-1">
+                      <ListChecks className="h-3 w-3" />
+                      {subprincipios.length}
+                    </Badge>
+                  )}
+                </div>
               </Link>
             );
           })}

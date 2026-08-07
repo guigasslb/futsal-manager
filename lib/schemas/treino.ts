@@ -30,9 +30,20 @@ export const ESTADOS_PRESENCA = [
   "ATRASADO",
 ] as const;
 
+export const MOTIVOS_FALTA = ["LESAO", "DOENCA", "OUTRO", "SEM_JUSTIFICACAO"] as const;
+
+export const LABEL_MOTIVO_FALTA: Record<(typeof MOTIVOS_FALTA)[number], string> = {
+  LESAO: "Lesão",
+  DOENCA: "Doença",
+  OUTRO: "Outro",
+  SEM_JUSTIFICACAO: "Sem justificação",
+};
+
 export const presencaSchema = z.object({
   atletaId: z.string().cuid(),
   estado: z.enum(ESTADOS_PRESENCA),
+  // Motivo da falta (F1 — lesões como motivo, secção 8.5).
+  motivo: z.enum(MOTIVOS_FALTA).nullable().optional(),
   justificacao: z.string().max(300).optional(),
 });
 

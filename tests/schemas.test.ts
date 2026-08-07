@@ -1,50 +1,75 @@
 import { describe, it, expect } from "vitest";
-import { atletaSchema } from "@/lib/schemas/atleta";
+import { atletaPessoalSchema, criarAtletaSchema } from "@/lib/schemas/atleta";
 import { exercicioSchema, diagramaSchema } from "@/lib/schemas/exercicio";
 import { jogoSchema, estatisticaSchema } from "@/lib/schemas/jogo";
 import { sessaoSchema, presencaSchema } from "@/lib/schemas/treino";
 
 const CUID = "ckv9v0z1w0000abcd1234efgh";
 
-describe("atletaSchema", () => {
+describe("atletaPessoalSchema (F1 — só dados pessoais)", () => {
   it("aceita um atleta válido mínimo", () => {
-    const r = atletaSchema.safeParse({ nome: "João Silva", escalaoId: CUID });
+    const r = atletaPessoalSchema.safeParse({ nome: "João Silva" });
     expect(r.success).toBe(true);
   });
 
   it("rejeita nome com menos de 2 caracteres", () => {
-    const r = atletaSchema.safeParse({ nome: "J", escalaoId: CUID });
+    const r = atletaPessoalSchema.safeParse({ nome: "J" });
     expect(r.success).toBe(false);
   });
 
-  it("rejeita número fora do intervalo 1-99", () => {
-    expect(atletaSchema.safeParse({ nome: "João", escalaoId: CUID, numero: 0 }).success).toBe(
-      false,
-    );
-    expect(atletaSchema.safeParse({ nome: "João", escalaoId: CUID, numero: 100 }).success).toBe(
-      false,
-    );
-    expect(atletaSchema.safeParse({ nome: "João", escalaoId: CUID, numero: 7 }).success).toBe(
-      true,
-    );
-  });
-
   it("rejeita posição inválida no array de posições", () => {
-    const r = atletaSchema.safeParse({ nome: "João", escalaoId: CUID, posicoes: ["AVANCADO"] });
+    const r = atletaPessoalSchema.safeParse({ nome: "João", posicoes: ["AVANCADO"] });
     expect(r.success).toBe(false);
   });
 
   it("aceita múltiplas posições válidas", () => {
-    const r = atletaSchema.safeParse({ nome: "João", escalaoId: CUID, posicoes: ["ALA", "PIVO"] });
+    const r = atletaPessoalSchema.safeParse({ nome: "João", posicoes: ["ALA", "PIVO"] });
     expect(r.success).toBe(true);
     if (r.success) expect(r.data.posicoes).toEqual(["ALA", "PIVO"]);
   });
 
-  it("rejeita escalão secundário igual ao principal", () => {
-    const r = atletaSchema.safeParse({ nome: "João", escalaoId: CUID, escalaoSecundarioId: CUID });
+  it("ignora escalão/número (passaram para a participação)", () => {
+    const r = atletaPessoalSchema.safeParse({ nome: "João", escalaoId: CUID, numero: 7 });
+    expect(r.success).toBe(true);
+    if (r.success) expect("numero" in r.data).toBe(false);
+  });
+});
+
+describe("criarAtletaSchema (dados pessoais + participação inicial)", () => {
+  it("aceita criação com participação inicial mínima", () => {
+    const r = criarAtletaSchema.safeParse({
+      nome: "João Silva",
+      participacaoInicial: { escalaoId: CUID },
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.participacaoInicial.tipo).toBe("PRINCIPAL");
+  });
+
+  it("rejeita sem participação inicial", () => {
+    expect(criarAtletaSchema.safeParse({ nome: "João Silva" }).success).toBe(false);
+  });
+
+  it("rejeita número fora do intervalo 1-999", () => {
+    const comNumero = (numero: number) =>
+      criarAtletaSchema.safeParse({
+        nome: "João",
+        participacaoInicial: { escalaoId: CUID, numero },
+      }).success;
+    expect(comNumero(0)).toBe(false);
+    expect(comNumero(1000)).toBe(false);
+    expect(comNumero(7)).toBe(true);
+  });
+
+  it("rejeita tipo de participação inválido", () => {
+    const r = criarAtletaSchema.safeParse({
+      nome: "João",
+      participacaoInicial: { escalaoId: CUID, tipo: "EMPRESTIMO" },
+    });
     expect(r.success).toBe(false);
   });
 });
+
+// Os schemas de participação (F1) têm ficheiro próprio: tests/participacoes.test.ts
 
 describe("exercicioSchema", () => {
   it("aceita exercício válido", () => {
@@ -203,5 +228,19 @@ describe("presencaSchema", () => {
 
   it("rejeita estado inválido", () => {
     expect(presencaSchema.safeParse({ atletaId: CUID, estado: "FERIAS" }).success).toBe(false);
+  });
+
+  it("aceita motivo de falta (F1) e null", () => {
+    for (const motivo of ["LESAO", "DOENCA", "OUTRO", "SEM_JUSTIFICACAO", null]) {
+      expect(
+        presencaSchema.safeParse({ atletaId: CUID, estado: "FALTA", motivo }).success,
+      ).toBe(true);
+    }
+  });
+
+  it("rejeita motivo de falta inválido", () => {
+    expect(
+      presencaSchema.safeParse({ atletaId: CUID, estado: "FALTA", motivo: "FERIAS" }).success,
+    ).toBe(false);
   });
 });

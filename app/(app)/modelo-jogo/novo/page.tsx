@@ -1,8 +1,20 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { ModeloJogoForm } from "@/components/modelo-jogo/ModeloJogoForm";
+import { listarEscaloes } from "@/lib/actions/escaloes";
+import { listarEpocas } from "@/lib/actions/epocas";
+import { obterEpocaAtiva } from "@/lib/epoca-context";
 
-export default function NovoModeloJogoPage() {
+export const metadata: Metadata = { title: "Novo modelo de jogo" };
+
+export default async function NovoModeloJogoPage() {
+  const [resEscaloes, resEpocas, epocaAtiva] = await Promise.all([
+    listarEscaloes(),
+    listarEpocas(),
+    obterEpocaAtiva(),
+  ]);
+
   return (
     <div className="space-y-6">
       <Link
@@ -13,7 +25,11 @@ export default function NovoModeloJogoPage() {
         Modelo de jogo
       </Link>
       <h1>Nova representação</h1>
-      <ModeloJogoForm />
+      <ModeloJogoForm
+        escaloes={resEscaloes.sucesso ? resEscaloes.dados : []}
+        epocas={resEpocas.sucesso ? resEpocas.dados : []}
+        epocaAtivaId={epocaAtiva?.id ?? null}
+      />
     </div>
   );
 }

@@ -29,12 +29,36 @@ const INCLUDE_DETALHE = {
     },
   },
   presencas: {
-    include: { atleta: { select: { id: true, nome: true, numero: true, posicoes: true } } },
+    include: { atleta: { select: { id: true, nome: true, posicoes: true } } },
   },
 } as const;
 
 export type SessaoLista = Prisma.SessaoGetPayload<{ include: typeof INCLUDE_LISTA }>;
-export type SessaoDetalhe = Prisma.SessaoGetPayload<{ include: typeof INCLUDE_DETALHE }>;
+
+/**
+ * Detalhe da sessão. O número de camisola já não vive no Atleta (F1) — é resolvido
+ * a partir da participação (AtletaEscalao) no escalão/época da sessão.
+ */
+export type SessaoDetalhe = Prisma.SessaoGetPayload<{ include: typeof INCLUDE_DETALHE }> & {
+  numeroPorAtleta: Record<string, number | null>;
+};
+
+/** Números de camisola dos atletas indicados, no escalão/época dados. */
+async function resolverNumeros(
+  escalaoId: string,
+  epocaId: string,
+  atletaIds: string[],
+): Promise<Record<string, number | null>> {
+  if (atletaIds.length === 0) return {};
+  const participacoes = await prisma.atletaEscalao.findMany({
+    where: { escalaoId, epocaId, atletaId: { in: atletaIds } },
+    select: { atletaId: true, numero: true },
+  });
+  const numeroPorAtleta: Record<string, number | null> = {};
+  for (const id of atletaIds) numeroPorAtleta[id] = null;
+  for (const p of participacoes) numeroPorAtleta[p.atletaId] = p.numero;
+  return numeroPorAtleta;
+}
 
 type Contexto =
   | { estado: "erro"; erro: string }
@@ -83,7 +107,13 @@ export async function obterSessao(id: string): Promise<Resultado<SessaoDetalhe>>
   });
   if (!sessao) return erro("Sessão não encontrada");
   if (!(await podeLerEscalao(sessao.escalaoId))) return erro("Sem permissão neste escalão");
-  return ok(sessao);
+
+  const numeroPorAtleta = await resolverNumeros(
+    sessao.escalaoId,
+    sessao.epocaId,
+    sessao.presencas.map((p) => p.atletaId),
+  );
+  return ok({ ...sessao, numeroPorAtleta });
 }
 
 export async function criarSessao(dados: unknown): Promise<Resultado<Sessao>> {
@@ -296,6 +326,7 @@ export async function marcarPresencas(
   const parsed = marcarPresencasSchema.safeParse(presencas);
   if (!parsed.success) return erroDeValidacao(parsed.error);
 
+  // F1: a presença guarda o escalão da sessão (analytics por escalão) e o motivo da falta.
   await prisma.$transaction(
     parsed.data.map((p) =>
       prisma.presenca.upsert({
@@ -303,10 +334,17 @@ export async function marcarPresencas(
         create: {
           sessaoId,
           atletaId: p.atletaId,
+          escalaoId: sessao.escalaoId,
           estado: p.estado,
+          motivo: p.motivo ?? null,
           justificacao: p.justificacao ?? null,
         },
-        update: { estado: p.estado, justificacao: p.justificacao ?? null },
+        update: {
+          escalaoId: sessao.escalaoId,
+          estado: p.estado,
+          motivo: p.motivo ?? null,
+          justificacao: p.justificacao ?? null,
+        },
       }),
     ),
   );

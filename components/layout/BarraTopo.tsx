@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import Link from "next/link";
-import { LogOut, KeyRound } from "lucide-react";
+import { LogOut, KeyRound, Bell } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { terminarSessao } from "@/lib/actions/auth-actions";
 import { SeletorEpoca } from "@/components/layout/SeletorEpoca";
+import { AlternadorTema } from "@/components/layout/AlternadorTema";
 import { Logo } from "@/components/layout/Logo";
 import type { Epoca } from "@prisma/client";
 
@@ -25,9 +26,16 @@ interface Props {
   nomeUtilizador: string;
   epocas: Epoca[];
   epocaAtivaId: string | null;
+  /** Há treino ou jogo hoje (F14 / §8.16) — mostra o indicador no cabeçalho. */
+  eventoHoje?: boolean;
 }
 
-export function BarraTopo({ nomeUtilizador, epocas, epocaAtivaId }: Props) {
+export function BarraTopo({
+  nomeUtilizador,
+  epocas,
+  epocaAtivaId,
+  eventoHoje = false,
+}: Props) {
   const [pending, startTransition] = useTransition();
 
   return (
@@ -37,9 +45,29 @@ export function BarraTopo({ nomeUtilizador, epocas, epocaAtivaId }: Props) {
         <Logo size={20} />
       </Link>
 
-      {/* Seletor de época + menu do utilizador */}
-      <div className="flex items-center gap-3 ml-auto">
+      {/* Seletor de época + ações + menu do utilizador */}
+      <div className="flex items-center gap-2 ml-auto sm:gap-3">
         <SeletorEpoca epocas={epocas} epocaAtivaId={epocaAtivaId} />
+
+        {/* Indicador de evento hoje (treino/jogo) → dashboard */}
+        <Link
+          href="/dashboard"
+          aria-label={
+            eventoHoje ? "Tens um evento hoje — ver dashboard" : "Ir para o dashboard"
+          }
+          className="relative flex h-9 w-9 items-center justify-center rounded-full text-cinza-500 transition-colors hover:bg-cinza-100 hover:text-cinza-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1"
+        >
+          <Bell className="h-[18px] w-[18px]" aria-hidden />
+          {eventoHoje && (
+            <span className="absolute right-2 top-2 flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-vermelho-600 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-vermelho-600" />
+            </span>
+          )}
+        </Link>
+
+        {/* Alternador de tema claro/escuro */}
+        <AlternadorTema />
 
         {/* Menu utilizador */}
         <DropdownMenu>

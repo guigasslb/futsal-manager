@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
+import { obterMembroAtual } from "@/lib/permissoes";
 import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
 import { registarSchema, criarClubeSchema } from "@/lib/schemas/onboarding";
 import { PERFIS_ARRANQUE } from "@/lib/permissoes-catalogo";
@@ -95,4 +96,25 @@ export async function criarClube(dados: unknown): Promise<Resultado<{ clubeId: s
 
   revalidatePath("/", "layout");
   return ok(resultado);
+}
+
+/**
+ * Marca o onboarding do clube como concluído (§8.1).
+ *
+ * Persiste em `Clube.onboardingConcluido` para que o estado seja partilhado
+ * entre dispositivos/sessões (antes vivia apenas em localStorage e perdia-se
+ * noutro browser). Chamada no final do wizard, antes de redirecionar.
+ */
+export async function marcarOnboardingConcluido(): Promise<Resultado<void>> {
+  const ctx = await obterMembroAtual();
+  if (!ctx) return erro("Sem acesso a este clube");
+
+  await prisma.clube.update({
+    where: { id: ctx.clube.id },
+    data: { onboardingConcluido: true },
+  });
+
+  revalidatePath("/onboarding");
+  revalidatePath("/dashboard");
+  return ok<void>(undefined);
 }

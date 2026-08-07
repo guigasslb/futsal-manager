@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   MousePointer2,
   User,
@@ -14,7 +14,8 @@ import {
   Undo2,
   Trash2,
   Check,
-  Camera,
+  Film,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,10 +30,20 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { CAMPO_W, CAMPO_H, LinhasCampo, ElementoSVG } from "./desenho";
+import { useEscalaCampo } from "./useEscalaCampo";
+import { usePointerDrag } from "./usePointerDrag";
+import { TimelinePassos } from "./TimelinePassos";
+import {
+  construirKeyframes,
+  elementoEmPonto,
+  DURACAO_PADRAO,
+  type Pos,
+} from "./animacao";
 import type {
   DiagramaCampo,
   ElementoCampo,
   CorJogador,
+  PassoAnimacao,
 } from "@/lib/schemas/exercicio";
 
 type Ferramenta =
@@ -67,8 +78,15 @@ const FERRAMENTAS: { id: Ferramenta; label: string; Icon: typeof User }[] = [
   { id: "apagar", label: "Apagar", Icon: Eraser },
 ];
 
+const PASSO_TECLADO = 5;
+const PASSO_TECLADO_FINO = 1;
+
 function novoId(): string {
   return Math.random().toString(36).slice(2, 10);
+}
+
+function fixar(v: number, max: number): number {
+  return Math.max(0, Math.min(max, v));
 }
 
 export function EditorCampo({
@@ -79,6 +97,9 @@ export function EditorCampo({
   onChange: (d: DiagramaCampo) => void;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const escala = useEscalaCampo(svgRef);
+  const drag = usePointerDrag(svgRef, escala);
+
   const [ferramenta, setFerramenta] = useState<Ferramenta>("selecionar");
   const [corJogador, setCorJogador] = useState<CorJogador>("azul");
   const [estiloSeta, setEstiloSeta] = useState<EstiloSeta>("movimento");
@@ -86,106 +107,138 @@ export function EditorCampo({
     "horizontal" | "vertical"
   >("vertical");
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null);
-  const [historico, setHistorico] = useState<ElementoCampo[][]>([]);
+  const [focadoId, setFocadoId] = useState<string | null>(null);
+  const [historico, setHistorico] = useState<DiagramaCampo[]>([]);
   const [caminhoAtual, setCaminhoAtual] = useState<{ x: number; y: number }[]>([]);
   const [arrastando, setArrastando] = useState<string | null>(null);
   const [textoInline, setTextoInline] = useState<{ x: number; y: number } | null>(
     null,
   );
+  const [modoAnimacao, setModoAnimacao] = useState(false);
+  // -1 = base ("Início"); 0..N-1 = índice do passo em edição.
+  const [keyframeActivo, setKeyframeActivo] = useState(-1);
+  const [anuncio, setAnuncio] = useState("");
 
   const elementos = valor.elementos;
+  const passos = valor.passos ?? [];
+  const temPontos = elementos.some((el) => "x" in el && "y" in el);
 
-  const registarHistorico = useCallback(() => {
-    setHistorico((h) => [...h.slice(-30), elementos]);
-  }, [elementos]);
+  // Keyframes acumulados; posições visíveis = keyframe activo.
+  const keyframes = construirKeyframes(valor);
+  const idxKf = Math.min(Math.max(keyframeActivo + 1, 0), keyframes.length - 1);
+  const posActivas = keyframes[idxKf] ?? keyframes[0];
 
-  const aplicar = useCallback(
-    (novos: ElementoCampo[]) => {
-      // Preserva os passos de animação ao editar os elementos.
-      onChange({ versao: valor.passos?.length ? 2 : 1, elementos: novos, passos: valor.passos });
-    },
-    [onChange, valor.passos],
-  );
+  // Elementos com as posições do keyframe activo aplicadas (para render/hit-test).
+  const elementosRender: ElementoCampo[] = elementos.map((el) => {
+    if ("x" in el && "y" in el) {
+      const p = posActivas.get(el.id);
+      return p ? { ...el, x: p.x, y: p.y } : el;
+    }
+    return el;
+  });
 
-  function capturarPasso() {
-    const posicoes = elementos
-      .filter((el): el is Extract<ElementoCampo, { x: number; y: number }> => "x" in el && "y" in el)
-      .map((el) => ({ elementoId: el.id, x: el.x, y: el.y }));
-    const passos = valor.passos ?? [];
-    onChange({
-      versao: 2,
-      elementos,
-      passos: [...passos, { id: novoId(), ordem: passos.length, posicoes }],
-    });
+  // Setas-fantasma (derivadas, não persistidas): movimento do passo activo.
+  const setasFantasma =
+    modoAnimacao && keyframeActivo >= 0 && keyframes[keyframeActivo]
+      ? (() => {
+          const prev = keyframes[keyframeActivo];
+          const curr = keyframes[keyframeActivo + 1];
+          const arr: { id: string; from: Pos; to: Pos }[] = [];
+          if (curr) {
+            for (const [id, p] of curr) {
+              const p0 = prev.get(id);
+              if (p0 && (p0.x !== p.x || p0.y !== p.y)) {
+                arr.push({ id, from: p0, to: p });
+              }
+            }
+          }
+          return arr;
+        })()
+      : [];
+
+  function anunciar(msg: string) {
+    setAnuncio(msg);
   }
 
-  function limparPassos() {
-    onChange({ versao: 1, elementos, passos: [] });
+  function snapshotAtual(): DiagramaCampo {
+    return { versao: 2, elementos, passos };
   }
 
-  function coordsDoEvento(e: React.PointerEvent): { x: number; y: number } | null {
-    const svg = svgRef.current;
-    if (!svg) return null;
-    const rect = svg.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * CAMPO_W;
-    const y = ((e.clientY - rect.top) / rect.height) * CAMPO_H;
-    return {
-      x: Math.max(0, Math.min(CAMPO_W, x)),
-      y: Math.max(0, Math.min(CAMPO_H, y)),
-    };
+  function registarHistorico() {
+    const snap = snapshotAtual();
+    setHistorico((h) => [...h.slice(-30), snap]);
+  }
+
+  // B4: o editor grava SEMPRE versao 2.
+  function aplicarElementos(novos: ElementoCampo[]) {
+    onChange({ versao: 2, elementos: novos, passos });
+  }
+  function aplicarPassos(novos: PassoAnimacao[]) {
+    onChange({ versao: 2, elementos, passos: novos });
+  }
+
+  // Move um elemento no keyframe activo (base ou delta do passo).
+  function moverElemento(id: string, x: number, y: number) {
+    if (keyframeActivo < 0) {
+      aplicarElementos(
+        elementos.map((el) =>
+          el.id === id && "x" in el ? { ...el, x, y } : el,
+        ),
+      );
+    } else {
+      const novos = passos.map((p, i) => {
+        if (i !== keyframeActivo) return p;
+        const outras = p.posicoes.filter((pp) => pp.elementoId !== id);
+        return { ...p, posicoes: [...outras, { elementoId: id, x, y }] };
+      });
+      aplicarPassos(novos);
+    }
   }
 
   function proximoNumero(cor: CorJogador): number {
     const numeros = elementos
       .filter((el) => el.tipo === "jogador" && el.cor === cor)
-      .map((el) => (el.tipo === "jogador" ? (el.numero ?? 0) : 0));
+      .map((el) => (el.tipo === "jogador" ? el.numero ?? 0 : 0));
     return numeros.length ? Math.max(...numeros) + 1 : 1;
-  }
-
-  function elementoEmPonto(x: number, y: number): ElementoCampo | null {
-    // Procura de trás para a frente (elementos por cima primeiro)
-    for (let i = elementos.length - 1; i >= 0; i--) {
-      const el = elementos[i];
-      if ("x" in el && "y" in el) {
-        if (Math.hypot(el.x - x, el.y - y) <= 14) return el;
-      } else if (el.pontos.length) {
-        for (const p of el.pontos) {
-          if (Math.hypot(p.x - x, p.y - y) <= 14) return el;
-        }
-      }
-    }
-    return null;
   }
 
   function handlePointerDown(e: React.PointerEvent) {
     if (textoInline) return;
-    const coords = coordsDoEvento(e);
+    const coords = drag.paraCoordenadas(e);
     if (!coords) return;
     const { x, y } = coords;
 
     switch (ferramenta) {
       case "selecionar": {
-        const alvo = elementoEmPonto(x, y);
+        const alvo = elementoEmPonto(elementosRender, x, y, drag.raioHit);
         if (alvo) {
           setSelecionadoId(alvo.id);
-          if ("x" in alvo) setArrastando(alvo.id);
+          setFocadoId(alvo.id);
+          if ("x" in alvo) {
+            // B2: captura o snapshot ANTES de mover (para o undo).
+            drag.snapshotRef.current = snapshotAtual();
+            // B1: mantém o ponteiro capturado mesmo se sair do <svg>.
+            drag.iniciarCaptura(e);
+            setArrastando(alvo.id);
+          }
         } else {
           setSelecionadoId(null);
         }
         break;
       }
       case "apagar": {
-        const alvo = elementoEmPonto(x, y);
+        const alvo = elementoEmPonto(elementosRender, x, y, drag.raioHit);
         if (alvo) {
           registarHistorico();
-          aplicar(elementos.filter((el) => el.id !== alvo.id));
+          aplicarElementos(elementos.filter((el) => el.id !== alvo.id));
           setSelecionadoId(null);
+          anunciar("Elemento apagado");
         }
         break;
       }
       case "jogador": {
         registarHistorico();
-        aplicar([
+        aplicarElementos([
           ...elementos,
           {
             id: novoId(),
@@ -200,17 +253,17 @@ export function EditorCampo({
       }
       case "bola": {
         registarHistorico();
-        aplicar([...elementos, { id: novoId(), tipo: "bola", x, y }]);
+        aplicarElementos([...elementos, { id: novoId(), tipo: "bola", x, y }]);
         break;
       }
       case "cone": {
         registarHistorico();
-        aplicar([...elementos, { id: novoId(), tipo: "cone", x, y }]);
+        aplicarElementos([...elementos, { id: novoId(), tipo: "cone", x, y }]);
         break;
       }
       case "baliza": {
         registarHistorico();
-        aplicar([
+        aplicarElementos([
           ...elementos,
           { id: novoId(), tipo: "baliza", x, y, orientacao: orientacaoBaliza },
         ]);
@@ -230,21 +283,73 @@ export function EditorCampo({
 
   function handlePointerMove(e: React.PointerEvent) {
     if (ferramenta !== "selecionar" || !arrastando) return;
-    const coords = coordsDoEvento(e);
+    const coords = drag.paraCoordenadas(e);
     if (!coords) return;
-    aplicar(
-      elementos.map((el) =>
-        el.id === arrastando && "x" in el ? { ...el, x: coords.x, y: coords.y } : el,
-      ),
-    );
+    moverElemento(arrastando, coords.x, coords.y);
   }
 
-  function handlePointerUp() {
+  function handlePointerUp(e: React.PointerEvent) {
     if (arrastando) {
-      // Regista o movimento no histórico ao largar (uma entrada por drag)
-      setHistorico((h) => [...h.slice(-30), elementos]);
+      // B2: grava o snapshot pré-drag no histórico (uma entrada por drag).
+      const snap = drag.snapshotRef.current;
+      if (snap) {
+        setHistorico((h) => [...h.slice(-30), snap]);
+        drag.snapshotRef.current = null;
+      }
+      drag.terminarCaptura(e);
       setArrastando(null);
     }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+      e.preventDefault();
+      anular();
+      return;
+    }
+    if (e.key === "Escape") {
+      setSelecionadoId(null);
+      setCaminhoAtual([]);
+      return;
+    }
+    if (!selecionadoId) return;
+
+    if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault();
+      apagarSelecionado();
+      return;
+    }
+
+    const passoMov = e.shiftKey ? PASSO_TECLADO_FINO : PASSO_TECLADO;
+    let dx = 0;
+    let dy = 0;
+    switch (e.key) {
+      case "ArrowUp":
+        dy = -passoMov;
+        break;
+      case "ArrowDown":
+        dy = passoMov;
+        break;
+      case "ArrowLeft":
+        dx = -passoMov;
+        break;
+      case "ArrowRight":
+        dx = passoMov;
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    const alvo = elementosRender.find(
+      (el) => el.id === selecionadoId && "x" in el,
+    );
+    if (!alvo || !("x" in alvo)) return;
+    const nx = fixar(alvo.x + dx, CAMPO_W);
+    const ny = fixar(alvo.y + dy, CAMPO_H);
+    // Cada movimento por teclado regista um snapshot no histórico.
+    registarHistorico();
+    moverElemento(selecionadoId, nx, ny);
+    anunciar(`Elemento movido para ${Math.round(nx)}, ${Math.round(ny)}`);
   }
 
   function concluirCaminho() {
@@ -254,7 +359,7 @@ export function EditorCampo({
     }
     registarHistorico();
     if (ferramenta === "seta") {
-      aplicar([
+      aplicarElementos([
         ...elementos,
         {
           id: novoId(),
@@ -265,7 +370,7 @@ export function EditorCampo({
         },
       ]);
     } else {
-      aplicar([
+      aplicarElementos([
         ...elementos,
         { id: novoId(), tipo: "linha", cor: "#1A1D29", pontos: caminhoAtual },
       ]);
@@ -276,7 +381,7 @@ export function EditorCampo({
   function confirmarTexto(conteudo: string) {
     if (textoInline && conteudo.trim()) {
       registarHistorico();
-      aplicar([
+      aplicarElementos([
         ...elementos,
         {
           id: novoId(),
@@ -293,53 +398,112 @@ export function EditorCampo({
   function anular() {
     if (!historico.length) return;
     const anterior = historico[historico.length - 1];
-    aplicar(anterior);
+    onChange(anterior);
     setSelecionadoId(null);
     setHistorico((h) => h.slice(0, -1));
+    anunciar("Ação anulada");
   }
 
   function limparTudo() {
     registarHistorico();
-    aplicar([]);
+    onChange({ versao: 2, elementos: [], passos: [] });
     setSelecionadoId(null);
     setCaminhoAtual([]);
+    setKeyframeActivo(-1);
+    anunciar("Diagrama limpo");
   }
 
   function apagarSelecionado() {
     if (!selecionadoId) return;
     registarHistorico();
-    aplicar(elementos.filter((el) => el.id !== selecionadoId));
+    aplicarElementos(elementos.filter((el) => el.id !== selecionadoId));
     setSelecionadoId(null);
+    anunciar("Elemento apagado");
   }
 
+  function alternarModoAnimacao() {
+    setModoAnimacao((v) => {
+      const proximo = !v;
+      setKeyframeActivo(-1);
+      setSelecionadoId(null);
+      setCaminhoAtual([]);
+      if (proximo) setFerramenta("selecionar");
+      return proximo;
+    });
+  }
+
+  function irParaKeyframe(idx: number) {
+    setKeyframeActivo(idx);
+    setSelecionadoId(null);
+    setCaminhoAtual([]);
+    if (idx >= 0) setFerramenta("selecionar");
+  }
+
+  function adicionarPasso() {
+    registarHistorico();
+    const novo: PassoAnimacao = {
+      id: novoId(),
+      ordem: passos.length,
+      posicoes: [],
+      duracaoMs: DURACAO_PADRAO,
+    };
+    aplicarPassos([...passos, novo]);
+    irParaKeyframe(passos.length);
+    anunciar(
+      `Passo ${passos.length + 1} adicionado. Arrasta os elementos para o próximo momento.`,
+    );
+  }
+
+  // Sai do modo animação se todos os passos forem removidos externamente.
+  useEffect(() => {
+    if (keyframeActivo > passos.length - 1) {
+      setKeyframeActivo(Math.min(keyframeActivo, passos.length - 1));
+    }
+  }, [passos.length, keyframeActivo]);
+
   const desenhandoCaminho = ferramenta === "seta" || ferramenta === "linha";
+  const aEditarPasso = keyframeActivo >= 0;
+  const ferramentasVisiveis = !aEditarPasso;
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row">
       {/* Barra de ferramentas */}
       <div className="flex flex-shrink-0 flex-wrap gap-1.5 lg:w-40 lg:flex-col">
-        {FERRAMENTAS.map(({ id, label, Icon }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => {
-              setFerramenta(id);
-              setCaminhoAtual([]);
-              setSelecionadoId(null);
-            }}
-            className={`flex items-center gap-2 rounded-md border px-3 py-2 text-corpo-sec transition-colors ${
-              ferramenta === id
-                ? "border-primary bg-primary/5 text-primary"
-                : "border-cinza-200 text-cinza-700 hover:bg-cinza-50"
-            }`}
-          >
-            <Icon className="h-4 w-4" />
-            {label}
-          </button>
-        ))}
+        {ferramentasVisiveis ? (
+          FERRAMENTAS.map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => {
+                setFerramenta(id);
+                setCaminhoAtual([]);
+                setSelecionadoId(null);
+              }}
+              className={`flex min-h-11 items-center gap-2 rounded-md border px-3 py-2 text-corpo-sec transition-colors ${
+                ferramenta === id
+                  ? "border-primary bg-primary/5 text-primary"
+                  : "border-cinza-200 text-cinza-700 hover:bg-cinza-50"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          ))
+        ) : (
+          <p className="rounded-md border border-cinza-200 bg-cinza-50 p-3 text-legenda text-cinza-600">
+            A editar o passo {keyframeActivo + 1}. Arrasta os elementos para
+            definir este momento.
+          </p>
+        )}
 
         <div className="mt-2 flex gap-1.5 lg:flex-col">
-          <Button type="button" variant="outline" size="sm" onClick={anular} disabled={!historico.length}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={anular}
+            disabled={!historico.length}
+          >
             <Undo2 className="h-4 w-4" />
             Anular
           </Button>
@@ -360,7 +524,8 @@ export function EditorCampo({
               <AlertDialogHeader>
                 <AlertDialogTitle>Limpar todo o diagrama?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Todos os elementos serão removidos. Podes anular esta ação.
+                  Todos os elementos e passos serão removidos. Podes anular esta
+                  ação.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -379,20 +544,69 @@ export function EditorCampo({
 
       {/* Campo + controlos contextuais */}
       <div className="flex-1 space-y-3">
+        {/* Região de anúncios para leitores de ecrã */}
+        <div aria-live="polite" className="sr-only">
+          {anuncio}
+        </div>
+
         <div className="relative">
           <svg
             ref={svgRef}
             viewBox={`0 0 ${CAMPO_W} ${CAMPO_H}`}
             className="w-full h-auto touch-none rounded-md border border-cinza-300"
+            tabIndex={0}
+            role="application"
+            aria-label="Editor de campo de futsal"
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
+            onKeyDown={handleKeyDown}
             onDoubleClick={desenhandoCaminho ? concluirCaminho : undefined}
           >
+            <defs>
+              <marker
+                id="seta-fantasma"
+                markerWidth={6}
+                markerHeight={6}
+                refX={4}
+                refY={3}
+                orient="auto"
+              >
+                <path d="M0,0 L6,3 L0,6 Z" fill="#F5C518" />
+              </marker>
+            </defs>
+
             <LinhasCampo />
-            {elementos.map((el) => (
-              <ElementoSVG key={el.id} elemento={el} selecionado={el.id === selecionadoId} />
+            {elementosRender.map((el) => (
+              <ElementoSVG
+                key={el.id}
+                elemento={el}
+                selecionado={el.id === selecionadoId}
+                focado={el.id === focadoId}
+                raioHit={drag.raioHit}
+                onFocarHit={(id) => {
+                  setFocadoId(id);
+                  setSelecionadoId(id);
+                }}
+              />
             ))}
+
+            {/* Setas-fantasma de trajecto (derivadas do delta do passo activo) */}
+            {setasFantasma.map((s) => (
+              <line
+                key={`fantasma-${s.id}`}
+                x1={s.from.x}
+                y1={s.from.y}
+                x2={s.to.x}
+                y2={s.to.y}
+                stroke="#F5C518"
+                strokeWidth={1.5}
+                strokeDasharray="5 3"
+                markerEnd="url(#seta-fantasma)"
+                opacity={0.85}
+              />
+            ))}
+
             {/* Caminho em construção */}
             {caminhoAtual.length > 0 && (
               <>
@@ -424,7 +638,8 @@ export function EditorCampo({
               }}
               placeholder="Texto…"
               onKeyDown={(e) => {
-                if (e.key === "Enter") confirmarTexto((e.target as HTMLInputElement).value);
+                if (e.key === "Enter")
+                  confirmarTexto((e.target as HTMLInputElement).value);
                 if (e.key === "Escape") setTextoInline(null);
               }}
               onBlur={(e) => confirmarTexto(e.target.value)}
@@ -432,138 +647,183 @@ export function EditorCampo({
           )}
         </div>
 
-        {/* Controlos contextuais */}
-        <div className="flex flex-wrap items-center gap-3 rounded-md bg-cinza-50 p-3 text-corpo-sec">
-          {ferramenta === "jogador" && (
-            <div className="flex items-center gap-2">
-              <span className="text-cinza-600">Cor:</span>
-              {CORES_JOGADOR.map((c) => (
-                <button
-                  key={c.valor}
-                  type="button"
-                  aria-label={c.nome}
-                  onClick={() => setCorJogador(c.valor)}
-                  className={`h-6 w-6 rounded-full border-2 ${
-                    corJogador === c.valor ? "border-cinza-900" : "border-transparent"
-                  }`}
-                  style={{ backgroundColor: c.hex }}
-                />
-              ))}
-            </div>
-          )}
+        <p className="text-legenda text-cinza-400">
+          Dica: seleciona um elemento e usa as setas do teclado para o mover
+          (Shift = ajuste fino). Delete apaga; Ctrl+Z anula.
+        </p>
 
-          {ferramenta === "seta" && (
-            <div className="flex items-center gap-2">
-              <span className="text-cinza-600">Estilo:</span>
-              {(
-                [
-                  { v: "movimento", l: "Movimento (—)" },
-                  { v: "passe", l: "Passe (- -)" },
-                  { v: "conducao", l: "Condução (~)" },
-                ] as const
-              ).map((o) => (
-                <button
-                  key={o.v}
+        {/* Controlos contextuais das ferramentas */}
+        {ferramentasVisiveis && (
+          <div className="flex flex-wrap items-center gap-3 rounded-md bg-cinza-50 p-3 text-corpo-sec">
+            {ferramenta === "jogador" && (
+              <div className="flex items-center gap-2">
+                <span className="text-cinza-600">Cor:</span>
+                {CORES_JOGADOR.map((c) => (
+                  <button
+                    key={c.valor}
+                    type="button"
+                    aria-label={c.nome}
+                    onClick={() => setCorJogador(c.valor)}
+                    className={`h-6 w-6 rounded-full border-2 ${
+                      corJogador === c.valor
+                        ? "border-cinza-900"
+                        : "border-transparent"
+                    }`}
+                    style={{ backgroundColor: c.hex }}
+                  />
+                ))}
+              </div>
+            )}
+
+            {ferramenta === "seta" && (
+              <div className="flex items-center gap-2">
+                <span className="text-cinza-600">Estilo:</span>
+                {(
+                  [
+                    { v: "movimento", l: "Movimento (—)" },
+                    { v: "passe", l: "Passe (- -)" },
+                    { v: "conducao", l: "Condução (~)" },
+                  ] as const
+                ).map((o) => (
+                  <button
+                    key={o.v}
+                    type="button"
+                    onClick={() => setEstiloSeta(o.v)}
+                    className={`rounded border px-2 py-1 ${
+                      estiloSeta === o.v
+                        ? "border-primary bg-primary/5 text-primary"
+                        : "border-cinza-200"
+                    }`}
+                  >
+                    {o.l}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {ferramenta === "baliza" && (
+              <div className="flex items-center gap-2">
+                <span className="text-cinza-600">Orientação:</span>
+                {(
+                  [
+                    { v: "vertical", l: "Vertical" },
+                    { v: "horizontal", l: "Horizontal" },
+                  ] as const
+                ).map((o) => (
+                  <button
+                    key={o.v}
+                    type="button"
+                    onClick={() => setOrientacaoBaliza(o.v)}
+                    className={`rounded border px-2 py-1 ${
+                      orientacaoBaliza === o.v
+                        ? "border-primary bg-primary/5 text-primary"
+                        : "border-cinza-200"
+                    }`}
+                  >
+                    {o.l}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {desenhandoCaminho && (
+              <div className="flex items-center gap-2">
+                <span className="text-cinza-600">
+                  {caminhoAtual.length === 0
+                    ? "Toca no campo para adicionar pontos"
+                    : `${caminhoAtual.length} ponto(s) — duplo-clique ou concluir`}
+                </span>
+                <Button
                   type="button"
-                  onClick={() => setEstiloSeta(o.v)}
-                  className={`rounded border px-2 py-1 ${
-                    estiloSeta === o.v
-                      ? "border-primary bg-primary/5 text-primary"
-                      : "border-cinza-200"
-                  }`}
+                  size="sm"
+                  variant="outline"
+                  onClick={concluirCaminho}
+                  disabled={caminhoAtual.length < 2}
                 >
-                  {o.l}
-                </button>
-              ))}
-            </div>
-          )}
+                  <Check className="h-4 w-4" />
+                  Concluir
+                </Button>
+                {caminhoAtual.length > 0 && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setCaminhoAtual([])}
+                  >
+                    Cancelar
+                  </Button>
+                )}
+              </div>
+            )}
 
-          {ferramenta === "baliza" && (
-            <div className="flex items-center gap-2">
-              <span className="text-cinza-600">Orientação:</span>
-              {(
-                [
-                  { v: "vertical", l: "Vertical" },
-                  { v: "horizontal", l: "Horizontal" },
-                ] as const
-              ).map((o) => (
-                <button
-                  key={o.v}
-                  type="button"
-                  onClick={() => setOrientacaoBaliza(o.v)}
-                  className={`rounded border px-2 py-1 ${
-                    orientacaoBaliza === o.v
-                      ? "border-primary bg-primary/5 text-primary"
-                      : "border-cinza-200"
-                  }`}
-                >
-                  {o.l}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {desenhandoCaminho && (
-            <div className="flex items-center gap-2">
-              <span className="text-cinza-600">
-                {caminhoAtual.length === 0
-                  ? "Toca no campo para adicionar pontos"
-                  : `${caminhoAtual.length} ponto(s) — duplo-clique ou concluir`}
-              </span>
+            {ferramenta === "selecionar" && selecionadoId && (
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={concluirCaminho}
-                disabled={caminhoAtual.length < 2}
+                className="text-vermelho-600"
+                onClick={apagarSelecionado}
               >
-                <Check className="h-4 w-4" />
-                Concluir
+                <Trash2 className="h-4 w-4" />
+                Apagar selecionado
               </Button>
-              {caminhoAtual.length > 0 && (
-                <Button type="button" size="sm" variant="ghost" onClick={() => setCaminhoAtual([])}>
-                  Cancelar
-                </Button>
-              )}
-            </div>
-          )}
+            )}
 
-          {ferramenta === "selecionar" && selecionadoId && (
+            {ferramenta === "selecionar" && !selecionadoId && (
+              <span className="text-cinza-500">
+                Toca num elemento para o selecionar e arrastar.
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Animação (secção 11) */}
+        <div className="space-y-3 rounded-md border border-cinza-200 p-3 text-corpo-sec">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
               size="sm"
-              variant="outline"
-              className="text-vermelho-600"
-              onClick={apagarSelecionado}
+              variant={modoAnimacao ? "default" : "outline"}
+              onClick={alternarModoAnimacao}
+              aria-pressed={modoAnimacao}
+              disabled={!temPontos && !modoAnimacao}
             >
-              <Trash2 className="h-4 w-4" />
-              Apagar selecionado
+              <Film className="h-4 w-4" />
+              {modoAnimacao ? "Modo animação ativo" : "Animar (A→B)"}
             </Button>
-          )}
+            {modoAnimacao && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={adicionarPasso}
+                disabled={!temPontos}
+              >
+                <Plus className="h-4 w-4" />
+                Adicionar passo
+              </Button>
+            )}
+            <span className="text-cinza-500">{passos.length} passo(s)</span>
+          </div>
 
-          {ferramenta === "selecionar" && !selecionadoId && (
-            <span className="text-cinza-500">
-              Toca num elemento para o selecionar e arrastar.
-            </span>
+          {modoAnimacao && (
+            <>
+              <TimelinePassos
+                passos={passos}
+                keyframeActivo={keyframeActivo}
+                onChange={(novos) => {
+                  registarHistorico();
+                  aplicarPassos(novos);
+                }}
+                onKeyframeChange={irParaKeyframe}
+              />
+              <p className="text-legenda text-cinza-400">
+                Seleciona <strong>Início</strong> (posição base) ou um passo e
+                arrasta os elementos. Cada passo guarda apenas o que muda; as
+                setas-fantasma mostram o movimento a partir do passo anterior.
+              </p>
+            </>
           )}
-        </div>
-
-        {/* Passos de animação (secção 11) */}
-        <div className="flex flex-wrap items-center gap-2 rounded-md border border-cinza-200 p-3 text-corpo-sec">
-          <span className="font-medium text-cinza-700">Animação:</span>
-          <Button type="button" size="sm" variant="outline" onClick={capturarPasso}>
-            <Camera className="h-4 w-4" />
-            Capturar passo
-          </Button>
-          <span className="text-cinza-500">{valor.passos?.length ?? 0} passo(s)</span>
-          {(valor.passos?.length ?? 0) > 0 && (
-            <Button type="button" size="sm" variant="ghost" className="text-vermelho-600" onClick={limparPassos}>
-              Limpar passos
-            </Button>
-          )}
-          <span className="text-legenda text-cinza-400">
-            Posiciona os elementos e captura cada momento (A→B). O primeiro passo é a posição inicial.
-          </span>
         </div>
       </div>
     </div>

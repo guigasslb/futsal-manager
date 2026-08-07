@@ -87,14 +87,17 @@ export async function apagarEscalao(id: string): Promise<Resultado<void>> {
   // Restrict — apagar com dependentes lançaria P2003 (500). Bloquear com mensagem.
   const [totalAtletas, totalSessoes, totalJogos, totalPlaneamentos, totalCompeticoes] =
     await Promise.all([
-      prisma.atleta.count({ where: { escalaoId: id } }),
+      // F1: as participações (AtletaEscalao) são Restrict sobre o escalão.
+      prisma.atletaEscalao.count({ where: { escalaoId: id } }),
       prisma.sessao.count({ where: { escalaoId: id } }),
       prisma.jogo.count({ where: { escalaoId: id } }),
       prisma.planeamento.count({ where: { escalaoId: id } }),
       prisma.competicao.count({ where: { escalaoId: id } }),
     ]);
   if (totalAtletas > 0)
-    return erro(`Não é possível apagar: este escalão tem ${totalAtletas} atleta(s) associado(s).`);
+    return erro(
+      `Não é possível apagar: este escalão tem ${totalAtletas} participação(ões) de atleta(s) associada(s).`,
+    );
   if (totalSessoes > 0)
     return erro(`Não é possível apagar: este escalão tem ${totalSessoes} sessão(ões) associada(s).`);
   if (totalJogos > 0)

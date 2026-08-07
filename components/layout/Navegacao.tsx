@@ -11,26 +11,41 @@ import {
   Trophy,
   Settings,
   Users2,
+  MessageSquare,
+  BarChart3,
   MoreHorizontal,
+  Rocket,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const ITENS = [
+const ITEM_COMECAR = { href: "/vitoria-rapida", label: "Começar", icon: Rocket };
+
+const ITENS_BASE = [
   { href: "/dashboard", label: "Início", icon: LayoutDashboard },
   { href: "/plantel", label: "Plantel", icon: Users },
   { href: "/treinos", label: "Treinos", icon: CalendarCheck },
   { href: "/exercicios", label: "Exercícios", icon: Dumbbell },
   { href: "/jogos", label: "Jogos", icon: Trophy },
+  { href: "/analiticos", label: "Analíticos", icon: BarChart3 },
+  { href: "/comunicacoes", label: "Comunicações", icon: MessageSquare },
   { href: "/reunioes", label: "Reuniões", icon: Users2 },
   { href: "/definicoes", label: "Definições", icon: Settings },
 ];
 
-const ITENS_BOTTOM = ITENS.slice(0, 4);
-const ITENS_MAIS = ITENS.slice(4);
-
-export function Navegacao() {
+/**
+ * @param mostrarComecar Mostra o atalho "Começar" (vitória rápida) — só quando
+ * o plantel está vazio (F10 / §8.1).
+ */
+export function Navegacao({ mostrarComecar = false }: { mostrarComecar?: boolean }) {
   const pathname = usePathname();
   const [maisAberto, setMaisAberto] = useState(false);
+
+  // "Começar" entra logo a seguir ao Início, para ficar visível na bottom-nav.
+  const ITENS = mostrarComecar
+    ? [ITENS_BASE[0], ITEM_COMECAR, ...ITENS_BASE.slice(1)]
+    : ITENS_BASE;
+  const ITENS_BOTTOM = ITENS.slice(0, 4);
+  const ITENS_MAIS = ITENS.slice(4);
 
   const ativo = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");

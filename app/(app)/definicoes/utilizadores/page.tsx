@@ -1,14 +1,19 @@
+import type { Metadata } from "next";
 import { listarMembros } from "@/lib/actions/utilizadores";
 import { listarPerfis } from "@/lib/actions/perfis";
 import { listarEscaloes } from "@/lib/actions/escaloes";
+import { obterMembroAtual } from "@/lib/permissoes";
 import { UtilizadoresLista } from "@/components/definicoes/UtilizadoresLista";
 import { EstadoErro } from "@/components/layout/EstadosUI";
 
+export const metadata: Metadata = { title: "Definições · Utilizadores" };
+
 export default async function MembrosPage() {
-  const [resMembros, resPerfis, resEscaloes] = await Promise.all([
+  const [resMembros, resPerfis, resEscaloes, membro] = await Promise.all([
     listarMembros(),
     listarPerfis(),
     listarEscaloes(),
+    obterMembroAtual(),
   ]);
   if (!resMembros.sucesso) return <EstadoErro mensagem={resMembros.erro} />;
 
@@ -17,5 +22,18 @@ export default async function MembrosPage() {
     ? resEscaloes.dados.map((e) => ({ id: e.id, nome: e.nome }))
     : [];
 
-  return <UtilizadoresLista membros={resMembros.dados} perfis={perfis} escaloes={escaloes} />;
+  // Gating de UI (secção 6.7) + regra de delegação do editor de overrides (6.4):
+  // só se concede a outro membro uma capacidade que o próprio possui.
+  const capacidadesProprias = membro?.capacidades ?? [];
+  const podeGerirMembros = capacidadesProprias.includes("CLUBE_UTILIZADORES");
+
+  return (
+    <UtilizadoresLista
+      membros={resMembros.dados}
+      perfis={perfis}
+      escaloes={escaloes}
+      podeGerirMembros={podeGerirMembros}
+      capacidadesProprias={capacidadesProprias}
+    />
+  );
 }

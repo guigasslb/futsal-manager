@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
@@ -15,6 +16,8 @@ function Cartao({ valor, label }: { valor: string | number; label: string }) {
     </div>
   );
 }
+
+export const metadata: Metadata = { title: "Relatório do atleta" };
 
 export default async function RelatorioAtletaPage({
   params,
@@ -39,9 +42,10 @@ export default async function RelatorioAtletaPage({
 
   const meta: string[] = [];
   if (a.posicoes.length) meta.push(a.posicoes.map((p) => LABEL_POSICAO[p]).join(", "));
-  if (a.numero != null) meta.push(`#${a.numero}`);
-  meta.push(a.escalao.nome);
-  meta.push(a.epoca.nome);
+  if (a.participacaoContexto?.numero != null)
+    meta.push(`#${a.participacaoContexto.numero}`);
+  for (const p of a.participacoes) meta.push(p.escalaoNome);
+  meta.push(a.epocaNome);
 
   return (
     <div className="space-y-6">
@@ -59,7 +63,7 @@ export default async function RelatorioAtletaPage({
         <div>
           <h1 className="leading-tight">{a.nome}</h1>
           <p className="mt-1 text-corpo-sec text-cinza-600">{meta.join(" · ")}</p>
-          <p className="text-legenda text-cinza-400">Relatório de desenvolvimento — {a.epoca.nome}</p>
+          <p className="text-legenda text-cinza-400">Relatório de desenvolvimento — {a.epocaNome}</p>
         </div>
       </div>
 

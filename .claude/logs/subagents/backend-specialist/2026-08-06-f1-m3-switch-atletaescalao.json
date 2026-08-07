@@ -1,0 +1,46 @@
+{
+  "timestamp": "2026-08-06T09:35:00Z",
+  "subagent": "backend-specialist",
+  "task": "F1 M3 — switch de codigo de Atleta.escalaoId para AtletaEscalao (participacoes N-N)",
+  "tools_used": ["Read", "Edit", "Write", "Bash"],
+  "files_created": [
+    "lib/schemas/participacao.ts",
+    "lib/actions/participacoes.ts"
+  ],
+  "files_modified": [
+    "lib/permissoes.ts",
+    "lib/schemas/atleta.ts",
+    "lib/schemas/treino.ts",
+    "lib/actions/atletas.ts",
+    "lib/actions/jogos.ts",
+    "lib/actions/treinos.ts",
+    "lib/actions/escaloes.ts",
+    "lib/actions/caderneta.ts",
+    "lib/actions/analise.ts",
+    "lib/actions/relatorios.ts",
+    "components/plantel/AtletaForm.tsx",
+    "app/(app)/plantel/page.tsx",
+    "app/(app)/plantel/[id]/page.tsx",
+    "app/(app)/plantel/[id]/relatorio/page.tsx",
+    "app/(app)/jogos/[id]/page.tsx",
+    "app/(app)/treinos/[id]/page.tsx",
+    "app/(app)/dashboard/page.tsx",
+    "tests/schemas.test.ts",
+    "tests/actions.test.ts",
+    "tests/actions-producao.test.ts",
+    "docs/FutsalManager_Spec_v6.md"
+  ],
+  "result": "success",
+  "validation": {
+    "typecheck": "0 erros",
+    "lint": "0 erros, 0 avisos",
+    "tests": "98/98 passam",
+    "build": "bloqueado por edicao concorrente de outro agente em prisma/schema.prisma (ModeloJogo F4 sem relacoes opostas) — fora do ambito desta tarefa"
+  },
+  "patterns_applied": [
+    "Server Actions + Zod + Resultado<T> + revalidatePath",
+    "Dual-write fase expand (campos legados ainda escritos ate M4)",
+    "Permissoes por participacao (algum escalao)"
+  ],
+  "user": "claude-code@irn.pt"
+}

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus, AlertTriangle, FileBarChart } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,7 +7,10 @@ import { listarEscaloes } from "@/lib/actions/escaloes";
 import { EstadoErro, EstadoVazio } from "@/components/layout/EstadosUI";
 import { CampoPesquisa } from "@/components/layout/CampoPesquisa";
 import { AvatarAtleta } from "@/components/plantel/AvatarAtleta";
+import { BadgeTipoParticipacao } from "@/components/plantel/BadgesParticipacao";
 import { ABREV_POSICAO } from "@/lib/schemas/atleta";
+
+export const metadata: Metadata = { title: "Plantel" };
 
 export default async function PlantelPage({
   searchParams,
@@ -30,15 +34,19 @@ export default async function PlantelPage({
     : resAtletas.dados;
   const tabTodos = !escalaoId;
 
-  // Números duplicados entre atletas ativos do mesmo escalão (secção 22.8)
+  // Números duplicados entre participações ativas do mesmo escalão (secção 8.5)
   const contagemNumeros = new Map<string, number>();
   for (const a of resAtletas.dados) {
-    if (a.numero == null) continue;
-    const chave = `${a.escalaoId}:${a.numero}`;
-    contagemNumeros.set(chave, (contagemNumeros.get(chave) ?? 0) + 1);
+    for (const p of a.participacoes) {
+      if (p.numero == null) continue;
+      const chave = `${p.escalaoId}:${p.numero}`;
+      contagemNumeros.set(chave, (contagemNumeros.get(chave) ?? 0) + 1);
+    }
   }
-  const numeroDuplicado = (escalaoIdA: string, numero: number | null) =>
-    numero != null && (contagemNumeros.get(`${escalaoIdA}:${numero}`) ?? 0) > 1;
+  const numeroDuplicado = (escalaoIdA: string | undefined, numero: number | null) =>
+    escalaoIdA != null &&
+    numero != null &&
+    (contagemNumeros.get(`${escalaoIdA}:${numero}`) ?? 0) > 1;
   const haDuplicados = [...contagemNumeros.values()].some((n) => n > 1);
 
   return (
@@ -117,7 +125,11 @@ export default async function PlantelPage({
           )}
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
             {atletas.map((a) => {
-              const dup = numeroDuplicado(a.escalaoId, a.numero);
+              const ctx = a.participacaoContexto;
+              const numero = ctx?.numero ?? null;
+              const dup = numeroDuplicado(ctx?.escalaoId, numero);
+              // Atletas em mais do que um escalão: mostrar escalão + tipo de participação.
+              const multiEscalao = a.participacoes.length > 1;
               return (
               <Link
                 key={a.id}
@@ -128,15 +140,35 @@ export default async function PlantelPage({
                 <div className="w-full">
                   <p className="truncate text-corpo font-semibold text-cinza-900">{a.nome}</p>
                   <p className="text-legenda text-cinza-600">
-                    {a.numero != null && (
+                    {numero != null && (
                       <span className={dup ? "font-semibold text-ambar-600" : ""}>
-                        #{a.numero}
+                        #{numero}
                       </span>
                     )}
-                    {a.numero != null && a.posicoes.length ? " · " : ""}
+                    {numero != null && a.posicoes.length ? " · " : ""}
                     {a.posicoes.map((p) => ABREV_POSICAO[p]).join(", ")}
-                    {a.numero == null && a.posicoes.length === 0 ? "—" : ""}
+                    {numero == null && a.posicoes.length === 0 ? "—" : ""}
                   </p>
+                  {multiEscalao ? (
+                    <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1">
+                      {a.participacoes.map((p) => (
+                        <span
+                          key={p.id}
+                          className="inline-flex max-w-full items-center gap-1 rounded-full border border-cinza-200 bg-cinza-50 py-0.5 pe-1 ps-2 text-legenda text-cinza-600"
+                        >
+                          <span className="truncate">{p.escalaoNome}</span>
+                          <BadgeTipoParticipacao tipo={p.tipo} compacto />
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    tabTodos &&
+                    a.participacoes.length === 1 && (
+                      <p className="mt-0.5 truncate text-legenda text-cinza-400">
+                        {a.participacoes[0].escalaoNome}
+                      </p>
+                    )
+                  )}
                 </div>
               </Link>
               );

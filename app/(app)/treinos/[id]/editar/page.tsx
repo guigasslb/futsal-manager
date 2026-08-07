@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
@@ -7,6 +8,8 @@ import { listarPlaneamentos } from "@/lib/actions/periodizacao";
 import { SessaoForm } from "@/components/treinos/SessaoForm";
 import { ApagarSessaoButton } from "@/components/treinos/ApagarSessaoButton";
 import { EstadoErro } from "@/components/layout/EstadosUI";
+
+export const metadata: Metadata = { title: "Editar treino" };
 
 export default async function EditarSessaoPage({
   params,

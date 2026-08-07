@@ -29,16 +29,44 @@ import {
   guardarEstatisticas,
   guardarRelatorio,
 } from "@/lib/actions/jogos";
-import { LABEL_UTILIZACAO } from "@/lib/schemas/jogo";
-import type { TipoMetrica, Utilizacao } from "@prisma/client";
+import { LABEL_BLOCO_TEMPO, LABEL_UTILIZACAO } from "@/lib/schemas/jogo";
+import { PlanoTatico } from "@/components/jogos/PlanoTatico";
+import { RegistoAoVivo } from "@/components/jogos/RegistoAoVivo";
+import { ScoutingJogo } from "@/components/jogos/ScoutingJogo";
+import { TimelineEventos, type EventoTimeline } from "@/components/jogos/TimelineEventos";
+import type {
+  BlocoTempo,
+  CasaFora,
+  ObservacaoAdversario,
+  Posicao,
+  TipoMetrica,
+  Utilizacao,
+} from "@prisma/client";
 
-type Atleta = { id: string; nome: string; numero: number | null; eGR: boolean };
+type Atleta = {
+  id: string;
+  nome: string;
+  numero: number | null;
+  eGR: boolean;
+  posicoes: Posicao[];
+};
 
 type Metrica = { id: string; nome: string; tipo: TipoMetrica; ativa: boolean };
+
+type LinhaPlano = { posicaoPrevista: Posicao | null; titularPrevisto: boolean };
+
+const BLOCOS: BlocoTempo[] = [
+  "JOGO_COMPLETO",
+  "MEIA_PARTE",
+  "BLOCO_10MIN",
+  "BLOCO_5MIN",
+  "NAO_JOGOU",
+];
 
 type EstatLinha = {
   atletaId: string;
   utilizacao: Utilizacao;
+  blocoTempo: BlocoTempo | null;
   minutos: number | null;
   golos: number;
   assistencias: number;
@@ -56,6 +84,11 @@ export function JogoDetalhe({
   estatisticasIniciais,
   relatorioInicial,
   golosMarcados,
+  planoInicial,
+  eventos,
+  observacoes,
+  casaFora,
+  adversario,
 }: {
   jogoId: string;
   atletas: Atleta[];
@@ -64,6 +97,11 @@ export function JogoDetalhe({
   estatisticasIniciais: Record<string, EstatLinha>;
   relatorioInicial: string;
   golosMarcados: number | null;
+  planoInicial: Record<string, LinhaPlano>;
+  eventos: EventoTimeline[];
+  observacoes: ObservacaoAdversario[];
+  casaFora: CasaFora;
+  adversario: string;
 }) {
   const [convocados, setConvocados] = useState<Set<string>>(
     () => new Set(convocadosIniciais),
@@ -80,6 +118,8 @@ export function JogoDetalhe({
 
   const atletaPorId = new Map(atletas.map((a) => [a.id, a]));
   const convocadosLista = atletas.filter((a) => convocados.has(a.id));
+  // Plano/Ao vivo/Timeline usam a convocatória gravada no servidor (verdade persistida).
+  const convocadosSalvos = atletas.filter((a) => convocadosIniciais.includes(a.id));
 
   // Atletas que tinham estatísticas gravadas (chaves de estatisticasIniciais)
   const comEstatisticas = new Set(Object.keys(estatisticasIniciais));
@@ -122,6 +162,7 @@ export function JogoDetalhe({
       estatisticas[id] ?? {
         atletaId: id,
         utilizacao: "NAO_UTILIZADO",
+        blocoTempo: null,
         minutos: null,
         golos: 0,
         assistencias: 0,
@@ -178,9 +219,12 @@ export function JogoDetalhe({
 
   return (
     <Tabs defaultValue="convocatoria">
-      <TabsList>
+      <TabsList className="flex-wrap">
         <TabsTrigger value="convocatoria">Convocatória</TabsTrigger>
+        <TabsTrigger value="plano">Plano</TabsTrigger>
+        <TabsTrigger value="aovivo">Ao Vivo</TabsTrigger>
         <TabsTrigger value="estatisticas">Estatísticas</TabsTrigger>
+        <TabsTrigger value="scouting">Scouting</TabsTrigger>
         <TabsTrigger value="relatorio">Relatório</TabsTrigger>
       </TabsList>
 
@@ -220,6 +264,41 @@ export function JogoDetalhe({
               </Button>
             </div>
           </>
+        )}
+      </TabsContent>
+
+      {/* ─── Plano (dia de jogo) ─── */}
+      <TabsContent value="plano" className="space-y-4">
+        <PlanoTatico
+          jogoId={jogoId}
+          convocados={convocadosSalvos.map((a) => ({
+            id: a.id,
+            nome: a.nome,
+            numero: a.numero,
+            posicoes: a.posicoes,
+          }))}
+          planoInicial={planoInicial}
+        />
+      </TabsContent>
+
+      {/* ─── Ao Vivo (registo de eventos) ─── */}
+      <TabsContent value="aovivo" className="space-y-4">
+        {convocadosSalvos.length === 0 ? (
+          <p className="rounded-md border border-dashed border-cinza-300 p-4 text-center text-corpo-sec text-cinza-500">
+            Define a convocatória primeiro para registar eventos ao vivo.
+          </p>
+        ) : (
+          <RegistoAoVivo
+            jogoId={jogoId}
+            eventos={eventos}
+            atletas={convocadosSalvos.map((a) => ({
+              id: a.id,
+              nome: a.nome,
+              numero: a.numero,
+            }))}
+            casaFora={casaFora}
+            adversario={adversario}
+          />
         )}
       </TabsContent>
 
@@ -275,6 +354,29 @@ export function JogoDetalhe({
                           {(["TITULAR", "UTILIZADO", "NAO_UTILIZADO"] as const).map((u) => (
                             <SelectItem key={u} value={u}>
                               {LABEL_UTILIZACAO[u]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="mb-2 space-y-1">
+                      <label className="text-legenda text-cinza-500">Tempo de jogo</label>
+                      <Select
+                        value={e.blocoTempo ?? "none"}
+                        onValueChange={(v) =>
+                          atualizarEstat(a.id, {
+                            blocoTempo: v === "none" ? null : (v as BlocoTempo),
+                          })
+                        }
+                      >
+                        <SelectTrigger className="h-9 sm:w-56">
+                          <SelectValue placeholder="Bloco de tempo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">— sem bloco —</SelectItem>
+                          {BLOCOS.map((b) => (
+                            <SelectItem key={b} value={b}>
+                              {LABEL_BLOCO_TEMPO[b]}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -352,20 +454,40 @@ export function JogoDetalhe({
         )}
       </TabsContent>
 
+      {/* ─── Scouting (no jogo) ─── */}
+      <TabsContent value="scouting" className="space-y-4">
+        <ScoutingJogo jogoId={jogoId} observacoes={observacoes} />
+      </TabsContent>
+
       {/* ─── Relatório ─── */}
-      <TabsContent value="relatorio" className="space-y-4">
-        <Textarea
-          value={relatorio}
-          onChange={(e) => setRelatorio(e.target.value)}
-          rows={8}
-          maxLength={5000}
-          placeholder="Reflexão pós-jogo…"
-        />
-        <div className="flex justify-end">
-          <Button onClick={guardarRel} disabled={pendingRel}>
-            <Check className="h-4 w-4" />
-            {pendingRel ? "A guardar…" : "Guardar relatório"}
-          </Button>
+      <TabsContent value="relatorio" className="space-y-6">
+        <div className="space-y-3">
+          <Textarea
+            value={relatorio}
+            onChange={(e) => setRelatorio(e.target.value)}
+            rows={8}
+            maxLength={5000}
+            placeholder="Reflexão pós-jogo…"
+          />
+          <div className="flex justify-end">
+            <Button onClick={guardarRel} disabled={pendingRel}>
+              <Check className="h-4 w-4" />
+              {pendingRel ? "A guardar…" : "Guardar relatório"}
+            </Button>
+          </div>
+        </div>
+
+        {/* Cronologia dos eventos (§10.4) */}
+        <div className="space-y-2 border-t border-cinza-100 pt-4">
+          <h3 className="text-subtitulo text-cinza-900">Cronologia do jogo</h3>
+          <TimelineEventos
+            eventos={eventos}
+            atletas={convocadosSalvos.map((a) => ({
+              id: a.id,
+              nome: a.nome,
+              numero: a.numero,
+            }))}
+          />
         </div>
       </TabsContent>
 

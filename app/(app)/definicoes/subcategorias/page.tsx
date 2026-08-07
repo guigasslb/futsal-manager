@@ -1,7 +1,10 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { listarSubcategorias } from "@/lib/actions/subcategorias";
 import { SubcategoriasLista } from "@/components/definicoes/SubcategoriasLista";
+
+export const metadata: Metadata = { title: "Definições · Subcategorias" };
 
 export default async function SubcategoriasPage() {
   const res = await listarSubcategorias();

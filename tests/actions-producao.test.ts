@@ -10,7 +10,9 @@ vi.mock("@/lib/epoca-context", () => ({
 }));
 vi.mock("@/lib/permissoes", () => ({
   exigirCapacidade: vi.fn(),
+  exigirCapacidadeEmAlgumEscalao: vi.fn(),
   podeLerEscalao: vi.fn(),
+  podeLerAlgumEscalao: vi.fn(),
   escaloesLegiveis: vi.fn(),
 }));
 
@@ -18,6 +20,7 @@ vi.mock("@/lib/db", () => ({
   prisma: {
     jogo: { findFirst: vi.fn(), count: vi.fn() },
     atleta: { count: vi.fn() },
+    atletaEscalao: { count: vi.fn(), findMany: vi.fn() },
     convocatoria: { findMany: vi.fn(), deleteMany: vi.fn(), create: vi.fn() },
     estatisticaAtleta: { deleteMany: vi.fn(), upsert: vi.fn() },
     valorMetrica: { upsert: vi.fn() },
@@ -61,11 +64,11 @@ beforeEach(() => {
   );
 });
 
-describe("definirConvocatoria — validação de pertença (auditoria A2)", () => {
-  it("rejeita atletas que não pertencem ao escalão/época do jogo", async () => {
+describe("definirConvocatoria — validação de pertença por participação (F1)", () => {
+  it("rejeita atletas sem participação ativa no escalão/época do jogo", async () => {
     mocked(prisma.jogo.findFirst).mockResolvedValue({ id: "j1", escalaoId: "esc1", epocaId: "ep1" });
-    // Só 1 dos 2 atletas pedidos é válido.
-    mocked(prisma.atleta.count).mockResolvedValue(1);
+    // Só 1 dos 2 atletas pedidos tem participação ativa.
+    mocked(prisma.atletaEscalao.count).mockResolvedValue(1);
 
     const r = await definirConvocatoria("j1", [A1, A2]);
     expect(r.sucesso).toBe(false);
@@ -73,14 +76,18 @@ describe("definirConvocatoria — validação de pertença (auditoria A2)", () =
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it("aceita quando todos os atletas pertencem", async () => {
+  it("aceita quando todos os atletas têm participação ativa", async () => {
     mocked(prisma.jogo.findFirst).mockResolvedValue({ id: "j1", escalaoId: "esc1", epocaId: "ep1" });
-    mocked(prisma.atleta.count).mockResolvedValue(2);
+    mocked(prisma.atletaEscalao.count).mockResolvedValue(2);
     mocked(prisma.convocatoria.findMany).mockResolvedValue([]);
 
     const r = await definirConvocatoria("j1", [A1, A2]);
     expect(r.sucesso).toBe(true);
     expect(prisma.$transaction).toHaveBeenCalledOnce();
+
+    const arg = (prisma.atletaEscalao.count as unknown as { mock: { calls: unknown[][] } })
+      .mock.calls[0][0] as { where: { escalaoId: string; epocaId: string; estado: string } };
+    expect(arg.where).toMatchObject({ escalaoId: "esc1", epocaId: "ep1", estado: "ATIVO" });
   });
 });
 
@@ -128,8 +135,8 @@ describe("reordenarExercicios — ids têm de pertencer à sessão (auditoria M4
 describe("apagarEscalao — guards de integridade (auditoria B3)", () => {
   it("bloqueia se houver sessões associadas", async () => {
     mocked(prisma.escalao.findFirst).mockResolvedValue({ id: "esc1", clubeId: "clube1" });
-    // counts: atletas=0, sessoes=2, jogos=0, planeamentos=0, competicoes=0
-    mocked(prisma.atleta.count).mockResolvedValue(0);
+    // counts: participações=0, sessoes=2, jogos=0, planeamentos=0, competicoes=0
+    mocked(prisma.atletaEscalao.count).mockResolvedValue(0);
     mocked(prisma.sessao.count).mockResolvedValue(2);
     mocked(prisma.jogo.count).mockResolvedValue(0);
     mocked(prisma.planeamento.count).mockResolvedValue(0);

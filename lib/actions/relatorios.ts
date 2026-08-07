@@ -38,7 +38,15 @@ export async function obterRelatorioEquipa(
       select: { golosMarcados: true, golosSofridos: true },
     }),
     prisma.sessao.count({ where: { epocaId: epoca.id, escalaoId } }),
-    prisma.atleta.count({ where: { epocaId: epoca.id, escalaoId, ativo: true } }),
+    // F1: nº de atletas = participações ativas neste escalão/época.
+    prisma.atletaEscalao.count({
+      where: {
+        epocaId: epoca.id,
+        escalaoId,
+        estado: "ATIVO",
+        atleta: { ativo: true },
+      },
+    }),
     prisma.estatisticaAtleta.findMany({
       where: { jogo: { epocaId: epoca.id, escalaoId } },
       include: { atleta: { select: { id: true, nome: true } } },

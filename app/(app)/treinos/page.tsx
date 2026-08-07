@@ -1,5 +1,15 @@
+import type { Metadata } from "next";
 import Link from "next/link";
-import { Plus, Dumbbell, MapPin, Users, List, CalendarDays, CalendarRange } from "lucide-react";
+import {
+  Plus,
+  Dumbbell,
+  MapPin,
+  Users,
+  List,
+  CalendarDays,
+  CalendarRange,
+  LayoutTemplate,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { listarSessoes } from "@/lib/actions/treinos";
 import { listarEscaloes } from "@/lib/actions/escaloes";
@@ -17,6 +27,8 @@ function formatarDataHora(data: Date): string {
 }
 
 const PRESENTES = new Set(["PRESENTE", "ATRASADO"]);
+
+export const metadata: Metadata = { title: "Treinos" };
 
 export default async function TreinosPage({
   searchParams,
@@ -52,9 +64,15 @@ export default async function TreinosPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1>Treinos</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline">
+            <Link href="/treinos/templates">
+              <LayoutTemplate className="h-4 w-4" />
+              Usar template
+            </Link>
+          </Button>
           <Button asChild variant="outline">
             <Link href="/treinos/periodizacao">
               <CalendarRange className="h-4 w-4" />
@@ -123,14 +141,22 @@ export default async function TreinosPage({
       {sessoes.length === 0 ? (
         <EstadoVazio
           titulo="Sem sessões nesta época"
-          descricao="Cria a primeira sessão de treino."
+          descricao="Cria a primeira sessão de treino — do zero ou a partir de um template."
           acao={
-            <Button asChild>
-              <Link href="/treinos/novo">
-                <Plus className="h-4 w-4" />
-                Criar sessão
-              </Link>
-            </Button>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button asChild>
+                <Link href="/treinos/novo">
+                  <Plus className="h-4 w-4" />
+                  Criar sessão
+                </Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/treinos/templates">
+                  <LayoutTemplate className="h-4 w-4" />
+                  Usar template
+                </Link>
+              </Button>
+            </div>
           }
         />
       ) : ehCalendario ? (

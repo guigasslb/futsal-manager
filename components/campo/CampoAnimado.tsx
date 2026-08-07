@@ -1,65 +1,152 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Play, Pause, RotateCcw } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CAMPO_W, CAMPO_H, LinhasCampo, ElementoSVG } from "./desenho";
-import type { DiagramaCampo, ElementoCampo } from "@/lib/schemas/exercicio";
+import { ControlosPlayback } from "./ControlosPlayback";
+import {
+  construirKeyframes,
+  ease,
+  DURACAO_PADRAO,
+  type Pos,
+} from "./animacao";
+import type { DiagramaCampo, ElementoCampo, PassoAnimacao } from "@/lib/schemas/exercicio";
 
-type Pos = { x: number; y: number };
+// Duração entre passos quando prefers-reduced-motion (avanço instantâneo, sem tween).
+const DURACAO_REDUZIDA = 700;
 
-// Cada passo captura TODAS as posições dos elementos-ponto → é um keyframe completo.
-// Sem passos: cena estática (só a base). Com passos: playback passo[0] → passo[1] → …
-function construirKeyframes(diagrama: DiagramaCampo): Map<string, Pos>[] {
-  const base = new Map<string, Pos>();
-  for (const el of diagrama.elementos) {
-    if ("x" in el && "y" in el) base.set(el.id, { x: el.x, y: el.y });
-  }
-  const passos = [...(diagrama.passos ?? [])].sort((a, b) => a.ordem - b.ordem);
-  if (passos.length === 0) return [base];
-
-  return passos.map((passo) => {
-    const m = new Map(base);
-    for (const p of passo.posicoes) m.set(p.elementoId, { x: p.x, y: p.y });
-    return m;
-  });
+function usaMovimentoReduzido(): boolean {
+  if (typeof window === "undefined" || !window.matchMedia) return false;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-const DURACAO_PADRAO = 900;
-
-export function CampoAnimado({ diagrama, className }: { diagrama: DiagramaCampo; className?: string }) {
-  const keyframes = construirKeyframes(diagrama);
+export function CampoAnimado({
+  diagrama,
+  className,
+}: {
+  diagrama: DiagramaCampo;
+  className?: string;
+}) {
+  const keyframes = useMemo(() => construirKeyframes(diagrama), [diagrama]);
+  const passos = useMemo(
+    () => [...(diagrama.passos ?? [])].sort((a, b) => a.ordem - b.ordem),
+    [diagrama.passos],
+  );
   const temAnimacao = keyframes.length > 1;
+
   const [posicoes, setPosicoes] = useState<Map<string, Pos>>(keyframes[0]);
   const [aPlay, setAPlay] = useState(false);
+  const [loop, setLoop] = useState(false);
+  const [velocidade, setVelocidade] = useState<0.5 | 1 | 2>(1);
+  const [movimentoReduzido, setMovimentoReduzido] = useState(false);
+
+  // Refs para o loop de animação (corrige B6: sem closures obsoletas no RAF).
+  const keyframesRef = useRef(keyframes);
+  const passosRef = useRef<PassoAnimacao[]>(passos);
+  const velocidadeRef = useRef(velocidade);
+  const loopRef = useRef(loop);
   const rafRef = useRef<number | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    keyframesRef.current = keyframes;
+    passosRef.current = passos;
+  }, [keyframes, passos]);
+  useEffect(() => {
+    velocidadeRef.current = velocidade;
+  }, [velocidade]);
+  useEffect(() => {
+    loopRef.current = loop;
+  }, [loop]);
+
+  // Detecta prefers-reduced-motion e reage a mudanças.
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setMovimentoReduzido(mq.matches);
+    const ouvir = () => setMovimentoReduzido(mq.matches);
+    mq.addEventListener("change", ouvir);
+    return () => mq.removeEventListener("change", ouvir);
+  }, []);
+
+  // Repõe o frame base quando o diagrama muda.
+  useEffect(() => {
+    setAPlay(false);
+    setPosicoes(keyframes[0]);
+  }, [keyframes]);
+
+  // Loop de playback.
+  useEffect(() => {
     if (!aPlay) return;
+
+    const reduzido = usaMovimentoReduzido();
+
+    // ── Movimento reduzido: avança passo-a-passo, sem interpolação ──
+    if (reduzido) {
+      let segmento = 0;
+      setPosicoes(keyframesRef.current[0]);
+      function avancar() {
+        segmento++;
+        const kfs = keyframesRef.current;
+        if (segmento >= kfs.length) {
+          if (loopRef.current) {
+            segmento = 0;
+            setPosicoes(kfs[0]);
+          } else {
+            setAPlay(false);
+            return;
+          }
+        } else {
+          setPosicoes(kfs[segmento]);
+        }
+        timeoutRef.current = setTimeout(avancar, DURACAO_REDUZIDA);
+      }
+      timeoutRef.current = setTimeout(avancar, DURACAO_REDUZIDA);
+      return () => {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      };
+    }
+
+    // ── Playback normal: interpolação suave com requestAnimationFrame ──
     let segmento = 0;
     let inicio = performance.now();
 
-    const passos = [...(diagrama.passos ?? [])].sort((a, b) => a.ordem - b.ordem);
-
     function frame(agora: number) {
-      const dur = passos[segmento]?.duracaoMs ?? DURACAO_PADRAO;
+      const kfs = keyframesRef.current;
+      const de = kfs[segmento];
+      const para = kfs[segmento + 1];
+      if (!de || !para) {
+        setAPlay(false);
+        return;
+      }
+      const durBase = passosRef.current[segmento]?.duracaoMs ?? DURACAO_PADRAO;
+      const dur = durBase / velocidadeRef.current;
       const t = Math.min(1, (agora - inicio) / dur);
-      const de = keyframes[segmento];
-      const para = keyframes[segmento + 1];
+      const te = ease(t);
+
       const interp = new Map<string, Pos>();
       for (const [id, p] of para) {
         const p0 = de.get(id) ?? p;
-        interp.set(id, { x: p0.x + (p.x - p0.x) * t, y: p0.y + (p.y - p0.y) * t });
+        interp.set(id, {
+          x: p0.x + (p.x - p0.x) * te,
+          y: p0.y + (p.y - p0.y) * te,
+        });
       }
       setPosicoes(interp);
 
       if (t >= 1) {
         segmento++;
-        if (segmento >= keyframes.length - 1) {
-          setAPlay(false);
-          return;
+        if (segmento >= kfs.length - 1) {
+          if (loopRef.current) {
+            segmento = 0;
+            inicio = agora;
+          } else {
+            setPosicoes(kfs[kfs.length - 1]);
+            setAPlay(false);
+            return;
+          }
+        } else {
+          inicio = agora;
         }
-        inicio = agora;
       }
       rafRef.current = requestAnimationFrame(frame);
     }
@@ -67,15 +154,21 @@ export function CampoAnimado({ diagrama, className }: { diagrama: DiagramaCampo;
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aPlay]);
 
+  function reproduzir() {
+    setPosicoes(keyframes[0]);
+    setAPlay(true);
+  }
+  function pausar() {
+    setAPlay(false);
+  }
   function reiniciar() {
     setAPlay(false);
     setPosicoes(keyframes[0]);
   }
 
-  // Aplica posições animadas aos elementos-ponto.
+  // Aplica as posições animadas aos elementos-ponto.
   const elementos: ElementoCampo[] = diagrama.elementos.map((el) => {
     if ("x" in el && "y" in el) {
       const p = posicoes.get(el.id);
@@ -99,16 +192,21 @@ export function CampoAnimado({ diagrama, className }: { diagrama: DiagramaCampo;
       </svg>
 
       {temAnimacao && (
-        <div className="flex items-center gap-2">
-          <Button type="button" size="sm" variant="outline" onClick={() => (aPlay ? setAPlay(false) : (reiniciar(), setAPlay(true)))}>
-            {aPlay ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-            {aPlay ? "Pausar" : "Reproduzir"}
-          </Button>
-          <Button type="button" size="sm" variant="ghost" onClick={reiniciar}>
-            <RotateCcw className="h-4 w-4" />
-            Reiniciar
-          </Button>
-          <span className="text-legenda text-cinza-500">{keyframes.length - 1} passo(s)</span>
+        <div className="flex flex-wrap items-center gap-3">
+          <ControlosPlayback
+            aPlay={aPlay}
+            loop={loop}
+            velocidade={velocidade}
+            onPlay={reproduzir}
+            onPause={pausar}
+            onReiniciar={reiniciar}
+            onVelocidade={setVelocidade}
+            onToggleLoop={() => setLoop((v) => !v)}
+          />
+          <span className="text-legenda text-cinza-500">
+            {keyframes.length - 1} passo(s)
+            {movimentoReduzido && " · movimento reduzido"}
+          </span>
         </div>
       )}
     </div>

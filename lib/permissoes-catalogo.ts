@@ -26,9 +26,50 @@ export const CAPACIDADES = [
   // Transversais
   "EXERCICIOS_GERIR",
   "RELATORIOS_VER",
+  // Operações avançadas (F0) — sujeitas a overrides por membro
+  "PROMOVER_ATLETAS", // promover atleta à equipa principal
+  "COMUNICACOES_GERIR", // gerir comunicações / templates de WhatsApp
+  "LEMBRETES_EQUIPA_GERIR", // criar lembretes para a equipa
+  // "FATURACAO_GERIR",  // FUTURO — faturação/mensalidades. Presente na arquitetura, ainda não ativa.
 ] as const;
 
 export type Capacidade = (typeof CAPACIDADES)[number];
+
+/**
+ * Capacidades efetivas de um membro (secção 6.4, overrides F0):
+ *   base (capacidades do perfil) + capacidadesExtra − capacidadesRevogadas.
+ *
+ * Função pura, definida neste módulo (e reexportada por `lib/permissoes.ts`)
+ * para poder ser usada também no cliente — o editor de overrides precisa de
+ * aplicar exatamente a mesma regra que o servidor.
+ *
+ * Só considera chaves válidas do catálogo ativo — chaves desconhecidas ou
+ * futuras (ex.: FATURACAO_GERIR) são ignoradas, garantindo que overrides
+ * antigos ou inválidos não concedem capacidades inexistentes.
+ */
+export function capacidadesEfetivas(
+  base: readonly string[],
+  extra: readonly string[],
+  revogadas: readonly string[],
+): Set<Capacidade> {
+  const catalogo = new Set<string>(CAPACIDADES);
+  const efetivas = new Set<Capacidade>();
+  for (const cap of base) {
+    if (catalogo.has(cap)) efetivas.add(cap as Capacidade);
+  }
+  for (const cap of extra) {
+    if (catalogo.has(cap)) efetivas.add(cap as Capacidade);
+  }
+  for (const cap of revogadas) {
+    efetivas.delete(cap as Capacidade);
+  }
+  return efetivas;
+}
+
+// FUTURO — capacidade de faturação. Definida à parte para não entrar no catálogo ativo
+// (não é atribuível nem verificável enquanto o módulo não existir), mas presente na
+// arquitetura para referência. Só ADMIN a terá quando for ativada.
+export const CAPACIDADE_FUTURA_FATURACAO = "FATURACAO_GERIR" as const;
 
 // Rótulos pt-PT para a UI de perfis.
 export const LABEL_CAPACIDADE: Record<Capacidade, string> = {
@@ -53,6 +94,9 @@ export const LABEL_CAPACIDADE: Record<Capacidade, string> = {
   REUNIOES_GERIR: "Gerir reuniões",
   EXERCICIOS_GERIR: "Gerir exercícios",
   RELATORIOS_VER: "Ver relatórios",
+  PROMOVER_ATLETAS: "Promover atletas à equipa principal",
+  COMUNICACOES_GERIR: "Gerir comunicações",
+  LEMBRETES_EQUIPA_GERIR: "Gerir lembretes da equipa",
 };
 
 export const CAPACIDADES_ESTRUTURA: Capacidade[] = [
@@ -108,6 +152,9 @@ export const PERFIS_ARRANQUE: PerfilArranque[] = [
       "CATALOGO_HABILIDADES",
       "EXERCICIOS_GERIR",
       "RELATORIOS_VER",
+      "PROMOVER_ATLETAS",
+      "COMUNICACOES_GERIR",
+      "LEMBRETES_EQUIPA_GERIR",
     ],
   },
   {

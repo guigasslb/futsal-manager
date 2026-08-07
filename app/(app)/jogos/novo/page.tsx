@@ -1,12 +1,19 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { listarEscaloes } from "@/lib/actions/escaloes";
+import { listarCompeticoes } from "@/lib/actions/competicoes";
 import { JogoForm } from "@/components/jogos/JogoForm";
 import { EstadoErro } from "@/components/layout/EstadosUI";
 
+export const metadata: Metadata = { title: "Novo jogo" };
+
 export default async function NovoJogoPage() {
-  const resEscaloes = await listarEscaloes();
+  const [resEscaloes, resComp] = await Promise.all([listarEscaloes(), listarCompeticoes()]);
   if (!resEscaloes.sucesso) return <EstadoErro mensagem={resEscaloes.erro} />;
+  const competicoes = resComp.sucesso
+    ? resComp.dados.map((c) => ({ id: c.id, nome: c.nome, escalaoId: c.escalaoId }))
+    : [];
 
   return (
     <div className="space-y-6">
@@ -22,7 +29,7 @@ export default async function NovoJogoPage() {
 
       <h1>Novo jogo</h1>
 
-      <JogoForm escaloes={resEscaloes.dados} />
+      <JogoForm escaloes={resEscaloes.dados} competicoes={competicoes} />
     </div>
   );
 }

@@ -1,9 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { obterExercicio } from "@/lib/actions/exercicios";
 import { ExercicioForm } from "@/components/exercicios/ExercicioForm";
 import { ApagarExercicioButton } from "@/components/exercicios/ApagarExercicioButton";
+
+export const metadata: Metadata = { title: "Editar exercício" };
 
 export default async function EditarExercicioPage({
   params,

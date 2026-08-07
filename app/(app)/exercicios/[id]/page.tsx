@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, Pencil, Clock } from "lucide-react";
@@ -7,6 +8,8 @@ import { obterExercicio } from "@/lib/actions/exercicios";
 import { LABEL_CATEGORIA, diagramaSchema } from "@/lib/schemas/exercicio";
 import { CampoFutsal } from "@/components/campo/CampoFutsal";
 import { CampoAnimado } from "@/components/campo/CampoAnimado";
+
+export const metadata: Metadata = { title: "Detalhe do exercício" };
 
 export default async function DetalheExercicioPage({
   params,

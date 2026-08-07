@@ -1,5 +1,6 @@
+import type { Metadata } from "next";
 import Link from "next/link";
-import { Users, CalendarRange, BarChart2, BookOpen, UserCog, ShieldCheck, Palette, Tag } from "lucide-react";
+import { Users, CalendarRange, BarChart2, BookOpen, UserCog, ShieldCheck, Palette, Tag, CreditCard, Plug } from "lucide-react";
 
 const SECCOES = [
   { href: "/definicoes/clube", label: "Clube", descricao: "Nome, cores e logótipo do clube", icon: Palette },
@@ -10,7 +11,11 @@ const SECCOES = [
   { href: "/definicoes/subcategorias", label: "Subcategorias", descricao: "Classificação de exercícios customizável", icon: Tag },
   { href: "/definicoes/utilizadores", label: "Equipa técnica", descricao: "Treinadores do clube e atribuição a escalões", icon: UserCog },
   { href: "/definicoes/perfis", label: "Perfis", descricao: "Perfis de permissões (configuráveis)", icon: ShieldCheck },
+  { href: "/definicoes/licenca", label: "Licença", descricao: "Subscrição, carteira e histórico de movimentos", icon: CreditCard },
+  { href: "/definicoes/integracao", label: "Integrações", descricao: "Sincronização com o Google Calendar", icon: Plug },
 ];
+
+export const metadata: Metadata = { title: "Definições" };
 
 export default function DefinicoesPage() {
   return (

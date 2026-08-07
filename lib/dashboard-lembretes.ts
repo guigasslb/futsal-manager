@@ -1,0 +1,116 @@
+/**
+ * Lembretes in-app leves (F14 / secção 8.16) — funções PURAS.
+ *
+ * Sem entidade `Lembrete` (essa é a fase própria — §3.15/§8.19): aqui apenas
+ * derivamos avisos do dashboard a partir dos dados já existentes de sessões e
+ * jogos («há treino/jogo hoje»). Sem push, sem service worker.
+ *
+ * Módulo puro (sem Prisma/servidor) → testável e reutilizável no cliente.
+ */
+
+/** Forma mínima de um evento (sessão ou jogo) para os lembretes. */
+export interface EventoLite {
+  id: string;
+  data: Date;
+  escalaoNome: string;
+  local?: string | null;
+  adversario?: string | null;
+}
+
+export type TipoLembrete = "treino" | "jogo";
+
+export interface Lembrete {
+  id: string;
+  tipo: TipoLembrete;
+  /** Ex.: "Treino hoje às 19:00". */
+  titulo: string;
+  /** Ex.: "Sub-13 · Pavilhão Municipal". */
+  detalhe: string;
+  href: string;
+  /** O evento já decorreu (data anterior a "agora"), mas ainda é hoje. */
+  passou: boolean;
+}
+
+/** Verdadeiro se as duas datas caem no mesmo dia civil (hora local). */
+export function mesmoDia(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+/** Hora local no formato "HH:MM" (determinístico, sem depender de locale). */
+export function horaCurta(d: Date): string {
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+function detalheEvento(e: EventoLite, tipo: TipoLembrete): string {
+  const partes: string[] = [];
+  if (tipo === "jogo" && e.adversario) partes.push(`vs ${e.adversario}`);
+  partes.push(e.escalaoNome);
+  if (e.local) partes.push(e.local);
+  return partes.join(" · ");
+}
+
+/**
+ * Constrói a lista ordenada de lembretes de HOJE a partir das sessões e jogos
+ * do dia. Ordena por hora ascendente; eventos já decorridos ficam depois dos
+ * que ainda estão por vir (mas o mesmo horário mantém a ordem cronológica).
+ */
+export function construirLembretesHoje(
+  sessoes: EventoLite[],
+  jogos: EventoLite[],
+  agora: Date,
+): Lembrete[] {
+  const deSessao = sessoes
+    .filter((s) => mesmoDia(s.data, agora))
+    .map<Lembrete>((s) => ({
+      id: s.id,
+      tipo: "treino",
+      titulo: `Treino hoje às ${horaCurta(s.data)}`,
+      detalhe: detalheEvento(s, "treino"),
+      href: `/treinos/${s.id}`,
+      passou: s.data.getTime() < agora.getTime(),
+    }));
+
+  const deJogo = jogos
+    .filter((j) => mesmoDia(j.data, agora))
+    .map<Lembrete>((j) => ({
+      id: j.id,
+      tipo: "jogo",
+      titulo: `Jogo hoje às ${horaCurta(j.data)}`,
+      detalhe: detalheEvento(j, "jogo"),
+      href: `/jogos/${j.id}`,
+      passou: j.data.getTime() < agora.getTime(),
+    }));
+
+  return [...deSessao, ...deJogo].sort((a, b) => {
+    // Por vir antes de já decorrido; dentro do grupo, por hora ascendente.
+    if (a.passou !== b.passou) return a.passou ? 1 : -1;
+    const ta = extrairMinutos(a.titulo);
+    const tb = extrairMinutos(b.titulo);
+    return ta - tb;
+  });
+}
+
+/** Extrai "HH:MM" do título e converte em minutos (auxiliar de ordenação). */
+function extrairMinutos(titulo: string): number {
+  const m = /(\d{2}):(\d{2})/.exec(titulo);
+  if (!m) return 0;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
+/** Há pelo menos um evento hoje (para o indicador visual do cabeçalho). */
+export function temEventoHoje(
+  sessoes: EventoLite[],
+  jogos: EventoLite[],
+  agora: Date,
+): boolean {
+  return (
+    sessoes.some((s) => mesmoDia(s.data, agora)) ||
+    jogos.some((j) => mesmoDia(j.data, agora))
+  );
+}

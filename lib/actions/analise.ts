@@ -1,9 +1,34 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
+import { revalidatePath } from "next/cache";
+import { Prisma, type Posicao, type TipoEventoJogo, type TipoRelatorio, type TipoSessao } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { obterEpocaAtiva, obterClubeIdAtual } from "@/lib/epoca-context";
-import { podeLerEscalao } from "@/lib/permissoes";
-import { ok, erro, type Resultado } from "@/lib/utils";
+import {
+  obterMembroAtual,
+  podeLerEscalao,
+  podeLerAlgumEscalao,
+  escaloesLegiveis,
+  type ContextoMembro,
+} from "@/lib/permissoes";
+import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
+import {
+  agregarEstatisticas,
+  blocoParaMinutos,
+  type EstatisticasAgregadas,
+  type LinhaEstatistica,
+} from "@/lib/estatisticas";
+import {
+  analiticoAtletaSchema,
+  analiticoEscalaoSchema,
+  analiticoClubeSchema,
+  gerarRelatorioSchema,
+} from "@/lib/schemas/analise";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tipos partilhados com a UI
+// ─────────────────────────────────────────────────────────────────────────────
 
 export interface JogoDadosAtleta {
   data: string; // "YYYY-MM-DD"
@@ -22,6 +47,75 @@ export interface PresencaMensal {
   taxa: number; // 0–1
 }
 
+const MESES = [
+  "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
+  "Jul", "Ago", "Set", "Out", "Nov", "Dez",
+] as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers internos
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Época em contexto: a indicada (validada contra o clube) ou a ativa. */
+async function resolverEpoca(
+  clubeId: string,
+  epocaId?: string,
+): Promise<{ id: string; nome: string } | null> {
+  if (epocaId) {
+    return prisma.epoca.findFirst({
+      where: { id: epocaId, clubeId },
+      select: { id: true, nome: true },
+    });
+  }
+  const ativa = await obterEpocaAtiva();
+  return ativa ? { id: ativa.id, nome: ativa.nome } : null;
+}
+
+/** Autenticação + capacidade RELATORIOS_VER (secção 8.15 — pilar do produto). */
+async function exigirRelatorios(): Promise<
+  { ok: true; ctx: ContextoMembro } | { ok: false; erro: string }
+> {
+  const ctx = await obterMembroAtual();
+  if (!ctx) return { ok: false, erro: "Não autenticado" };
+  if (!ctx.capacidades.includes("RELATORIOS_VER"))
+    return { ok: false, erro: "Sem permissão" };
+  return { ok: true, ctx };
+}
+
+/**
+ * Agrupa presenças por mês (vista individual). Função interna pura:
+ * `total` = sessões do mês; `presentes` = sessões do mês onde o atleta esteve.
+ */
+function montarPresencasMensais(
+  sessoes: { id: string; data: Date }[],
+  presencaSessaoIds: Set<string>,
+): PresencaMensal[] {
+  const mesMap = new Map<string, { total: number; presentes: number; mesIdx: number }>();
+  for (const s of sessoes) {
+    const d = new Date(s.data);
+    const mesIdx = d.getMonth();
+    const key = `${d.getFullYear()}-${String(mesIdx + 1).padStart(2, "0")}`;
+    const atual = mesMap.get(key) ?? { total: 0, presentes: 0, mesIdx };
+    atual.total++;
+    if (presencaSessaoIds.has(s.id)) atual.presentes++;
+    mesMap.set(key, atual);
+  }
+  return [...mesMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, v]) => ({
+      mes: MESES[v.mesIdx],
+      total: v.total,
+      presentes: v.presentes,
+      taxa: v.total > 0 ? v.presentes / v.total : 0,
+    }));
+}
+
+const ESTADOS_PRESENTE = ["PRESENTE", "ATRASADO"] as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Séries simples do perfil do atleta (mantidas do MVP — sem exigir RELATORIOS_VER)
+// ─────────────────────────────────────────────────────────────────────────────
+
 export async function obterEvolucaoAtleta(
   atletaId: string,
 ): Promise<Resultado<JogoDadosAtleta[]>> {
@@ -31,11 +125,17 @@ export async function obterEvolucaoAtleta(
   if (!epoca) return erro("Nenhuma época ativa");
 
   const atleta = await prisma.atleta.findFirst({
-    where: { id: atletaId, escalao: { clubeId } },
-    select: { escalaoId: true },
+    where: { id: atletaId, clubeId },
+    select: {
+      participacoes: {
+        where: { epocaId: epoca.id, estado: "ATIVO" },
+        select: { escalaoId: true },
+      },
+    },
   });
   if (!atleta) return erro("Atleta não encontrado");
-  if (!(await podeLerEscalao(atleta.escalaoId))) return erro("Sem permissão neste escalão");
+  if (!(await podeLerAlgumEscalao(atleta.participacoes.map((p) => p.escalaoId))))
+    return erro("Sem permissão neste escalão");
 
   const estatisticas = await prisma.estatisticaAtleta.findMany({
     where: { atletaId, jogo: { epocaId: epoca.id } },
@@ -65,20 +165,29 @@ export async function obterPresencasMensal(
   if (!epoca) return erro("Nenhuma época ativa");
 
   const atleta = await prisma.atleta.findFirst({
-    where: { id: atletaId, escalao: { clubeId } },
-    select: { escalaoId: true, criadoEm: true, dataIngresso: true },
+    where: { id: atletaId, clubeId },
+    select: {
+      criadoEm: true,
+      dataIngresso: true,
+      participacoes: {
+        where: { epocaId: epoca.id, estado: "ATIVO" },
+        select: { escalaoId: true },
+      },
+    },
   });
   if (!atleta) return erro("Atleta não encontrado");
-  if (!(await podeLerEscalao(atleta.escalaoId))) return erro("Sem permissão neste escalão");
 
-  // Divisor da taxa de presença: sessões desde o ingresso (secção 22.3).
+  const escaloesAtivos = atleta.participacoes.map((p) => p.escalaoId);
+  if (!(await podeLerAlgumEscalao(escaloesAtivos)))
+    return erro("Sem permissão neste escalão");
+
   const ingresso = atleta.dataIngresso ?? atleta.criadoEm;
 
   const [sessoes, presencas] = await Promise.all([
     prisma.sessao.findMany({
       where: {
         epocaId: epoca.id,
-        escalaoId: atleta.escalaoId,
+        escalaoId: { in: escaloesAtivos },
         data: { gte: ingresso },
       },
       select: { id: true, data: true },
@@ -87,7 +196,7 @@ export async function obterPresencasMensal(
     prisma.presenca.findMany({
       where: {
         atletaId,
-        estado: { in: ["PRESENTE", "ATRASADO"] },
+        estado: { in: [...ESTADOS_PRESENTE] },
         sessao: { epocaId: epoca.id },
       },
       select: { sessaoId: true },
@@ -95,27 +204,841 @@ export async function obterPresencasMensal(
   ]);
 
   const presencasSet = new Set(presencas.map((p) => p.sessaoId));
-  const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-  const mesMap = new Map<string, { total: number; presentes: number; mesIdx: number }>();
+  return ok(montarPresencasMensais(sessoes, presencasSet));
+}
 
+// ─────────────────────────────────────────────────────────────────────────────
+// NÍVEL 1 — Analítico do atleta (secção 8.15 / 10.1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AnaliticoCaderneta {
+  total: number;
+  desbloqueadas: number;
+  emProgresso: number;
+}
+
+export interface ComparacaoEquipa {
+  /** Média de golos por atleta do escalão. */
+  golosMediaEquipa: number;
+  /** Taxa de presença média do escalão (presenças / (nAtletas × sessões)). */
+  taxaPresencaMediaEquipa: number;
+  /** Tempo de jogo médio por atleta (minutos, a partir dos blocos). */
+  tempoJogoMedioEquipa: number;
+}
+
+export interface AnaliticoAtleta {
+  atleta: { id: string; nome: string; posicoes: Posicao[]; eGR: boolean };
+  epoca: { id: string; nome: string };
+  /** Escalão de contexto; null quando é a vista conjunta (todas as participações). */
+  escalaoContexto: { id: string; nome: string } | null;
+  agregado: EstatisticasAgregadas;
+  presencasMensais: PresencaMensal[];
+  evolucaoJogos: JogoDadosAtleta[];
+  caderneta: AnaliticoCaderneta;
+  /** Comparação com a média da equipa; só disponível na vista de um escalão. */
+  comparacaoEquipa: ComparacaoEquipa | null;
+}
+
+export async function obterAnaliticoAtleta(
+  atletaId: string,
+  escalaoId?: string,
+  epocaId?: string,
+): Promise<Resultado<AnaliticoAtleta>> {
+  const parsed = analiticoAtletaSchema.safeParse({ atletaId, escalaoId, epocaId });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
+
+  const perm = await exigirRelatorios();
+  if (!perm.ok) return erro(perm.erro);
+  const clubeId = perm.ctx.clube.id;
+
+  const epoca = await resolverEpoca(clubeId, epocaId);
+  if (!epoca) return erro("Nenhuma época ativa");
+
+  const atleta = await prisma.atleta.findFirst({
+    where: { id: atletaId, clubeId },
+    select: {
+      id: true,
+      nome: true,
+      posicoes: true,
+      criadoEm: true,
+      dataIngresso: true,
+      participacoes: {
+        where: { epocaId: epoca.id, estado: "ATIVO" },
+        select: { escalaoId: true, escalao: { select: { nome: true } } },
+      },
+    },
+  });
+  if (!atleta) return erro("Atleta não encontrado");
+
+  const escaloesAtivos = atleta.participacoes.map((p) => p.escalaoId);
+  if (!(await podeLerAlgumEscalao(escaloesAtivos)))
+    return erro("Sem permissão neste escalão");
+
+  // Escalão de contexto: o pedido (tem de ser uma participação) ou vista conjunta.
+  let escaloesCtx: string[];
+  let escalaoContexto: { id: string; nome: string } | null;
+  if (escalaoId) {
+    const participacao = atleta.participacoes.find((p) => p.escalaoId === escalaoId);
+    if (!participacao)
+      return erro("O atleta não participa neste escalão nesta época");
+    if (!(await podeLerEscalao(escalaoId))) return erro("Sem permissão neste escalão");
+    escaloesCtx = [escalaoId];
+    escalaoContexto = { id: escalaoId, nome: participacao.escalao.nome };
+  } else {
+    escaloesCtx = escaloesAtivos;
+    escalaoContexto = null;
+  }
+
+  const eGR = atleta.posicoes.includes("GUARDA_REDES");
+  const ingresso = atleta.dataIngresso ?? atleta.criadoEm;
+  const filtroJogo = { epocaId: epoca.id, escalaoId: { in: escaloesCtx } };
+
+  const [jogosConvocado, estatisticas, sessoes, presencas, totalHabilidades, progressos] =
+    await Promise.all([
+      prisma.convocatoria.count({
+        where: { convocado: true, atletaId, jogo: filtroJogo },
+      }),
+      prisma.estatisticaAtleta.findMany({
+        where: { atletaId, jogo: filtroJogo },
+        select: {
+          utilizacao: true,
+          blocoTempo: true,
+          minutos: true,
+          golos: true,
+          assistencias: true,
+          defesas: true,
+          golosSofridosGR: true,
+          jogo: { select: { data: true, adversario: true } },
+        },
+        orderBy: { jogo: { data: "asc" } },
+      }),
+      prisma.sessao.findMany({
+        where: {
+          epocaId: epoca.id,
+          escalaoId: { in: escaloesCtx },
+          data: { gte: ingresso },
+        },
+        select: { id: true, data: true },
+        orderBy: { data: "asc" },
+      }),
+      prisma.presenca.findMany({
+        where: {
+          atletaId,
+          estado: { in: [...ESTADOS_PRESENTE] },
+          sessao: { epocaId: epoca.id },
+          escalaoId: { in: escaloesCtx },
+        },
+        select: { sessaoId: true },
+      }),
+      prisma.habilidade.count({ where: { clubeId } }),
+      prisma.progressoHabilidade.findMany({
+        where: { atletaId, epocaId: epoca.id },
+        select: { estado: true },
+      }),
+    ]);
+
+  const linhas: LinhaEstatistica[] = estatisticas.map((e) => ({
+    utilizacao: e.utilizacao,
+    blocoTempo: e.blocoTempo,
+    minutos: e.minutos,
+    golos: e.golos,
+    assistencias: e.assistencias,
+    defesas: e.defesas,
+    golosSofridosGR: e.golosSofridosGR,
+  }));
+
+  const presencasSet = new Set(presencas.map((p) => p.sessaoId));
+  const agregado = agregarEstatisticas({
+    eGR,
+    jogosConvocado,
+    sessoesTotais: sessoes.length,
+    presencas: presencas.length,
+    estatisticas: linhas,
+  });
+
+  const evolucaoJogos: JogoDadosAtleta[] = estatisticas.map((e) => ({
+    data: e.jogo.data.toISOString().slice(0, 10),
+    adversario: e.jogo.adversario,
+    golos: e.golos,
+    assistencias: e.assistencias,
+    defesas: e.defesas,
+    golosSofridosGR: e.golosSofridosGR,
+    utilizado: e.utilizacao !== "NAO_UTILIZADO",
+  }));
+
+  const caderneta: AnaliticoCaderneta = {
+    total: totalHabilidades,
+    desbloqueadas: progressos.filter((p) => p.estado === "DESBLOQUEADO").length,
+    emProgresso: progressos.filter((p) => p.estado === "EM_PROGRESSO").length,
+  };
+
+  const comparacaoEquipa =
+    escalaoContexto !== null
+      ? await calcularComparacaoEquipa(escalaoContexto.id, epoca.id)
+      : null;
+
+  return ok({
+    atleta: { id: atleta.id, nome: atleta.nome, posicoes: atleta.posicoes, eGR },
+    epoca,
+    escalaoContexto,
+    agregado,
+    presencasMensais: montarPresencasMensais(sessoes, presencasSet),
+    evolucaoJogos,
+    caderneta,
+    comparacaoEquipa,
+  });
+}
+
+/** Médias da equipa de um escalão, para comparação individual (secção 8.15). */
+async function calcularComparacaoEquipa(
+  escalaoId: string,
+  epocaId: string,
+): Promise<ComparacaoEquipa> {
+  const [nAtletas, sessoes, estatisticas, presencas] = await Promise.all([
+    prisma.atletaEscalao.count({
+      where: { escalaoId, epocaId, estado: "ATIVO", atleta: { ativo: true } },
+    }),
+    prisma.sessao.count({ where: { epocaId, escalaoId } }),
+    prisma.estatisticaAtleta.findMany({
+      where: { jogo: { epocaId, escalaoId } },
+      select: { golos: true, blocoTempo: true },
+    }),
+    prisma.presenca.count({
+      where: {
+        escalaoId,
+        estado: { in: [...ESTADOS_PRESENTE] },
+        sessao: { epocaId },
+      },
+    }),
+  ]);
+
+  const totalGolos = estatisticas.reduce((acc, e) => acc + e.golos, 0);
+  const totalTempo = estatisticas.reduce((acc, e) => acc + blocoParaMinutos(e.blocoTempo), 0);
+  const slots = nAtletas * sessoes;
+
+  return {
+    golosMediaEquipa: nAtletas > 0 ? totalGolos / nAtletas : 0,
+    taxaPresencaMediaEquipa: slots > 0 ? presencas / slots : 0,
+    tempoJogoMedioEquipa: nAtletas > 0 ? totalTempo / nAtletas : 0,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NÍVEL 2 — Analítico do escalão/equipa (secção 10.2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface RankingAtleta {
+  atletaId: string;
+  nome: string;
+  valor: number;
+}
+
+export interface UtilizacaoAtleta {
+  atletaId: string;
+  nome: string;
+  tempoJogoAcumulado: number;
+  jogosUtilizados: number;
+}
+
+export interface ResultadoJogoResumo {
+  jogoId: string;
+  data: string; // "YYYY-MM-DD"
+  adversario: string;
+  golosMarcados: number | null;
+  golosSofridos: number | null;
+  resultado: "V" | "E" | "D" | null;
+}
+
+export interface AnaliticoEscalao {
+  escalao: { id: string; nome: string };
+  epoca: { id: string; nome: string };
+  jogos: number;
+  vitorias: number;
+  empates: number;
+  derrotas: number;
+  golosMarcados: number;
+  golosSofridos: number;
+  golosMarcadosMedia: number;
+  golosSofridosMedia: number;
+  sessoes: number;
+  nAtletas: number;
+  taxaPresencaMedia: number;
+  marcadores: RankingAtleta[];
+  assistentes: RankingAtleta[];
+  maisUtilizados: UtilizacaoAtleta[];
+  eventosPorTipo: Record<TipoEventoJogo, number>;
+  presencaMensal: PresencaMensal[];
+  distribuicaoTipoTreino: Record<TipoSessao, number>;
+  resultados: ResultadoJogoResumo[];
+}
+
+function resultadoJogo(m: number | null, s: number | null): "V" | "E" | "D" | null {
+  if (m == null || s == null) return null;
+  if (m > s) return "V";
+  if (m < s) return "D";
+  return "E";
+}
+
+export async function obterAnaliticoEscalao(
+  escalaoId: string,
+  epocaId?: string,
+): Promise<Resultado<AnaliticoEscalao>> {
+  const parsed = analiticoEscalaoSchema.safeParse({ escalaoId, epocaId });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
+
+  const perm = await exigirRelatorios();
+  if (!perm.ok) return erro(perm.erro);
+  const clubeId = perm.ctx.clube.id;
+
+  const escalao = await prisma.escalao.findFirst({
+    where: { id: escalaoId, clubeId },
+    select: { id: true, nome: true },
+  });
+  if (!escalao) return erro("Escalão não encontrado");
+  if (!(await podeLerEscalao(escalaoId))) return erro("Sem permissão neste escalão");
+
+  const epoca = await resolverEpoca(clubeId, epocaId);
+  if (!epoca) return erro("Nenhuma época ativa");
+
+  const [jogos, sessoes, nAtletas, estatisticas, eventos, presencas] = await Promise.all([
+    prisma.jogo.findMany({
+      where: { epocaId: epoca.id, escalaoId },
+      select: { id: true, data: true, adversario: true, golosMarcados: true, golosSofridos: true },
+      orderBy: { data: "asc" },
+    }),
+    prisma.sessao.findMany({
+      where: { epocaId: epoca.id, escalaoId },
+      select: { id: true, data: true, tipoSessao: true },
+    }),
+    prisma.atletaEscalao.count({
+      where: { epocaId: epoca.id, escalaoId, estado: "ATIVO", atleta: { ativo: true } },
+    }),
+    prisma.estatisticaAtleta.findMany({
+      where: { jogo: { epocaId: epoca.id, escalaoId } },
+      select: {
+        atletaId: true,
+        golos: true,
+        assistencias: true,
+        blocoTempo: true,
+        utilizacao: true,
+        atleta: { select: { nome: true } },
+      },
+    }),
+    prisma.eventoJogo.findMany({
+      where: { jogo: { epocaId: epoca.id, escalaoId } },
+      select: { tipo: true },
+    }),
+    prisma.presenca.findMany({
+      where: {
+        escalaoId,
+        estado: { in: [...ESTADOS_PRESENTE] },
+        sessao: { epocaId: epoca.id },
+      },
+      select: { sessaoId: true },
+    }),
+  ]);
+
+  // Resultados V/E/D + golos.
+  let vitorias = 0;
+  let empates = 0;
+  let derrotas = 0;
+  let golosMarcados = 0;
+  let golosSofridos = 0;
+  const resultados: ResultadoJogoResumo[] = [];
+  for (const j of jogos) {
+    const r = resultadoJogo(j.golosMarcados, j.golosSofridos);
+    if (r === "V") vitorias++;
+    else if (r === "E") empates++;
+    else if (r === "D") derrotas++;
+    if (j.golosMarcados != null) golosMarcados += j.golosMarcados;
+    if (j.golosSofridos != null) golosSofridos += j.golosSofridos;
+    resultados.push({
+      jogoId: j.id,
+      data: j.data.toISOString().slice(0, 10),
+      adversario: j.adversario,
+      golosMarcados: j.golosMarcados,
+      golosSofridos: j.golosSofridos,
+      resultado: r,
+    });
+  }
+  const jogosComResultado = jogos.filter(
+    (j) => j.golosMarcados != null && j.golosSofridos != null,
+  ).length;
+
+  // Rankings + utilização (agregação por atletaId — evita fundir homónimos).
+  const golosMap = new Map<string, { nome: string; valor: number }>();
+  const assistMap = new Map<string, { nome: string; valor: number }>();
+  const utilMap = new Map<string, { nome: string; tempo: number; jogos: number }>();
+  for (const e of estatisticas) {
+    if (e.golos > 0) {
+      const a = golosMap.get(e.atletaId) ?? { nome: e.atleta.nome, valor: 0 };
+      a.valor += e.golos;
+      golosMap.set(e.atletaId, a);
+    }
+    if (e.assistencias > 0) {
+      const a = assistMap.get(e.atletaId) ?? { nome: e.atleta.nome, valor: 0 };
+      a.valor += e.assistencias;
+      assistMap.set(e.atletaId, a);
+    }
+    const u = utilMap.get(e.atletaId) ?? { nome: e.atleta.nome, tempo: 0, jogos: 0 };
+    u.tempo += blocoParaMinutos(e.blocoTempo);
+    if (e.utilizacao !== "NAO_UTILIZADO") u.jogos++;
+    utilMap.set(e.atletaId, u);
+  }
+  const marcadores: RankingAtleta[] = [...golosMap.entries()]
+    .map(([atletaId, v]) => ({ atletaId, nome: v.nome, valor: v.valor }))
+    .sort((a, b) => b.valor - a.valor)
+    .slice(0, 10);
+  const assistentes: RankingAtleta[] = [...assistMap.entries()]
+    .map(([atletaId, v]) => ({ atletaId, nome: v.nome, valor: v.valor }))
+    .sort((a, b) => b.valor - a.valor)
+    .slice(0, 10);
+  const maisUtilizados: UtilizacaoAtleta[] = [...utilMap.entries()]
+    .map(([atletaId, v]) => ({
+      atletaId,
+      nome: v.nome,
+      tempoJogoAcumulado: v.tempo,
+      jogosUtilizados: v.jogos,
+    }))
+    .sort((a, b) => b.tempoJogoAcumulado - a.tempoJogoAcumulado)
+    .slice(0, 10);
+
+  // Eventos por tipo (todas as chaves inicializadas a 0).
+  const eventosPorTipo = Object.fromEntries(
+    (Object.values(EVENTO_TIPOS) as TipoEventoJogo[]).map((t) => [t, 0]),
+  ) as Record<TipoEventoJogo, number>;
+  for (const ev of eventos) eventosPorTipo[ev.tipo]++;
+
+  // Distribuição de tipos de treino.
+  const distribuicaoTipoTreino = Object.fromEntries(
+    (Object.values(SESSAO_TIPOS) as TipoSessao[]).map((t) => [t, 0]),
+  ) as Record<TipoSessao, number>;
+  for (const s of sessoes) distribuicaoTipoTreino[s.tipoSessao]++;
+
+  // Assiduidade mensal da equipa: presentes / (nAtletas × sessões do mês).
+  const presencasSet = presencas.map((p) => p.sessaoId);
+  const presencasPorSessao = new Map<string, number>();
+  for (const id of presencasSet)
+    presencasPorSessao.set(id, (presencasPorSessao.get(id) ?? 0) + 1);
+  const mesEquipa = new Map<string, { sessoes: number; presentes: number; mesIdx: number }>();
   for (const s of sessoes) {
     const d = new Date(s.data);
     const mesIdx = d.getMonth();
     const key = `${d.getFullYear()}-${String(mesIdx + 1).padStart(2, "0")}`;
-    const atual = mesMap.get(key) ?? { total: 0, presentes: 0, mesIdx };
-    atual.total++;
-    if (presencasSet.has(s.id)) atual.presentes++;
-    mesMap.set(key, atual);
+    const atual = mesEquipa.get(key) ?? { sessoes: 0, presentes: 0, mesIdx };
+    atual.sessoes++;
+    atual.presentes += presencasPorSessao.get(s.id) ?? 0;
+    mesEquipa.set(key, atual);
+  }
+  const presencaMensal: PresencaMensal[] = [...mesEquipa.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, v]) => {
+      const total = v.sessoes * nAtletas;
+      return {
+        mes: MESES[v.mesIdx],
+        total,
+        presentes: v.presentes,
+        taxa: total > 0 ? v.presentes / total : 0,
+      };
+    });
+
+  const slots = nAtletas * sessoes.length;
+
+  return ok({
+    escalao,
+    epoca,
+    jogos: jogos.length,
+    vitorias,
+    empates,
+    derrotas,
+    golosMarcados,
+    golosSofridos,
+    golosMarcadosMedia: jogosComResultado > 0 ? golosMarcados / jogosComResultado : 0,
+    golosSofridosMedia: jogosComResultado > 0 ? golosSofridos / jogosComResultado : 0,
+    sessoes: sessoes.length,
+    nAtletas,
+    taxaPresencaMedia: slots > 0 ? presencas.length / slots : 0,
+    marcadores,
+    assistentes,
+    maisUtilizados,
+    eventosPorTipo,
+    presencaMensal,
+    distribuicaoTipoTreino,
+    resultados,
+  });
+}
+
+// Valores dos enums (Prisma gera os enums como objetos runtime).
+const EVENTO_TIPOS: Record<TipoEventoJogo, TipoEventoJogo> = {
+  GOLO: "GOLO",
+  ASSISTENCIA: "ASSISTENCIA",
+  FALTA: "FALTA",
+  CARTAO_AMARELO: "CARTAO_AMARELO",
+  CARTAO_VERMELHO: "CARTAO_VERMELHO",
+  SUBSTITUICAO: "SUBSTITUICAO",
+  DEFESA: "DEFESA",
+  GOLO_SOFRIDO: "GOLO_SOFRIDO",
+  TIMEOUT: "TIMEOUT",
+};
+
+const SESSAO_TIPOS: Record<TipoSessao, TipoSessao> = {
+  NORMAL: "NORMAL",
+  ABERTO: "ABERTO",
+  CAPTACAO: "CAPTACAO",
+  EVENTO: "EVENTO",
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NÍVEL 3 — Analítico do clube (transversal — secção 10.3)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface EscalaoResumoClube {
+  escalaoId: string;
+  nome: string;
+  nAtletas: number;
+  jogos: number;
+  vitorias: number;
+  empates: number;
+  derrotas: number;
+  golosMarcados: number;
+  golosSofridos: number;
+  sessoes: number;
+  taxaPresencaMedia: number;
+}
+
+export interface AnaliticoClubeEpoca {
+  clube: { id: string; nome: string };
+  epoca: { id: string; nome: string };
+  escaloes: EscalaoResumoClube[];
+  totais: {
+    nAtletas: number;
+    jogos: number;
+    vitorias: number;
+    empates: number;
+    derrotas: number;
+    golosMarcados: number;
+    golosSofridos: number;
+    sessoes: number;
+    taxaPresencaMediaGlobal: number;
+  };
+}
+
+export async function obterAnaliticoClubeEpoca(
+  epocaId?: string,
+): Promise<Resultado<AnaliticoClubeEpoca>> {
+  const parsed = analiticoClubeSchema.safeParse({ epocaId });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
+
+  const perm = await exigirRelatorios();
+  if (!perm.ok) return erro(perm.erro);
+  const clube = perm.ctx.clube;
+
+  const epoca = await resolverEpoca(clube.id, epocaId);
+  if (!epoca) return erro("Nenhuma época ativa");
+
+  // Escalões visíveis ao membro (Admin/DT = todos; treinador = os seus + visíveis).
+  const legiveis = await escaloesLegiveis();
+  const escaloes = await prisma.escalao.findMany({
+    where: {
+      clubeId: clube.id,
+      ...(legiveis === "TODOS" ? {} : { id: { in: legiveis } }),
+    },
+    select: { id: true, nome: true, ordem: true },
+    orderBy: [{ ordem: "asc" }, { nome: "asc" }],
+  });
+  if (escaloes.length === 0) return erro("Sem escalões visíveis");
+
+  const escalaoIds = escaloes.map((e) => e.id);
+  const filtroEpocaEscaloes = { epocaId: epoca.id, escalaoId: { in: escalaoIds } };
+
+  const [jogos, sessoes, participacoes, presencas] = await Promise.all([
+    prisma.jogo.findMany({
+      where: filtroEpocaEscaloes,
+      select: { escalaoId: true, golosMarcados: true, golosSofridos: true },
+    }),
+    prisma.sessao.findMany({
+      where: filtroEpocaEscaloes,
+      select: { escalaoId: true },
+    }),
+    prisma.atletaEscalao.groupBy({
+      by: ["escalaoId"],
+      where: {
+        epocaId: epoca.id,
+        escalaoId: { in: escalaoIds },
+        estado: "ATIVO",
+        atleta: { ativo: true },
+      },
+      _count: { _all: true },
+    }),
+    prisma.presenca.findMany({
+      where: {
+        escalaoId: { in: escalaoIds },
+        estado: { in: [...ESTADOS_PRESENTE] },
+        sessao: { epocaId: epoca.id },
+      },
+      select: { escalaoId: true },
+    }),
+  ]);
+
+  const nAtletasPorEscalao = new Map<string, number>(
+    participacoes.map((p) => [p.escalaoId, p._count._all]),
+  );
+  const sessoesPorEscalao = new Map<string, number>();
+  for (const s of sessoes)
+    sessoesPorEscalao.set(s.escalaoId, (sessoesPorEscalao.get(s.escalaoId) ?? 0) + 1);
+  const presencasPorEscalao = new Map<string, number>();
+  for (const p of presencas) {
+    if (!p.escalaoId) continue;
+    presencasPorEscalao.set(p.escalaoId, (presencasPorEscalao.get(p.escalaoId) ?? 0) + 1);
   }
 
-  return ok(
-    [...mesMap.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([, v]) => ({
-        mes: MESES[v.mesIdx],
-        total: v.total,
-        presentes: v.presentes,
-        taxa: v.total > 0 ? v.presentes / v.total : 0,
-      })),
+  interface Acc {
+    jogos: number;
+    vitorias: number;
+    empates: number;
+    derrotas: number;
+    golosMarcados: number;
+    golosSofridos: number;
+  }
+  const jogosPorEscalao = new Map<string, Acc>();
+  for (const j of jogos) {
+    const a =
+      jogosPorEscalao.get(j.escalaoId) ??
+      { jogos: 0, vitorias: 0, empates: 0, derrotas: 0, golosMarcados: 0, golosSofridos: 0 };
+    a.jogos++;
+    const r = resultadoJogo(j.golosMarcados, j.golosSofridos);
+    if (r === "V") a.vitorias++;
+    else if (r === "E") a.empates++;
+    else if (r === "D") a.derrotas++;
+    if (j.golosMarcados != null) a.golosMarcados += j.golosMarcados;
+    if (j.golosSofridos != null) a.golosSofridos += j.golosSofridos;
+    jogosPorEscalao.set(j.escalaoId, a);
+  }
+
+  const resumos: EscalaoResumoClube[] = escaloes.map((e) => {
+    const j = jogosPorEscalao.get(e.id);
+    const nAtletas = nAtletasPorEscalao.get(e.id) ?? 0;
+    const nSessoes = sessoesPorEscalao.get(e.id) ?? 0;
+    const nPresencas = presencasPorEscalao.get(e.id) ?? 0;
+    const slots = nAtletas * nSessoes;
+    return {
+      escalaoId: e.id,
+      nome: e.nome,
+      nAtletas,
+      jogos: j?.jogos ?? 0,
+      vitorias: j?.vitorias ?? 0,
+      empates: j?.empates ?? 0,
+      derrotas: j?.derrotas ?? 0,
+      golosMarcados: j?.golosMarcados ?? 0,
+      golosSofridos: j?.golosSofridos ?? 0,
+      sessoes: nSessoes,
+      taxaPresencaMedia: slots > 0 ? nPresencas / slots : 0,
+    };
+  });
+
+  const totais = resumos.reduce(
+    (acc, r) => {
+      acc.nAtletas += r.nAtletas;
+      acc.jogos += r.jogos;
+      acc.vitorias += r.vitorias;
+      acc.empates += r.empates;
+      acc.derrotas += r.derrotas;
+      acc.golosMarcados += r.golosMarcados;
+      acc.golosSofridos += r.golosSofridos;
+      acc.sessoes += r.sessoes;
+      return acc;
+    },
+    {
+      nAtletas: 0, jogos: 0, vitorias: 0, empates: 0, derrotas: 0,
+      golosMarcados: 0, golosSofridos: 0, sessoes: 0,
+    },
   );
+  const slotsGlobais = resumos.reduce((acc, r) => acc + r.nAtletas * r.sessoes, 0);
+  const presencasGlobais = [...presencasPorEscalao.values()].reduce((a, b) => a + b, 0);
+
+  return ok({
+    clube: { id: clube.id, nome: clube.nome },
+    epoca,
+    escaloes: resumos,
+    totais: {
+      ...totais,
+      taxaPresencaMediaGlobal: slotsGlobais > 0 ? presencasGlobais / slotsGlobais : 0,
+    },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Relatório de época partilhável (secção 3.10 / 10.6)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface RelatorioGerado {
+  id: string;
+  token: string;
+}
+
+export interface IdentidadeClube {
+  nome: string;
+  corPrimaria: string;
+  corSecundaria: string;
+  logoUrl: string | null;
+}
+
+/** Snapshot imutável guardado em `dadosSnapshot` (bíblia §10.6). */
+interface RelatorioSnapshot {
+  tipo: TipoRelatorio;
+  clube: IdentidadeClube;
+  epoca: { nome: string };
+  geradoEm: string; // ISO
+  dados: AnaliticoAtleta | AnaliticoEscalao | AnaliticoClubeEpoca;
+}
+
+export interface RelatorioPublico {
+  tipo: TipoRelatorio;
+  clube: IdentidadeClube;
+  epoca: { nome: string };
+  geradoEm: string;
+  dados: AnaliticoAtleta | AnaliticoEscalao | AnaliticoClubeEpoca;
+}
+
+export interface RelatorioResumo {
+  id: string;
+  token: string;
+  tipo: TipoRelatorio;
+  epocaId: string;
+  escalaoId: string | null;
+  atletaId: string | null;
+  expiraEm: Date | null;
+  criadoEm: Date;
+}
+
+const PATH_RELATORIOS = "/relatorios";
+
+function gerarToken(): string {
+  // 24 bytes → 32 chars base64url, não-adivinhável (bíblia §9 — token não-adivinhável).
+  return randomBytes(24).toString("base64url");
+}
+
+export async function gerarRelatorioPartilhado(
+  dados: unknown,
+): Promise<Resultado<RelatorioGerado>> {
+  const parsed = gerarRelatorioSchema.safeParse(dados);
+  if (!parsed.success) return erroDeValidacao(parsed.error);
+
+  const perm = await exigirRelatorios();
+  if (!perm.ok) return erro(perm.erro);
+  const clubeId = perm.ctx.clube.id;
+
+  const epoca = await resolverEpoca(clubeId, parsed.data.epocaId);
+  if (!epoca) return erro("Nenhuma época ativa");
+
+  // Constrói o snapshot chamando o analítico correspondente (reutiliza permissões).
+  let conteudo: AnaliticoAtleta | AnaliticoEscalao | AnaliticoClubeEpoca;
+  if (parsed.data.tipo === "EPOCA_ATLETA") {
+    const r = await obterAnaliticoAtleta(parsed.data.atletaId!, parsed.data.escalaoId, epoca.id);
+    if (!r.sucesso) return erro(r.erro, r.camposInvalidos);
+    conteudo = r.dados;
+  } else if (parsed.data.tipo === "EPOCA_EQUIPA") {
+    const r = await obterAnaliticoEscalao(parsed.data.escalaoId!, epoca.id);
+    if (!r.sucesso) return erro(r.erro, r.camposInvalidos);
+    conteudo = r.dados;
+  } else {
+    const r = await obterAnaliticoClubeEpoca(epoca.id);
+    if (!r.sucesso) return erro(r.erro, r.camposInvalidos);
+    conteudo = r.dados;
+  }
+
+  const clube = perm.ctx.clube;
+  const snapshot: RelatorioSnapshot = {
+    tipo: parsed.data.tipo,
+    clube: {
+      nome: clube.nome,
+      corPrimaria: clube.corPrimaria,
+      corSecundaria: clube.corSecundaria,
+      logoUrl: clube.logoUrl,
+    },
+    epoca: { nome: epoca.nome },
+    geradoEm: new Date().toISOString(),
+    dados: conteudo,
+  };
+
+  const registo = await prisma.relatorioPartilhado.create({
+    data: {
+      clubeId,
+      token: gerarToken(),
+      tipo: parsed.data.tipo,
+      epocaId: epoca.id,
+      escalaoId: parsed.data.escalaoId ?? null,
+      atletaId: parsed.data.atletaId ?? null,
+      dadosSnapshot: snapshot as unknown as Prisma.InputJsonValue,
+      expiraEm: parsed.data.expiraEm ?? null,
+      criadorId: perm.ctx.utilizadorId,
+    },
+    select: { id: true, token: true },
+  });
+
+  revalidatePath(PATH_RELATORIOS);
+  return ok(registo);
+}
+
+/**
+ * Leitura PÚBLICA de um relatório partilhado pelo token (sem autenticação).
+ * Devolve o snapshot imutável + identidade do clube. Respeita a expiração.
+ */
+export async function obterRelatorioPorToken(
+  token: string,
+): Promise<Resultado<RelatorioPublico>> {
+  if (!token || typeof token !== "string") return erro("Relatório não encontrado");
+
+  const registo = await prisma.relatorioPartilhado.findUnique({
+    where: { token },
+    select: { tipo: true, dadosSnapshot: true, expiraEm: true },
+  });
+  if (!registo || registo.dadosSnapshot == null) return erro("Relatório não encontrado");
+  if (registo.expiraEm && registo.expiraEm.getTime() < Date.now())
+    return erro("Este relatório expirou");
+
+  const snap = registo.dadosSnapshot as unknown as RelatorioSnapshot;
+  return ok({
+    tipo: registo.tipo,
+    clube: snap.clube,
+    epoca: snap.epoca,
+    geradoEm: snap.geradoEm,
+    dados: snap.dados,
+  });
+}
+
+export async function listarRelatoriosPartilhados(): Promise<Resultado<RelatorioResumo[]>> {
+  const perm = await exigirRelatorios();
+  if (!perm.ok) return erro(perm.erro);
+
+  const registos = await prisma.relatorioPartilhado.findMany({
+    where: { clubeId: perm.ctx.clube.id },
+    select: {
+      id: true,
+      token: true,
+      tipo: true,
+      epocaId: true,
+      escalaoId: true,
+      atletaId: true,
+      expiraEm: true,
+      criadoEm: true,
+    },
+    orderBy: { criadoEm: "desc" },
+  });
+  return ok(registos);
+}
+
+export async function revogarRelatorioPartilhado(id: string): Promise<Resultado<void>> {
+  const perm = await exigirRelatorios();
+  if (!perm.ok) return erro(perm.erro);
+
+  const registo = await prisma.relatorioPartilhado.findFirst({
+    where: { id, clubeId: perm.ctx.clube.id },
+    select: { id: true },
+  });
+  if (!registo) return erro("Relatório não encontrado");
+
+  await prisma.relatorioPartilhado.delete({ where: { id } });
+  revalidatePath(PATH_RELATORIOS);
+  return ok(undefined);
 }

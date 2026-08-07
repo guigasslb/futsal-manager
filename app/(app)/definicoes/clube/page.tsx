@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import { obterClubeAtivo } from "@/lib/permissoes";
 import { BrandingForm } from "@/components/definicoes/BrandingForm";
 import { EstadoErro } from "@/components/layout/EstadosUI";
+
+export const metadata: Metadata = { title: "Definições · Clube" };
 
 export default async function ClubePage() {
   const clube = await obterClubeAtivo();

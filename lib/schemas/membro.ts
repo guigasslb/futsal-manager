@@ -15,5 +15,13 @@ export const perfilSchema = z.object({
   capacidades: z.array(z.enum(CAPACIDADES)).default([]),
 });
 
+// Overrides de capacidades por membro sobre o perfil base (F0).
+export const definirOverridesSchema = z.object({
+  membroId: z.string().cuid("Membro inválido"),
+  extra: z.array(z.enum(CAPACIDADES)).default([]),
+  revogadas: z.array(z.enum(CAPACIDADES)).default([]),
+});
+
 export type ConvidarMembroInput = z.infer<typeof convidarMembroSchema>;
 export type PerfilInput = z.infer<typeof perfilSchema>;
+export type DefinirOverridesInput = z.infer<typeof definirOverridesSchema>;

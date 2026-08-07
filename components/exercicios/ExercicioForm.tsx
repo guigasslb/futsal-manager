@@ -20,20 +20,33 @@ import { listarSubcategorias } from "@/lib/actions/subcategorias";
 import {
   diagramaSchema,
   DIAGRAMA_VAZIO,
+  PARTES_TREINO,
+  LABEL_PARTE_TREINO,
   type DiagramaCampo,
+  type PropriedadeConteudoValor,
+  type ParteTreinoValor,
 } from "@/lib/schemas/exercicio";
 import {
   LABEL_CATEGORIA_PRINCIPAL,
   CATEGORIAS_PRINCIPAIS,
 } from "@/lib/schemas/subcategoria";
 import { EditorCampo } from "@/components/campo/EditorCampo";
+import { ToggleBiblioteca } from "@/components/exercicios/ToggleBiblioteca";
 import type { CategoriaExercicioPrincipal, Exercicio, SubcategoriaExercicio } from "@prisma/client";
 
 const SENTINEL_NONE = "__none__";
 
 type ExercicioParaEdicao = Pick<
   Exercicio,
-  "id" | "nome" | "descricao" | "objetivo" | "duracaoMin" | "categoriaPrincipal" | "subcategoriaId"
+  | "id"
+  | "nome"
+  | "descricao"
+  | "objetivo"
+  | "duracaoMin"
+  | "categoriaPrincipal"
+  | "subcategoriaId"
+  | "parteTreino"
+  | "escalaoAlvo"
 > & { diagrama?: unknown };
 
 function lerDiagrama(raw: unknown): DiagramaCampo {
@@ -52,7 +65,13 @@ export function ExercicioForm({ exercicio }: { exercicio?: ExercicioParaEdicao }
   const [subcategoriaId, setSubcategoriaId] = useState<string>(
     exercicio?.subcategoriaId ?? SENTINEL_NONE,
   );
+  const [parteTreino, setParteTreino] = useState<string>(
+    exercicio?.parteTreino ?? SENTINEL_NONE,
+  );
   const [subcategorias, setSubcategorias] = useState<SubcategoriaExercicio[]>([]);
+  // F3 (secção 4.2): a propriedade é decidida pelo treinador na criação.
+  // Na edição não se altera aqui — passa-se a clube pelo toggle de partilha.
+  const [proprietario, setProprietario] = useState<PropriedadeConteudoValor>("TREINADOR");
   const [diagrama, setDiagrama] = useState<DiagramaCampo>(() =>
     lerDiagrama(exercicio?.diagrama),
   );
@@ -95,6 +114,10 @@ export function ExercicioForm({ exercicio }: { exercicio?: ExercicioParaEdicao }
           ? (categoriaPrincipal as CategoriaExercicioPrincipal)
           : undefined,
       subcategoriaId: subcategoriaId !== SENTINEL_NONE ? subcategoriaId : null,
+      parteTreino:
+        parteTreino !== SENTINEL_NONE ? (parteTreino as ParteTreinoValor) : undefined,
+      escalaoAlvo: String(fd.get("escalaoAlvo") ?? "").trim() || undefined,
+      proprietario,
       diagrama,
     };
 
@@ -147,6 +170,13 @@ export function ExercicioForm({ exercicio }: { exercicio?: ExercicioParaEdicao }
         </div>
       </div>
 
+      {/* ── Biblioteca (só na criação — secção 4.2) ── */}
+      {!exercicio && (
+        <div className="max-w-lg">
+          <ToggleBiblioteca valor={proprietario} onChange={setProprietario} disabled={pending} />
+        </div>
+      )}
+
       {/* ── Classificação ── */}
       <fieldset className="max-w-lg space-y-4 rounded-lg border border-cinza-200 p-4">
         <legend className="px-1 text-corpo-sec text-cinza-600">Classificação</legend>
@@ -194,6 +224,39 @@ export function ExercicioForm({ exercicio }: { exercicio?: ExercicioParaEdicao }
                   ))}
                 </SelectContent>
               </Select>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label>Parte do treino</Label>
+            <Select value={parteTreino} onValueChange={setParteTreino}>
+              <SelectTrigger>
+                <SelectValue placeholder="— Não definida —" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SENTINEL_NONE}>— Não definida —</SelectItem>
+                {PARTES_TREINO.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {LABEL_PARTE_TREINO[p]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="escalaoAlvo">Escalão alvo</Label>
+            <Input
+              id="escalaoAlvo"
+              name="escalaoAlvo"
+              defaultValue={exercicio?.escalaoAlvo ?? ""}
+              maxLength={40}
+              placeholder="ex: Sub-15"
+            />
+            {erros.escalaoAlvo && (
+              <p className="text-legenda text-vermelho-600">{erros.escalaoAlvo}</p>
             )}
           </div>
         </div>

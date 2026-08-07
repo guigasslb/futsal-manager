@@ -15,7 +15,12 @@ export function InstalarBibliotecaButton({ variant = "outline" }: { variant?: "o
     startTransition(async () => {
       const res = await instalarBibliotecaArranque();
       if (res.sucesso) {
-        toast.success(`${res.dados.criados} exercícios instalados`);
+        // Idempotente: criados = 0 significa que já estava instalada.
+        toast.success(
+          res.dados.criados > 0
+            ? `${res.dados.criados} exercícios instalados`
+            : "A biblioteca de arranque já está instalada neste clube.",
+        );
         router.refresh();
       } else {
         toast.error(res.erro);

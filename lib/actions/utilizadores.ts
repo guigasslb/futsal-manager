@@ -4,13 +4,14 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
-import { obterMembroAtual, exigirCapacidade } from "@/lib/permissoes";
+import { obterMembroAtual, exigirCapacidade, capacidadesEfetivas } from "@/lib/permissoes";
+import type { Capacidade } from "@/lib/permissoes-catalogo";
 import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
 import { convidarMembroSchema } from "@/lib/schemas/membro";
 import { alterarPasswordSchema, passwordSchema } from "@/lib/schemas/utilizador";
 
 const BCRYPT_COST = 12;
-const PATH = "/definicoes/membros";
+const PATH = "/definicoes/utilizadores";
 
 export interface MembroLista {
   membroId: string;
@@ -21,6 +22,10 @@ export interface MembroLista {
   perfilNome: string;
   estado: string;
   escaloesAtribuidos: string[];
+  /** Capacidades do perfil base — necessárias para o editor de overrides (6.4). */
+  perfilCapacidades: string[];
+  capacidadesExtra: string[];
+  capacidadesRevogadas: string[];
 }
 
 export async function listarMembros(): Promise<Resultado<MembroLista[]>> {
@@ -31,7 +36,7 @@ export async function listarMembros(): Promise<Resultado<MembroLista[]>> {
     where: { clubeId: ctx.clube.id },
     include: {
       utilizador: { select: { id: true, nome: true, email: true } },
-      perfil: { select: { id: true, nome: true } },
+      perfil: { select: { id: true, nome: true, capacidades: true } },
       atribuicoes: { select: { escalaoId: true } },
     },
     orderBy: { utilizador: { nome: "asc" } },
@@ -47,6 +52,9 @@ export async function listarMembros(): Promise<Resultado<MembroLista[]>> {
       perfilNome: m.perfil.nome,
       estado: m.estado,
       escaloesAtribuidos: m.atribuicoes.map((a) => a.escalaoId),
+      perfilCapacidades: m.perfil.capacidades,
+      capacidadesExtra: m.capacidadesExtra,
+      capacidadesRevogadas: m.capacidadesRevogadas,
     })),
   );
 }
@@ -234,7 +242,8 @@ export async function alterarMinhaPassword(dados: unknown): Promise<Resultado<vo
   return ok(undefined);
 }
 
-// Admin = perfil com CLUBE_UTILIZADORES e CLUBE_PERFIS. Impede ficar sem admin (secção 6.7).
+// Admin = capacidades EFETIVAS (perfil + extra − revogadas) com CLUBE_UTILIZADORES
+// e CLUBE_PERFIS. Impede ficar sem admin (secção 6.7), considerando overrides (F0).
 async function ficariaSemAdmin(
   clubeId: string,
   membroIdAlvo: string,
@@ -245,14 +254,14 @@ async function ficariaSemAdmin(
     include: { perfil: { select: { id: true, capacidades: true } } },
   });
 
-  const eAdmin = (caps: string[]) =>
-    caps.includes("CLUBE_UTILIZADORES") && caps.includes("CLUBE_PERFIS");
+  const eAdmin = (caps: Set<Capacidade>) =>
+    caps.has("CLUBE_UTILIZADORES") && caps.has("CLUBE_PERFIS");
 
-  let novoCaps: string[] = [];
+  // Base do novo perfil a atribuir ao membro alvo (apenas em atribuirPerfilMembro).
+  let novaBase: string[] = [];
   if (novoPerfilId) {
-    const encontrado = membros.find((m) => m.perfil.id === novoPerfilId)?.perfil.capacidades;
-    novoCaps =
-      encontrado ??
+    novaBase =
+      membros.find((m) => m.perfil.id === novoPerfilId)?.perfil.capacidades ??
       (await prisma.perfil.findUnique({
         where: { id: novoPerfilId },
         select: { capacidades: true },
@@ -262,10 +271,16 @@ async function ficariaSemAdmin(
 
   const adminsRestantes = membros.filter((m) => {
     if (m.id === membroIdAlvo) {
+      // Remoção do membro: deixa de contar.
       if (novoPerfilId === null) return false;
-      return eAdmin(novoCaps);
+      // Troca de perfil: muda a base; os overrides do membro mantêm-se.
+      return eAdmin(
+        capacidadesEfetivas(novaBase, m.capacidadesExtra, m.capacidadesRevogadas),
+      );
     }
-    return eAdmin(m.perfil.capacidades);
+    return eAdmin(
+      capacidadesEfetivas(m.perfil.capacidades, m.capacidadesExtra, m.capacidadesRevogadas),
+    );
   });
 
   return adminsRestantes.length === 0;

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import {
   Plus,
@@ -8,9 +9,10 @@ import {
   UserPlus,
   CalendarPlus,
   ChevronRight,
-  Dumbbell,
   MapPin,
   ArrowRight,
+  CalendarClock,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
@@ -18,6 +20,11 @@ import { prisma } from "@/lib/db";
 import { obterEpocaAtiva, obterClubeIdAtual } from "@/lib/epoca-context";
 import { obterClubeAtivo, obterMembroAtual } from "@/lib/permissoes";
 import { EstadoVazio } from "@/components/layout/EstadosUI";
+import {
+  construirLembretesHoje,
+  type EventoLite,
+  type Lembrete,
+} from "@/lib/dashboard-lembretes";
 
 function dataLonga(data: Date): string {
   return new Date(data).toLocaleString("pt-PT", {
@@ -66,6 +73,8 @@ function MotivoCampo() {
   );
 }
 
+export const metadata: Metadata = { title: "Início" };
+
 export default async function DashboardPage() {
   const session = await auth();
   const clubeId = await obterClubeIdAtual();
@@ -90,7 +99,24 @@ export default async function DashboardPage() {
 
   const agora = new Date();
 
-  const [clube, proximaSessao, proximoJogo, nAtletas, nSessoes, nJogos] = await Promise.all([
+  // Janela do dia de hoje (para os lembretes in-app — F14 / §8.16).
+  const inicioDia = new Date(agora);
+  inicioDia.setHours(0, 0, 0, 0);
+  const fimDia = new Date(agora);
+  fimDia.setHours(23, 59, 59, 999);
+  const janelaHoje = { gte: inicioDia, lte: fimDia };
+
+  const [
+    clube,
+    proximaSessao,
+    proximoJogo,
+    nAtletas,
+    nSessoes,
+    nJogos,
+    sessoesHoje,
+    jogosHoje,
+    escaloesContagem,
+  ] = await Promise.all([
     obterClubeAtivo(),
     prisma.sessao.findFirst({
       where: { epocaId: epoca.id, escalao: { clubeId }, data: { gte: agora } },
@@ -102,10 +128,70 @@ export default async function DashboardPage() {
       include: { escalao: { select: { nome: true } } },
       orderBy: { data: "asc" },
     }),
-    prisma.atleta.count({ where: { epocaId: epoca.id, ativo: true, escalao: { clubeId } } }),
+    // F1: atletas do clube com participação ativa na época.
+    prisma.atleta.count({
+      where: {
+        clubeId,
+        ativo: true,
+        participacoes: { some: { epocaId: epoca.id, estado: "ATIVO" } },
+      },
+    }),
     prisma.sessao.count({ where: { epocaId: epoca.id, escalao: { clubeId } } }),
     prisma.jogo.count({ where: { epocaId: epoca.id, escalao: { clubeId } } }),
+    // Eventos de HOJE (para os lembretes) — sessões e jogos do clube na época.
+    prisma.sessao.findMany({
+      where: { epocaId: epoca.id, escalao: { clubeId }, data: janelaHoje },
+      select: { id: true, data: true, local: true, escalao: { select: { nome: true } } },
+      orderBy: { data: "asc" },
+    }),
+    prisma.jogo.findMany({
+      where: { epocaId: epoca.id, escalao: { clubeId }, data: janelaHoje },
+      select: {
+        id: true,
+        data: true,
+        local: true,
+        adversario: true,
+        escalao: { select: { nome: true } },
+      },
+      orderBy: { data: "asc" },
+    }),
+    // Atletas ativos por escalão (contador — F14 / §8.16).
+    prisma.escalao.findMany({
+      where: { clubeId },
+      select: {
+        id: true,
+        nome: true,
+        _count: {
+          select: {
+            participacoes: { where: { epocaId: epoca.id, estado: "ATIVO" } },
+          },
+        },
+      },
+      orderBy: { ordem: "asc" },
+    }),
   ]);
+
+  // Lembretes in-app: treino/jogo hoje (usa os dados existentes; sem push).
+  const sessoesHojeLite: EventoLite[] = sessoesHoje.map((s) => ({
+    id: s.id,
+    data: s.data,
+    escalaoNome: s.escalao.nome,
+    local: s.local,
+  }));
+  const jogosHojeLite: EventoLite[] = jogosHoje.map((j) => ({
+    id: j.id,
+    data: j.data,
+    escalaoNome: j.escalao.nome,
+    local: j.local,
+    adversario: j.adversario,
+  }));
+  const lembretes = construirLembretesHoje(sessoesHojeLite, jogosHojeLite, agora);
+
+  // Época "nova" (sem qualquer dado) → empty state motivacional.
+  const epocaVazia = nAtletas === 0 && nSessoes === 0 && nJogos === 0;
+
+  // Escalões com atletas (para o contador por escalão).
+  const escaloesComAtletas = escaloesContagem.filter((e) => e._count.participacoes > 0);
 
   // Qual evento é o mais próximo → vai para o herói; o outro fica como secundário.
   const sessaoT = proximaSessao ? new Date(proximaSessao.data).getTime() : Infinity;
@@ -141,6 +227,16 @@ export default async function DashboardPage() {
         </p>
       </div>
 
+      {/* Lembretes de hoje (treino/jogo) — F14 / §8.16 */}
+      {lembretes.length > 0 && <LembretesBanner lembretes={lembretes} />}
+
+      {/* Plantel vazio → atalho para a vitória rápida (F10 / §8.1) */}
+      {nAtletas === 0 && <BannerVitoriaRapida />}
+
+      {epocaVazia ? (
+        <EstadoVazioEpoca />
+      ) : (
+        <>
       {/* Herói + secundário */}
       <div className="grid gap-5 lg:grid-cols-3">
         {/* Cartão-herói: próximo evento mais próximo */}
@@ -155,9 +251,15 @@ export default async function DashboardPage() {
                 <p className="mt-3 text-[26px] font-bold leading-tight">
                   vs {proximoJogo.adversario}
                 </p>
-                <p className="mt-1 text-corpo text-white/85">
-                  {dataLonga(proximoJogo.data)} · {proximoJogo.escalao.nome} ·{" "}
-                  {proximoJogo.casaFora === "CASA" ? "Casa" : "Fora"}
+                <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-corpo text-white/85">
+                  <span className="capitalize">{dataLonga(proximoJogo.data)}</span>
+                  <span>{proximoJogo.escalao.nome}</span>
+                  <span>{proximoJogo.casaFora === "CASA" ? "Casa" : "Fora"}</span>
+                  {proximoJogo.local && (
+                    <span className="inline-flex items-center gap-1">
+                      <MapPin className="h-3.5 w-3.5" /> {proximoJogo.local}
+                    </span>
+                  )}
                 </p>
                 <div className="mt-6 flex flex-wrap gap-2">
                   <Link href={`/jogos/${proximoJogo.id}`} className="hero-btn-solid">
@@ -258,15 +360,49 @@ export default async function DashboardPage() {
         </div>
       </div>
 
+      {/* Atletas por escalão (contador) — F14 / §8.16 */}
+      {escaloesComAtletas.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-legenda font-semibold uppercase tracking-wide text-cinza-400">
+            Atletas por escalão
+          </p>
+          <div className="animar-cascata grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {escaloesComAtletas.map((e) => (
+              <Link
+                key={e.id}
+                href="/plantel"
+                className="card-base card-hover group flex items-center gap-3 p-4"
+              >
+                <span className="chip-clube flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl">
+                  <Users className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-corpo font-semibold text-cinza-900">{e.nome}</p>
+                  <p className="text-legenda text-cinza-500">
+                    <span className="tabular-nums font-semibold text-cinza-700">
+                      {e._count.participacoes}
+                    </span>{" "}
+                    {e._count.participacoes === 1 ? "atleta" : "atletas"}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+        </>
+      )}
+
       {/* Ações rápidas */}
       <div className="space-y-3">
         <p className="text-legenda font-semibold uppercase tracking-wide text-cinza-400">
           Ações rápidas
         </p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="animar-cascata grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <AcaoRapida href="/treinos/novo" icon={CalendarPlus} titulo="Nova sessão" desc="Planear um treino" />
           <AcaoRapida href="/jogos/novo" icon={Trophy} titulo="Novo jogo" desc="Registar um jogo" />
           <AcaoRapida href="/plantel/novo" icon={UserPlus} titulo="Novo atleta" desc="Adicionar ao plantel" />
+          <AcaoRapida href="/plantel" icon={Users} titulo="Ver plantel" desc="Consultar atletas" />
         </div>
       </div>
     </div>
@@ -314,6 +450,105 @@ function MiniStat({ valor, label }: { valor: number; label: string }) {
     <div>
       <p className="text-[22px] font-bold leading-none tabular-nums text-cinza-900">{valor}</p>
       <p className="mt-1 text-legenda text-cinza-500">{label}</p>
+    </div>
+  );
+}
+
+/** Banner de lembretes de hoje (treino/jogo) — F14 / §8.16. */
+function LembretesBanner({ lembretes }: { lembretes: Lembrete[] }) {
+  return (
+    <div
+      className="animar-entrada rounded-xl border border-ambar-500/40 bg-ambar-500/10 p-4"
+      role="status"
+    >
+      <div className="mb-2 flex items-center gap-2">
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-ambar-500/20 text-ambar-600">
+          <CalendarClock className="h-4 w-4" />
+        </span>
+        <p className="text-corpo-sec font-semibold text-cinza-900">
+          {lembretes.length === 1 ? "Tens 1 evento hoje" : `Tens ${lembretes.length} eventos hoje`}
+        </p>
+      </div>
+      <ul className="animar-cascata space-y-1.5">
+        {lembretes.map((l) => (
+          <li key={`${l.tipo}-${l.id}`}>
+            <Link
+              href={l.href}
+              className="group flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-ambar-500/10"
+            >
+              {l.tipo === "jogo" ? (
+                <Trophy className="h-4 w-4 flex-shrink-0 text-cinza-500" />
+              ) : (
+                <Calendar className="h-4 w-4 flex-shrink-0 text-cinza-500" />
+              )}
+              <span
+                className={
+                  l.passou
+                    ? "text-corpo-sec text-cinza-500 line-through"
+                    : "text-corpo-sec font-medium text-cinza-900"
+                }
+              >
+                {l.titulo}
+              </span>
+              <span className="truncate text-legenda text-cinza-500">· {l.detalhe}</span>
+              <ChevronRight className="ml-auto h-4 w-4 flex-shrink-0 text-cinza-300 transition-transform group-hover:translate-x-0.5" />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Atalho para o percurso de vitória rápida quando o plantel está vazio — F10 / §8.1. */
+function BannerVitoriaRapida() {
+  return (
+    <div
+      className="animar-entrada flex flex-col gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center"
+      role="status"
+    >
+      <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <Sparkles className="h-5 w-5" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-corpo font-semibold text-cinza-900">Começa em 10 minutos</p>
+        <p className="text-legenda text-cinza-500">
+          Monta o plantel em massa, agenda o primeiro treino e gera a primeira
+          convocatória — tudo num só sítio.
+        </p>
+      </div>
+      <Button asChild className="sm:flex-shrink-0">
+        <Link href="/vitoria-rapida">
+          Começar <ArrowRight className="ml-1 h-4 w-4" />
+        </Link>
+      </Button>
+    </div>
+  );
+}
+
+/** Estado vazio motivacional para época sem qualquer dado — F14 / §12.0/13.1. */
+function EstadoVazioEpoca() {
+  return (
+    <div className="hero-card flex flex-col items-center p-8 text-center sm:p-10">
+      <MotivoCampo />
+      <div className="relative flex flex-col items-center">
+        <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15">
+          <Sparkles className="h-7 w-7" />
+        </span>
+        <p className="text-[22px] font-bold leading-tight">A época está pronta a arrancar</p>
+        <p className="mt-1 max-w-md text-corpo text-white/85">
+          Ainda não há atletas, treinos ou jogos. Começa por montar o plantel e agendar o
+          primeiro treino — o resto do dashboard preenche-se sozinho com o uso.
+        </p>
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
+          <Link href="/plantel/novo" className="hero-btn-solid">
+            <UserPlus className="h-4 w-4" /> Adicionar atleta
+          </Link>
+          <Link href="/treinos/novo" className="hero-btn">
+            Agendar treino <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

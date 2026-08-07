@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { obterEpocaAtiva, obterClubeIdAtual } from "@/lib/epoca-context";
-import { exigirCapacidade, podeLerEscalao } from "@/lib/permissoes";
+import { exigirCapacidadeEmAlgumEscalao, podeLerAlgumEscalao } from "@/lib/permissoes";
 import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
 import { atualizarProgressoSchema } from "@/lib/schemas/caderneta";
 import type { EstadoHabilidade, Habilidade, ProgressoHabilidade } from "@prisma/client";
@@ -23,12 +23,20 @@ export async function obterCadernetaAtleta(
   const epoca = await obterEpocaAtiva();
   if (!epoca) return erro("Nenhuma época ativa");
 
+  // F1: permissão pelas participações ativas do atleta na época.
   const atleta = await prisma.atleta.findFirst({
-    where: { id: atletaId, escalao: { clubeId } },
-    select: { id: true, escalaoId: true },
+    where: { id: atletaId, clubeId },
+    select: {
+      id: true,
+      participacoes: {
+        where: { epocaId: epoca.id, estado: "ATIVO" },
+        select: { escalaoId: true },
+      },
+    },
   });
   if (!atleta) return erro("Atleta não encontrado");
-  if (!(await podeLerEscalao(atleta.escalaoId))) return erro("Sem permissão neste escalão");
+  if (!(await podeLerAlgumEscalao(atleta.participacoes.map((p) => p.escalaoId))))
+    return erro("Sem permissão neste escalão");
 
   const [habilidades, progressos] = await Promise.all([
     prisma.habilidade.findMany({
@@ -73,13 +81,25 @@ export async function atualizarProgresso(
   if (!epoca) return erro("Nenhuma época ativa");
 
   const [atleta, habilidade] = await Promise.all([
-    prisma.atleta.findFirst({ where: { id: atletaId, escalao: { clubeId } }, select: { id: true, escalaoId: true } }),
+    prisma.atleta.findFirst({
+      where: { id: atletaId, clubeId },
+      select: {
+        id: true,
+        participacoes: {
+          where: { epocaId: epoca.id, estado: "ATIVO" },
+          select: { escalaoId: true },
+        },
+      },
+    }),
     prisma.habilidade.findFirst({ where: { id: habilidadeId, clubeId }, select: { id: true } }),
   ]);
   if (!atleta) return erro("Atleta não encontrado");
   if (!habilidade) return erro("Habilidade não encontrada");
 
-  const perm = await exigirCapacidade("CADERNETA_GERIR", atleta.escalaoId);
+  const perm = await exigirCapacidadeEmAlgumEscalao(
+    "CADERNETA_GERIR",
+    atleta.participacoes.map((p) => p.escalaoId),
+  );
   if (!perm.ok) return erro(perm.erro);
 
   // DESBLOQUEADO regista data; voltar atrás limpa (secção 12.7)

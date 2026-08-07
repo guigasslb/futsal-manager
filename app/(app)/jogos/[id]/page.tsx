@@ -1,14 +1,17 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, Pencil, Home, Plane, Video } from "lucide-react";
+import { Pencil, Home, Plane, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
 import { obterJogo } from "@/lib/actions/jogos";
 import { listarAtletas } from "@/lib/actions/atletas";
 import { listarMetricas } from "@/lib/actions/metricas";
 import { prisma } from "@/lib/db";
+import { obterMembroAtual } from "@/lib/permissoes";
 import { JogoDetalhe } from "@/components/jogos/JogoDetalhe";
-import { RegistoAoVivo } from "@/components/jogos/RegistoAoVivo";
 import { ApagarJogoButton } from "@/components/jogos/ApagarJogoButton";
+import { ConvocatoriaWhatsApp } from "@/components/jogos/ConvocatoriaWhatsApp";
 import { LABEL_CASA_FORA } from "@/lib/schemas/jogo";
 
 function formatarData(data: Date): string {
@@ -18,6 +21,8 @@ function formatarData(data: Date): string {
     month: "long",
   });
 }
+
+export const metadata: Metadata = { title: "Detalhe do jogo" };
 
 export default async function DetalheJogoPage({
   params,
@@ -29,12 +34,14 @@ export default async function DetalheJogoPage({
   if (!res.sucesso) notFound();
 
   const j = res.dados;
-  const [resAtletas, resMetricas] = await Promise.all([
+  const [resAtletas, resMetricas, membro] = await Promise.all([
     listarAtletas(j.escalaoId),
     listarMetricas(true),
+    obterMembroAtual(),
   ]);
   const atletas = resAtletas.sucesso ? resAtletas.dados : [];
   const metricasAtivas = resMetricas.sucesso ? resMetricas.dados : [];
+  const podeComunicar = membro?.capacidades.includes("COMUNICACOES_GERIR") ?? false;
 
   // Métricas a mostrar: ativas + as que já têm valores neste jogo (histórico, secção 22.1)
   const idsComValor = new Set(
@@ -57,6 +64,7 @@ export default async function DetalheJogoPage({
       {
         atletaId: e.atletaId,
         utilizacao: e.utilizacao,
+        blocoTempo: e.blocoTempo,
         minutos: e.minutos,
         golos: e.golos,
         assistencias: e.assistencias,
@@ -70,20 +78,40 @@ export default async function DetalheJogoPage({
     ]),
   );
 
+  // F5 (M15): plano de dia de jogo por convocado (posição/titularidade prevista).
+  const planoInicial = Object.fromEntries(
+    j.convocatorias
+      .filter((c) => c.convocado)
+      .map((c) => [
+        c.atletaId,
+        { posicaoPrevista: c.posicaoPrevista, titularPrevisto: c.titularPrevisto },
+      ]),
+  );
+
+  const eventos = j.eventos.map((e) => ({
+    id: e.id,
+    parte: e.parte,
+    minuto: e.minuto,
+    tipo: e.tipo,
+    bloco: e.bloco,
+    atletaId: e.atletaId,
+    atletaSecundarioId: e.atletaSecundarioId,
+  }));
+
   const temResultado = j.golosMarcados != null && j.golosSofridos != null;
 
   return (
     <div className="space-y-6">
       {/* Navegação */}
       <div className="flex items-center justify-between">
-        <Link
-          href="/jogos"
-          className="flex items-center gap-1 text-corpo-sec text-cinza-600 hover:text-cinza-900 transition-colors"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Jogos
-        </Link>
-        <div className="flex gap-2">
+        <Breadcrumbs
+          items={[
+            { label: "Jogos", href: "/jogos" },
+            { label: `vs ${j.adversario}` },
+          ]}
+        />
+        <div className="flex flex-wrap gap-2">
+          {podeComunicar && <ConvocatoriaWhatsApp jogoId={j.id} />}
           <Button asChild variant="outline">
             <Link href={`/jogos/${j.id}/editar`}>
               <Pencil className="h-4 w-4" />
@@ -137,8 +165,10 @@ export default async function DetalheJogoPage({
         atletas={atletas.map((a) => ({
           id: a.id,
           nome: a.nome,
-          numero: a.numero,
+          // Número da participação neste escalão (F1).
+          numero: a.participacaoContexto?.numero ?? j.numeroPorAtleta[a.id] ?? null,
           eGR: a.posicoes.includes("GUARDA_REDES"),
+          posicoes: a.posicoes,
         }))}
         metricas={metricas.map((m) => ({
           id: m.id,
@@ -150,20 +180,11 @@ export default async function DetalheJogoPage({
         estatisticasIniciais={estatisticasIniciais}
         relatorioInicial={j.relatorio ?? ""}
         golosMarcados={j.golosMarcados}
-      />
-
-      <RegistoAoVivo
-        jogoId={j.id}
-        eventos={j.eventos.map((e) => ({
-          id: e.id,
-          parte: e.parte,
-          minuto: e.minuto,
-          tipo: e.tipo,
-          atletaId: e.atletaId,
-        }))}
-        atletas={atletas
-          .filter((a) => convocadosIniciais.includes(a.id))
-          .map((a) => ({ id: a.id, nome: a.nome, numero: a.numero }))}
+        planoInicial={planoInicial}
+        eventos={eventos}
+        observacoes={j.observacoes}
+        casaFora={j.casaFora}
+        adversario={j.adversario}
       />
     </div>
   );

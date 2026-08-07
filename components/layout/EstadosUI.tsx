@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 // ─── Loading ──────────────────────────────────────────────────────────────────
 
 export function SkeletonLinha({ className }: { className?: string }) {
-  return <div className={cn("h-5 animate-pulse rounded bg-cinza-200", className)} />;
+  return <div className={cn("skeleton-shimmer h-5 rounded bg-cinza-200", className)} />;
 }
 
 export function SkeletonCartao({ className }: { className?: string }) {
@@ -28,7 +28,7 @@ export function SkeletonLista({ linhas = 4 }: { linhas?: number }) {
           key={i}
           className="flex items-center gap-3 rounded-md border border-cinza-200 bg-white p-4"
         >
-          <div className="h-10 w-10 animate-pulse rounded-full bg-cinza-200" />
+          <div className="skeleton-shimmer h-10 w-10 rounded-full bg-cinza-200" />
           <div className="flex-1 space-y-2">
             <SkeletonLinha className="h-4 w-40" />
             <SkeletonLinha className="h-3 w-24" />

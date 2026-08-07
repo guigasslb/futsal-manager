@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus, Home, Plane, ClipboardList, Trophy, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,8 @@ function formatarData(data: Date): string {
     month: "short",
   });
 }
+
+export const metadata: Metadata = { title: "Jogos" };
 
 export default async function JogosPage({
   searchParams,

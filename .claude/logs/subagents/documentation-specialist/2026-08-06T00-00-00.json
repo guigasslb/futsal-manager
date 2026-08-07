@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-08-06T00:00:00Z",
+  "subagent": "documentation-specialist",
+  "task": "Actualizar changelog (secção 19) da bíblia com a entrada F1 M2 — migração expand f1a_atletaescalao_expand",
+  "tools_used": ["Grep", "Read", "Edit", "Write"],
+  "documents_created": [
+    "docs/FutsalManager_Spec_v6.md (secção 19 — nova entrada 2026-08-06)"
+  ],
+  "result": "success",
+  "documentation_type": "Technical",
+  "user": "claude-code@irn.pt"
+}

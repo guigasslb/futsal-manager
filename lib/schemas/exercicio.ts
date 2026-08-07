@@ -14,6 +14,8 @@ const jogadorSchema = z.object({
   numero: z.number().int().optional(),
   cor: corJogadorSchema,
   posicao: z.enum(["GR", "fixo", "ala", "pivo"]).optional(),
+  // Equipa a que o jogador pertence (opcional; convenção da secção 11.3).
+  equipa: z.enum(["propria", "adversario", "neutro"]).optional(),
 });
 
 const bolaSchema = z.object({
@@ -103,6 +105,50 @@ export type DiagramaCampo = z.infer<typeof diagramaSchema>;
 
 export const DIAGRAMA_VAZIO: DiagramaCampo = { versao: 1, elementos: [] };
 
+// Diagrama vazio no formato v2 (base + passos). O editor grava sempre v2.
+export const DIAGRAMA_VAZIO_V2: DiagramaCampo = { versao: 2, elementos: [], passos: [] };
+
+// ─── Bibliotecas 🎒 pessoal / 🏛️ clube (secções 3.3 e 4.2) ──────────────────
+
+/** Parte do treino onde o exercício se aplica (secção 3.3). */
+export const PARTES_TREINO = [
+  "AQUECIMENTO",
+  "PRINCIPAL",
+  "JOGO_REDUZIDO",
+  "RETORNO_CALMA",
+] as const;
+
+export type ParteTreinoValor = (typeof PARTES_TREINO)[number];
+
+export const LABEL_PARTE_TREINO: Record<ParteTreinoValor, string> = {
+  AQUECIMENTO: "Aquecimento",
+  PRINCIPAL: "Parte principal",
+  JOGO_REDUZIDO: "Jogo reduzido",
+  RETORNO_CALMA: "Retorno à calma",
+};
+
+/**
+ * Propriedade do conteúdo metodológico. Decidida pelo treinador no momento da
+ * criação (toggle), NÃO por quem paga a licença — secção 4.2 (decisão definitiva).
+ */
+export const PROPRIEDADES_CONTEUDO = ["TREINADOR", "CLUBE"] as const;
+
+export type PropriedadeConteudoValor = (typeof PROPRIEDADES_CONTEUDO)[number];
+
+export const LABEL_PROPRIEDADE_CONTEUDO: Record<PropriedadeConteudoValor, string> = {
+  TREINADOR: "Biblioteca pessoal",
+  CLUBE: "Biblioteca do clube",
+};
+
+/** Fase da época de um template de sessão (secção 3.4). */
+export const FASES_EPOCA = ["PREPARATORIO", "COMPETITIVO", "TRANSICAO"] as const;
+
+export const LABEL_FASE_EPOCA: Record<(typeof FASES_EPOCA)[number], string> = {
+  PREPARATORIO: "Preparatório",
+  COMPETITIVO: "Competitivo",
+  TRANSICAO: "Transição",
+};
+
 export const exercicioSchema = z.object({
   nome: z.string().min(1, "O nome é obrigatório").max(100),
   descricao: z.string().max(2000).optional(),
@@ -117,10 +163,67 @@ export const exercicioSchema = z.object({
     .enum(["ATAQUE", "DEFESA", "TRANSICAO", "BOLAS_PARADAS", "FISICO", "GUARDA_REDES", "OUTRO"])
     .optional(),
   subcategoriaId: z.string().cuid().nullable().optional(),
+  // F3: organização da biblioteca (secção 3.3).
+  parteTreino: z.enum(PARTES_TREINO).optional(),
+  escalaoAlvo: z.string().max(40, "Máximo 40 caracteres").optional(),
+  // F3: toggle pessoal (default) vs clube na criação (secção 4.2).
+  proprietario: z.enum(PROPRIEDADES_CONTEUDO).default("TREINADOR"),
   diagrama: diagramaSchema.optional(),
 });
 
 export type ExercicioInput = z.infer<typeof exercicioSchema>;
+
+/** Toggle explícito de contribuição de um exercício pessoal para a biblioteca do clube. */
+export const partilharExercicioSchema = z.object({
+  exercicioId: z.string().cuid("Exercício inválido"),
+});
+
+export type PartilharExercicioInput = z.infer<typeof partilharExercicioSchema>;
+
+// ─── Templates de sessão (secção 3.4) ───────────────────────────────────────
+
+export const modeloSessaoExercicioSchema = z.object({
+  exercicioId: z.string().cuid("Exercício inválido"),
+  ordem: z.number().int().min(0).max(99),
+  duracaoMin: z.number().int().min(1).max(180).optional(),
+  notas: z.string().max(500).optional(),
+  parteTreino: z.enum(PARTES_TREINO).optional(),
+});
+
+export const criarModeloSessaoSchema = z.object({
+  nome: z.string().min(1, "O nome é obrigatório").max(120),
+  descricao: z.string().max(2000).optional(),
+  objetivoTatico: z.string().max(500).optional(),
+  faseEpoca: z.enum(FASES_EPOCA).optional(),
+  escalaoAlvo: z.string().max(40, "Máximo 40 caracteres").optional(),
+  duracaoMin: z
+    .number()
+    .int()
+    .min(1, "A duração deve ser pelo menos 1 minuto")
+    .max(300, "A duração máxima é 300 minutos")
+    .optional(),
+  proprietario: z.enum(PROPRIEDADES_CONTEUDO).default("TREINADOR"),
+  exercicios: z
+    .array(modeloSessaoExercicioSchema)
+    .min(1, "O template tem de ter pelo menos um exercício")
+    .max(30, "Máximo de 30 exercícios por template")
+    .refine(
+      (lista) => new Set(lista.map((e) => e.ordem)).size === lista.length,
+      "A ordem dos exercícios não pode repetir-se",
+    ),
+});
+
+export type CriarModeloSessaoInput = z.infer<typeof criarModeloSessaoSchema>;
+
+/** Criação de uma sessão de treino a partir de um template (cópia, sem ligação). */
+export const criarSessaoDeTemplateSchema = z.object({
+  modeloSessaoId: z.string().cuid("Template inválido"),
+  escalaoId: z.string().cuid("Escalão inválido"),
+  data: z.coerce.date(),
+  epocaId: z.string().cuid("Época inválida").optional(),
+});
+
+export type CriarSessaoDeTemplateInput = z.infer<typeof criarSessaoDeTemplateSchema>;
 
 // Re-exportado para retrocompatibilidade com imports que usavam LABEL_CATEGORIA/CATEGORIAS.
 // Mapeia para o novo enum CategoriaExercicioPrincipal.

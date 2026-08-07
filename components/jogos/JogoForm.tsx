@@ -17,6 +17,11 @@ import { criarJogo, atualizarJogo } from "@/lib/actions/jogos";
 import { LABEL_CASA_FORA, LABEL_TIPO_JOGO } from "@/lib/schemas/jogo";
 import type { CasaFora, Escalao, Jogo, TipoJogo } from "@prisma/client";
 
+/** Valor sentinela do Select para «sem competição associada». */
+const SEM_COMPETICAO = "__nenhuma__";
+
+type CompeticaoBasica = { id: string; nome: string; escalaoId: string };
+
 function paraInputDateTime(date: Date | null | undefined): string {
   if (!date) return "";
   const d = new Date(date);
@@ -34,6 +39,7 @@ type JogoParaEdicao = Pick<
   | "tipo"
   | "escalaoId"
   | "competicao"
+  | "competicaoId"
   | "local"
   | "golosMarcados"
   | "golosSofridos"
@@ -44,9 +50,11 @@ type JogoParaEdicao = Pick<
 
 export function JogoForm({
   escaloes,
+  competicoes = [],
   jogo,
 }: {
   escaloes: EscalaoBasico[];
+  competicoes?: CompeticaoBasica[];
   jogo?: JogoParaEdicao;
 }) {
   const router = useRouter();
@@ -56,6 +64,23 @@ export function JogoForm({
   const [escalaoId, setEscalaoId] = useState<string>(jogo?.escalaoId ?? "");
   const [casaFora, setCasaFora] = useState<CasaFora>(jogo?.casaFora ?? "CASA");
   const [tipo, setTipo] = useState<TipoJogo>(jogo?.tipo ?? "OFICIAL");
+  const [competicaoId, setCompeticaoId] = useState<string>(
+    jogo?.competicaoId ?? SEM_COMPETICAO,
+  );
+
+  // Só as competições do escalão selecionado podem ser associadas ao jogo.
+  const competicoesDoEscalao = competicoes.filter((c) => c.escalaoId === escalaoId);
+
+  function mudarEscalao(novo: string) {
+    setEscalaoId(novo);
+    // Se a competição atual não pertence ao novo escalão, limpa a seleção.
+    if (
+      competicaoId !== SEM_COMPETICAO &&
+      !competicoes.some((c) => c.id === competicaoId && c.escalaoId === novo)
+    ) {
+      setCompeticaoId(SEM_COMPETICAO);
+    }
+  }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -75,6 +100,7 @@ export function JogoForm({
       tipo,
       escalaoId: escalaoId || undefined,
       competicao: String(fd.get("competicao") ?? "").trim() || undefined,
+      competicaoId: competicaoId === SEM_COMPETICAO ? null : competicaoId,
       local: String(fd.get("local") ?? "").trim() || undefined,
       golosMarcados: gm !== "" ? Number(gm) : null,
       golosSofridos: gs !== "" ? Number(gs) : null,
@@ -145,7 +171,7 @@ export function JogoForm({
 
         <div className="space-y-1.5">
           <Label>Escalão *</Label>
-          <Select value={escalaoId} onValueChange={setEscalaoId}>
+          <Select value={escalaoId} onValueChange={mudarEscalao}>
             <SelectTrigger>
               <SelectValue placeholder="Seleciona" />
             </SelectTrigger>
@@ -165,14 +191,27 @@ export function JogoForm({
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <Label htmlFor="competicao">Competição</Label>
-          <Input
-            id="competicao"
-            name="competicao"
-            maxLength={100}
-            defaultValue={jogo?.competicao ?? ""}
-            placeholder="ex: Liga distrital"
-          />
+          <Label>Competição</Label>
+          <Select
+            value={competicaoId}
+            onValueChange={setCompeticaoId}
+            disabled={!escalaoId}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={escalaoId ? "Sem competição" : "Escolhe o escalão"} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={SEM_COMPETICAO}>Sem competição</SelectItem>
+              {competicoesDoEscalao.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.nome}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {escalaoId && competicoesDoEscalao.length === 0 && (
+            <p className="text-legenda text-cinza-500">Sem competições neste escalão.</p>
+          )}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="local">Recinto</Label>
@@ -184,6 +223,20 @@ export function JogoForm({
             placeholder="ex: Pavilhão"
           />
         </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="competicao">Competição (texto livre)</Label>
+        <Input
+          id="competicao"
+          name="competicao"
+          maxLength={100}
+          defaultValue={jogo?.competicao ?? ""}
+          placeholder="ex: Liga distrital"
+        />
+        <p className="text-legenda text-cinza-500">
+          Nota opcional. Para classificação, associa uma competição acima.
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-4">

@@ -16,10 +16,10 @@ import {
 } from "@/components/ui/select";
 import { criarAtleta, atualizarAtleta } from "@/lib/actions/atletas";
 import { LABEL_POSICAO } from "@/lib/schemas/atleta";
-import type { Atleta, Escalao, Posicao } from "@prisma/client";
+import { LABEL_TIPO_PARTICIPACAO, TIPOS_PARTICIPACAO } from "@/lib/schemas/participacao";
+import type { Escalao, Posicao, TipoParticipacao } from "@prisma/client";
 
 const POSICOES: Posicao[] = ["GUARDA_REDES", "FIXO", "ALA", "PIVO", "UNIVERSAL"];
-const SEM_SECUNDARIO = "__none__";
 
 function formatDateForInput(date: Date | null | undefined): string {
   if (!date) return "";
@@ -28,22 +28,23 @@ function formatDateForInput(date: Date | null | undefined): string {
 }
 
 type EscalaoBasico = Pick<Escalao, "id" | "nome">;
-type AtletaParaEdicao = Pick<
-  Atleta,
-  | "id"
-  | "nome"
-  | "escalaoId"
-  | "escalaoSecundarioId"
-  | "dataNascimento"
-  | "dataIngresso"
-  | "posicoes"
-  | "numero"
-  | "observacoes"
-  | "fotoUrl"
-  | "encarregadoNome"
-  | "encarregadoContacto"
-  | "encarregadoEmail"
->;
+
+/**
+ * Dados pessoais do atleta em edição. Escalão e número pertencem à participação
+ * (AtletaEscalao) e geram-se aqui apenas na criação (participação inicial).
+ */
+export type AtletaParaEdicao = {
+  id: string;
+  nome: string;
+  dataNascimento: Date | null;
+  dataIngresso: Date | null;
+  posicoes: Posicao[];
+  observacoes: string | null;
+  fotoUrl: string | null;
+  encarregadoNome: string | null;
+  encarregadoContacto: string | null;
+  encarregadoEmail: string | null;
+};
 
 export function AtletaForm({
   escaloes,
@@ -53,16 +54,15 @@ export function AtletaForm({
   atleta?: AtletaParaEdicao;
 }) {
   const router = useRouter();
+  const emEdicao = atleta != null;
   const [pending, startTransition] = useTransition();
   const [erros, setErros] = useState<Record<string, string>>({});
   const [erroGeral, setErroGeral] = useState<string | null>(null);
   const [posicoes, setPosicoes] = useState<Set<Posicao>>(
     () => new Set(atleta?.posicoes ?? []),
   );
-  const [escalaoId, setEscalaoId] = useState<string>(atleta?.escalaoId ?? "");
-  const [escalaoSecundarioId, setEscalaoSecundarioId] = useState<string>(
-    atleta?.escalaoSecundarioId ?? SEM_SECUNDARIO,
-  );
+  const [escalaoId, setEscalaoId] = useState<string>("");
+  const [tipoParticipacao, setTipoParticipacao] = useState<TipoParticipacao>("PRINCIPAL");
 
   function alternarPosicao(p: Posicao) {
     setPosicoes((prev) => {
@@ -84,13 +84,9 @@ export function AtletaForm({
     const dataRaw = val("dataNascimento");
     const ingressoRaw = val("dataIngresso");
 
-    const dados = {
+    const pessoal = {
       nome: String(fd.get("nome")),
-      escalaoId: escalaoId || undefined,
-      escalaoSecundarioId:
-        escalaoSecundarioId !== SEM_SECUNDARIO ? escalaoSecundarioId : null,
       posicoes: [...posicoes],
-      numero: numeroRaw !== "" ? Number(numeroRaw) : undefined,
       dataNascimento: dataRaw !== "" ? dataRaw : undefined,
       dataIngresso: ingressoRaw !== "" ? ingressoRaw : undefined,
       observacoes: val("observacoes") || undefined,
@@ -100,10 +96,23 @@ export function AtletaForm({
       encarregadoEmail: val("encarregadoEmail"),
     };
 
+    // O escalão da participação inicial é obrigatório na criação (secção 8.5).
+    if (!emEdicao && escalaoId === "") {
+      setErros({ "participacaoInicial.escalaoId": "Escolhe o escalão do atleta" });
+      return;
+    }
+
     startTransition(async () => {
       const res = atleta
-        ? await atualizarAtleta(atleta.id, dados)
-        : await criarAtleta(dados);
+        ? await atualizarAtleta(atleta.id, pessoal)
+        : await criarAtleta({
+            ...pessoal,
+            participacaoInicial: {
+              escalaoId,
+              numero: numeroRaw !== "" ? Number(numeroRaw) : undefined,
+              tipo: tipoParticipacao,
+            },
+          });
 
       if (res.sucesso) {
         toast.success(atleta ? "Atleta atualizado" : "Atleta criado");
@@ -115,8 +124,6 @@ export function AtletaForm({
       }
     });
   }
-
-  const secundarios = escaloes.filter((e) => e.id !== escalaoId);
 
   return (
     <form onSubmit={handleSubmit} className="max-w-lg space-y-6">
@@ -132,16 +139,9 @@ export function AtletaForm({
           {erros.nome && <p className="text-legenda text-vermelho-600">{erros.nome}</p>}
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="numero">Número</Label>
-            <Input id="numero" name="numero" type="number" min={1} max={99} defaultValue={atleta?.numero ?? ""} placeholder="ex: 7" />
-            {erros.numero && <p className="text-legenda text-vermelho-600">{erros.numero}</p>}
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="dataNascimento">Data de nascimento</Label>
-            <Input id="dataNascimento" name="dataNascimento" type="date" defaultValue={formatDateForInput(atleta?.dataNascimento)} />
-          </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="dataNascimento">Data de nascimento</Label>
+          <Input id="dataNascimento" name="dataNascimento" type="date" defaultValue={formatDateForInput(atleta?.dataNascimento)} />
         </div>
 
         <div className="space-y-1.5">
@@ -183,35 +183,59 @@ export function AtletaForm({
         </div>
       </div>
 
-      {/* Escalões */}
-      <div className="space-y-4 border-t border-cinza-200 pt-5">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label>Escalão principal *</Label>
-            <Select value={escalaoId} onValueChange={setEscalaoId}>
-              <SelectTrigger><SelectValue placeholder="Seleciona" /></SelectTrigger>
-              <SelectContent>
-                {escaloes.map((e) => (<SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>))}
-              </SelectContent>
-            </Select>
-            {erros.escalaoId && <p className="text-legenda text-vermelho-600">{erros.escalaoId}</p>}
+      {/* Participação inicial (só na criação) */}
+      {!emEdicao && (
+        <div className="space-y-4 border-t border-cinza-200 pt-5">
+          <p className="text-corpo font-semibold text-cinza-900">Participação inicial</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="participacao-escalao">Escalão *</Label>
+              <Select value={escalaoId} onValueChange={setEscalaoId}>
+                <SelectTrigger id="participacao-escalao" className="h-11">
+                  <SelectValue placeholder="Seleciona" />
+                </SelectTrigger>
+                <SelectContent>
+                  {escaloes.map((e) => (<SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>))}
+                </SelectContent>
+              </Select>
+              {erros["participacaoInicial.escalaoId"] && (
+                <p className="text-legenda text-vermelho-600">
+                  {erros["participacaoInicial.escalaoId"]}
+                </p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="numero">Número</Label>
+              <Input id="numero" name="numero" type="number" min={1} max={999} placeholder="ex: 7" />
+              {erros["participacaoInicial.numero"] && (
+                <p className="text-legenda text-vermelho-600">
+                  {erros["participacaoInicial.numero"]}
+                </p>
+              )}
+            </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Escalão secundário</Label>
-            <Select value={escalaoSecundarioId} onValueChange={setEscalaoSecundarioId}>
-              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+            <Label htmlFor="participacao-tipo">Tipo de participação</Label>
+            <Select
+              value={tipoParticipacao}
+              onValueChange={(v) => setTipoParticipacao(v as TipoParticipacao)}
+            >
+              <SelectTrigger id="participacao-tipo" className="h-11">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                <SelectItem value={SEM_SECUNDARIO}>— nenhum —</SelectItem>
-                {secundarios.map((e) => (<SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>))}
+                {TIPOS_PARTICIPACAO.map((t) => (
+                  <SelectItem key={t} value={t}>{LABEL_TIPO_PARTICIPACAO[t]}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
-            {erros.escalaoSecundarioId && (
-              <p className="text-legenda text-vermelho-600">{erros.escalaoSecundarioId}</p>
-            )}
           </div>
+          <p className="text-legenda text-cinza-400">
+            O escalão e o número de camisola pertencem à participação. Depois de criar o
+            atleta podes associá-lo a mais escalões.
+          </p>
         </div>
-        <p className="text-legenda text-cinza-400">Um atleta pode jogar em até dois escalões.</p>
-      </div>
+      )}
 
       {/* Encarregado de educação */}
       <div className="space-y-4 border-t border-cinza-200 pt-5">
@@ -240,8 +264,8 @@ export function AtletaForm({
       </div>
 
       <div className="flex gap-3 pt-2">
-        <Button type="submit" disabled={pending || !escalaoId}>
-          {pending ? "A guardar…" : atleta ? "Guardar alterações" : "Criar atleta"}
+        <Button type="submit" disabled={pending}>
+          {pending ? "A guardar…" : emEdicao ? "Guardar alterações" : "Criar atleta"}
         </Button>
         <Button type="button" variant="outline" disabled={pending} onClick={() => router.back()}>
           Cancelar

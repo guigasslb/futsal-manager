@@ -42,6 +42,44 @@
     --radius: 8px;
   }
 
+  /*
+    Tema escuro — base do produto (F14 / secção 12.0/12.1).
+    Fundo #0F0E13 · superfície #1C1B22 · elevada #2A2933 · texto claro quente.
+    A cor do clube continua a sobrepor --primary/--ring em runtime (ver layout);
+    aqui fica apenas o laranja da marca como default.
+  */
+  .dark {
+    --background: 255 15% 6%; /* #0F0E13 */
+    --foreground: 40 17% 92%; /* #EEEBE6 branco quente */
+
+    --card: 252 11% 12%; /* #1C1B22 */
+    --card-foreground: 40 17% 92%;
+
+    --popover: 252 11% 14%;
+    --popover-foreground: 40 17% 92%;
+
+    --primary: 14 87% 53%; /* laranja da marca #F0531E */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 246 11% 18%; /* #2A2933 */
+    --secondary-foreground: 40 17% 92%;
+
+    --muted: 246 11% 18%;
+    --muted-foreground: 34 8% 66%; /* legível AA sobre superfícies escuras */
+
+    --accent: 246 11% 18%;
+    --accent-foreground: 22 90% 70%; /* laranja claro */
+
+    --destructive: 0 62% 56%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 246 9% 22%;
+    --input: 246 9% 22%;
+    --ring: 14 87% 53%;
+
+    color-scheme: dark;
+  }
+
   * {
     @apply border-border;
   }
@@ -186,5 +224,186 @@
   }
   .hero-btn-solid:hover {
     transform: translateY(-1px);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TEMA ESCURO — remapeamento das utilidades hardcoded (F14 / secção 12.1)
+   ─────────────────────────────────────────────────────────────────────────
+   A app usa classes utilitárias claras diretas (text-cinza-*, bg-white, …) em
+   muitos ficheiros. Em vez de as editar uma a uma, remapeamos o seu valor
+   quando `.dark` está ativo. A especificidade `.dark .util` (0,2,0) vence a
+   utilidade base (0,1,0), pelo que toda a UI responde ao tema escuro.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Texto (claro sobre superfícies escuras — contraste AA) */
+.dark .text-cinza-900 { color: #eeebe6; }
+.dark .text-cinza-800 { color: #e4e1db; }
+.dark .text-cinza-700 { color: #d8d3cb; }
+.dark .text-cinza-600 { color: #c2bcb3; }
+.dark .text-cinza-500 { color: #a8a29a; }
+.dark .text-cinza-400 { color: #928c84; }
+.dark .text-cinza-300 { color: #6c665f; }
+
+/* Superfícies */
+.dark .bg-white { background-color: #1c1b22; }
+.dark .bg-white\/60 { background-color: rgba(28, 27, 34, 0.6); }
+.dark .bg-cinza-50 { background-color: #1c1b22; }
+.dark .bg-cinza-100 { background-color: #2a2933; }
+.dark .bg-cinza-200 { background-color: #2a2933; }
+
+/* Bordas e separadores */
+.dark .border-cinza-100 { border-color: #232228; }
+.dark .border-cinza-200 { border-color: #2a2933; }
+.dark .border-cinza-300 { border-color: #34333d; }
+.dark .border-cinza-200\/70 { border-color: rgba(42, 41, 51, 0.7); }
+.dark .border-cinza-200\/60 { border-color: rgba(42, 41, 51, 0.6); }
+.dark .divide-cinza-100 > :not([hidden]) ~ :not([hidden]) { border-color: #232228; }
+.dark .divide-cinza-200 > :not([hidden]) ~ :not([hidden]) { border-color: #2a2933; }
+
+/* Estados de hover e placeholders */
+.dark .hover\:bg-cinza-50:hover { background-color: #2a2933; }
+.dark .hover\:bg-cinza-100:hover { background-color: #2a2933; }
+.dark .placeholder\:text-cinza-400::placeholder { color: #6c665f; }
+
+/* Classes de componente (definidas via @apply → precisam de override explícito) */
+.dark body {
+  background-color: #0f0e13;
+  color: #eeebe6;
+}
+.dark h1,
+.dark h2,
+.dark h3 {
+  color: #eeebe6;
+}
+
+.dark .card-base {
+  background-color: #1c1b22;
+  border-color: rgba(42, 41, 51, 0.9);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 6px 20px -8px rgba(0, 0, 0, 0.55);
+}
+.dark .card-hover:hover {
+  border-color: color-mix(in srgb, var(--cor-primaria, #f0531e) 42%, #2a2933);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.5),
+    0 14px 32px -10px color-mix(in srgb, var(--cor-primaria, #f0531e) 42%, transparent);
+}
+
+.dark .app-surface {
+  background-color: #0f0e13;
+  background-image: radial-gradient(
+    120% 60% at 100% -8%,
+    color-mix(in srgb, var(--cor-primaria, #f0531e) 15%, transparent) 0%,
+    transparent 55%
+  );
+}
+
+.dark .topbar-glass {
+  background-color: rgba(20, 19, 26, 0.72);
+}
+
+.dark .nav-item {
+  color: #c2bcb3;
+}
+.dark .nav-item:hover {
+  background-color: #2a2933;
+  color: #eeebe6;
+}
+.dark .nav-item-active {
+  background-color: color-mix(in srgb, var(--cor-primaria, #f0531e) 22%, #1c1b22);
+  color: color-mix(in srgb, var(--cor-primaria, #f0531e) 55%, #ffffff);
+}
+
+.dark .chip-clube {
+  background-color: color-mix(in srgb, var(--cor-primaria, #f0531e) 20%, #1c1b22);
+  color: color-mix(in srgb, var(--cor-primaria, #f0531e) 62%, #ffffff);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOTION como linguagem (F14 / secção 12.0) — subtil, só CSS.
+   Transição de página (fade + 8px), cascata de listas (40ms) e shimmer.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@keyframes fc-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fc-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Entrada de página / bloco */
+.animar-entrada {
+  animation: fc-fade-in 0.28s ease-out both;
+}
+
+/* Entrada em cascata para listas / grelhas (delay 40ms por item) */
+.animar-cascata > * {
+  animation: fc-fade-in 0.3s ease-out both;
+}
+.animar-cascata > *:nth-child(1) { animation-delay: 0ms; }
+.animar-cascata > *:nth-child(2) { animation-delay: 40ms; }
+.animar-cascata > *:nth-child(3) { animation-delay: 80ms; }
+.animar-cascata > *:nth-child(4) { animation-delay: 120ms; }
+.animar-cascata > *:nth-child(5) { animation-delay: 160ms; }
+.animar-cascata > *:nth-child(6) { animation-delay: 200ms; }
+.animar-cascata > *:nth-child(7) { animation-delay: 240ms; }
+.animar-cascata > *:nth-child(8) { animation-delay: 280ms; }
+
+/* Skeleton com shimmer (nunca spinner genérico — secção 12.0) */
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.45),
+    transparent
+  );
+  animation: fc-shimmer 1.4s infinite;
+}
+.dark .skeleton-shimmer::after {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.08),
+    transparent
+  );
+}
+
+/* Respeitar prefers-reduced-motion (secção 12.0/13.3) */
+@media (prefers-reduced-motion: reduce) {
+  .animar-entrada,
+  .animar-cascata > * {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .skeleton-shimmer::after {
+    animation: none !important;
+  }
+  .card-hover:hover {
+    transform: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
   }
 }

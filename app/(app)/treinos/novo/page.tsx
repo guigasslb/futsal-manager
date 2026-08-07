@@ -1,9 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { listarEscaloes } from "@/lib/actions/escaloes";
 import { listarPlaneamentos } from "@/lib/actions/periodizacao";
 import { SessaoForm } from "@/components/treinos/SessaoForm";
 import { EstadoErro } from "@/components/layout/EstadosUI";
+
+export const metadata: Metadata = { title: "Novo treino" };
 
 export default async function NovaSessaoPage() {
   const [resEscaloes, resPlan] = await Promise.all([

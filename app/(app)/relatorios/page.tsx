@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { listarEscaloes } from "@/lib/actions/escaloes";
 import { listarAtletas } from "@/lib/actions/atletas";
@@ -14,6 +15,8 @@ function Cartao({ valor, label }: { valor: string | number; label: string }) {
     </div>
   );
 }
+
+export const metadata: Metadata = { title: "Relatórios" };
 
 export default async function RelatoriosPage({
   searchParams,

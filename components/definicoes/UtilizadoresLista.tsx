@@ -39,6 +39,8 @@ import {
   removerMembro,
   type MembroLista,
 } from "@/lib/actions/utilizadores";
+import { OverridesMembroDialog } from "@/components/definicoes/OverridesMembroDialog";
+import type { Capacidade } from "@/lib/permissoes-catalogo";
 
 type PerfilBasico = { id: string; nome: string };
 type EscalaoBasico = { id: string; nome: string };
@@ -165,14 +167,25 @@ function RedefinirPasswordDialog({ membro }: { membro: MembroLista }) {
   );
 }
 
+/**
+ * Lista da equipa técnica (secção 8.2).
+ *
+ * `podeGerirMembros` (capacidade `CLUBE_UTILIZADORES`) controla o gating de UI
+ * das ações de gestão; `capacidadesProprias` alimenta a regra de delegação do
+ * editor de overrides (6.4 — só se concede o que se tem).
+ */
 export function UtilizadoresLista({
   membros,
   perfis,
   escaloes,
+  podeGerirMembros,
+  capacidadesProprias,
 }: {
   membros: MembroLista[];
   perfis: PerfilBasico[];
   escaloes: EscalaoBasico[];
+  podeGerirMembros: boolean;
+  capacidadesProprias: Capacidade[];
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -211,7 +224,7 @@ export function UtilizadoresLista({
             Treinadores e responsáveis do clube. Atribui cada um ao perfil e aos escalões que gere.
           </p>
         </div>
-        <ConvidarDialog perfis={perfis} />
+        {podeGerirMembros && <ConvidarDialog perfis={perfis} />}
       </div>
 
       {membros.length === 0 ? (
@@ -231,45 +244,55 @@ export function UtilizadoresLista({
                   <p className="text-corpo font-semibold text-cinza-900">{m.nome}</p>
                   <p className="text-legenda text-cinza-600">{m.email}</p>
                 </div>
-                <div className="w-48">
-                  <Select
-                    value={m.perfilId}
-                    onValueChange={(v) => mudarPerfil(m.membroId, v)}
-                    disabled={pending}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {perfis.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <RedefinirPasswordDialog membro={m} />
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="icon" aria-label="Remover membro">
-                      <Trash2 className="h-4 w-4 text-vermelho-600" />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Remover «{m.nome}» do clube?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        O membro perde o acesso ao clube. Os dados do clube mantêm-se.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => remover(m.membroId)}
-                        className="bg-vermelho-600 hover:bg-vermelho-600/90 text-white"
+                {podeGerirMembros ? (
+                  <>
+                    <div className="w-48">
+                      <Select
+                        value={m.perfilId}
+                        onValueChange={(v) => mudarPerfil(m.membroId, v)}
+                        disabled={pending}
                       >
-                        Remover
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {perfis.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <OverridesMembroDialog
+                      membro={m}
+                      capacidadesProprias={capacidadesProprias}
+                    />
+                    <RedefinirPasswordDialog membro={m} />
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" aria-label="Remover membro">
+                          <Trash2 className="h-4 w-4 text-vermelho-600" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Remover «{m.nome}» do clube?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            O membro perde o acesso ao clube. Os dados do clube mantêm-se.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => remover(m.membroId)}
+                            className="bg-vermelho-600 hover:bg-vermelho-600/90 text-white"
+                          >
+                            Remover
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </>
+                ) : (
+                  <span className="text-corpo-sec text-cinza-500">{m.perfilNome}</span>
+                )}
               </div>
 
               {escaloes.length > 0 && (
@@ -279,15 +302,28 @@ export function UtilizadoresLista({
                   </span>
                   {escaloes.map((e) => {
                     const ativo = m.escaloesAtribuidos.includes(e.id);
+                    const cor = ativo
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-cinza-200 text-cinza-500";
+                    // Sem CLUBE_UTILIZADORES a atribuição é só de leitura.
+                    if (!podeGerirMembros) {
+                      return (
+                        <span
+                          key={e.id}
+                          className={`rounded-full border px-2.5 py-0.5 text-legenda ${cor}`}
+                        >
+                          {e.nome}
+                        </span>
+                      );
+                    }
                     return (
                       <button
                         key={e.id}
                         onClick={() => alternarEscalao(m, e.id)}
                         disabled={pending}
-                        className={`rounded-full border px-2.5 py-0.5 text-legenda transition-colors ${
-                          ativo
-                            ? "border-primary bg-primary/5 text-primary"
-                            : "border-cinza-200 text-cinza-500 hover:bg-cinza-50"
+                        aria-pressed={ativo}
+                        className={`rounded-full border px-2.5 py-0.5 text-legenda transition-colors ${cor} ${
+                          ativo ? "" : "hover:bg-cinza-50"
                         }`}
                       >
                         {e.nome}

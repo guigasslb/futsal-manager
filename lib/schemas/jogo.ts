@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BlocoTempo, Posicao, TipoEventoJogo } from "@prisma/client";
 
 /**
  * Valida um URL de vídeo: só https e só domínios YouTube (secção 8 da bíblia).
@@ -47,25 +48,28 @@ export type JogoInput = z.infer<typeof jogoSchema>;
 
 export const eventoJogoSchema = z.object({
   parte: z.number().int().min(1).max(2),
-  minuto: z.number().int().min(0).max(60).nullable().optional(),
-  tipo: z.enum([
-    "GOLO",
-    "ASSISTENCIA",
-    "FALTA",
-    "CARTAO_AMARELO",
-    "CARTAO_VERMELHO",
-    "SUBSTITUICAO",
-    "DEFESA",
-    "GOLO_SOFRIDO",
-    "TIMEOUT",
-  ]),
+  minuto: z.number().int().min(0).max(120).nullable().optional(),
+  tipo: z.nativeEnum(TipoEventoJogo),
+  // F5 (M15): bloco de tempo associado ao evento (útil em substituições).
+  bloco: z.nativeEnum(BlocoTempo).nullable().optional(),
   atletaId: z.string().cuid().nullable().optional(),
   atletaSecundarioId: z.string().cuid().nullable().optional(),
 });
 
 export type EventoJogoInput = z.infer<typeof eventoJogoSchema>;
 
-export const LABEL_EVENTO: Record<string, string> = {
+/**
+ * F5 (M15): registo de evento ao vivo com `jogoId` embutido no payload.
+ * O modelo `EventoJogo` (§3.7) usa `parte` (obrigatório), `tipo` e
+ * `atletaSecundarioId` (assistência / substituído); não tem `descricao`.
+ */
+export const registarEventoJogoSchema = eventoJogoSchema.extend({
+  jogoId: z.string().cuid(),
+});
+
+export type RegistarEventoJogoInput = z.infer<typeof registarEventoJogoSchema>;
+
+export const LABEL_TIPO_EVENTO: Record<TipoEventoJogo, string> = {
   GOLO: "Golo",
   ASSISTENCIA: "Assistência",
   FALTA: "Falta",
@@ -77,6 +81,34 @@ export const LABEL_EVENTO: Record<string, string> = {
   TIMEOUT: "Timeout",
 };
 
+/** Alias retrocompatível (usado no registo ao vivo). */
+export const LABEL_EVENTO = LABEL_TIPO_EVENTO;
+
+export const LABEL_BLOCO_TEMPO: Record<BlocoTempo, string> = {
+  JOGO_COMPLETO: "Jogo completo",
+  MEIA_PARTE: "Meia parte",
+  BLOCO_10MIN: "10 minutos",
+  BLOCO_5MIN: "5 minutos",
+  NAO_JOGOU: "Não jogou",
+};
+
+// ─── Plano de dia de jogo (convocatória prevista) ─────────────────────────────
+
+/**
+ * F5 (M15): plano tático de dia de jogo por convocado — posição e titularidade
+ * previstas. `convocadoId` é o `atletaId` da convocatória.
+ */
+export const convocatoriaPrevistaSchema = z.object({
+  convocadoId: z.string().cuid(),
+  posicaoPrevista: z.nativeEnum(Posicao).nullable().optional(),
+  titularPrevisto: z.boolean().optional(),
+});
+
+export const planoTaticoSchema = z.array(convocatoriaPrevistaSchema);
+
+export type ConvocatoriaPrevistaInput = z.infer<typeof convocatoriaPrevistaSchema>;
+export type PlanoTaticoInput = z.infer<typeof planoTaticoSchema>;
+
 export const LABEL_TIPO_JOGO: Record<"OFICIAL" | "AMIGAVEL", string> = {
   OFICIAL: "Oficial",
   AMIGAVEL: "Amigável",
@@ -85,6 +117,8 @@ export const LABEL_TIPO_JOGO: Record<"OFICIAL" | "AMIGAVEL", string> = {
 export const estatisticaSchema = z.object({
   atletaId: z.string().cuid(),
   utilizacao: z.enum(["TITULAR", "UTILIZADO", "NAO_UTILIZADO"]),
+  // F5 (M15): tempo de jogo por bloco (alternativa/complemento a `minutos`).
+  blocoTempo: z.nativeEnum(BlocoTempo).nullable().optional(),
   minutos: z.number().int().min(0).max(60).nullable().optional(),
   golos: z.number().int().min(0).default(0),
   assistencias: z.number().int().min(0).default(0),

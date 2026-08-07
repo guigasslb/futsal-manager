@@ -2,12 +2,16 @@
 // Conteúdo autorado (uma vez), sem IA em runtime. Campo 400×200 unidades (secção 11).
 // Instalável num clube via lib/actions/exercicios.ts → instalarBibliotecaArranque().
 
-import type { CategoriaExercicioPrincipal } from "@prisma/client";
+import type { CategoriaExercicioPrincipal, ParteTreino } from "@prisma/client";
 import type { DiagramaCampo } from "@/lib/schemas/exercicio";
 
 export interface ExercicioArranque {
   nome: string;
   categoriaPrincipal: CategoriaExercicioPrincipal;
+  /** Parte do treino (F3, secção 3.3) — organiza a biblioteca e os templates. */
+  parteTreino: ParteTreino;
+  /** Escalão/faixa etária sugerida (texto livre, ex: "sub-10"). Opcional. */
+  escalaoAlvo?: string;
   duracaoMin: number;
   objetivo: string;
   descricao: string;
@@ -28,6 +32,7 @@ export const BIBLIOTECA_ARRANQUE: ExercicioArranque[] = [
   {
     nome: "Ativação — Roda de passe",
     categoriaPrincipal: "FISICO",
+    parteTreino: "AQUECIMENTO",
     duracaoMin: 10,
     objetivo: "Elevar a temperatura corporal e melhorar a qualidade do passe curto.",
     descricao:
@@ -54,6 +59,7 @@ export const BIBLIOTECA_ARRANQUE: ExercicioArranque[] = [
   {
     nome: "Passe e receção em losango",
     categoriaPrincipal: "ATAQUE",
+    parteTreino: "PRINCIPAL",
     duracaoMin: 12,
     objetivo: "Melhorar a orientação da receção e o passe com o pé de dentro.",
     descricao:
@@ -80,6 +86,7 @@ export const BIBLIOTECA_ARRANQUE: ExercicioArranque[] = [
   {
     nome: "Condução em slalom + finalização",
     categoriaPrincipal: "ATAQUE",
+    parteTreino: "PRINCIPAL",
     duracaoMin: 15,
     objetivo: "Condução de bola em espaço reduzido e finalização em corrida.",
     descricao:
@@ -109,6 +116,7 @@ export const BIBLIOTECA_ARRANQUE: ExercicioArranque[] = [
   {
     nome: "Manutenção 4x4+3 apoios",
     categoriaPrincipal: "ATAQUE",
+    parteTreino: "PRINCIPAL",
     duracaoMin: 18,
     objetivo: "Manter a posse sob pressão, criar linhas de passe e apoio.",
     descricao:
@@ -134,6 +142,7 @@ export const BIBLIOTECA_ARRANQUE: ExercicioArranque[] = [
   {
     nome: "Transição ofensiva 3x2",
     categoriaPrincipal: "TRANSICAO",
+    parteTreino: "PRINCIPAL",
     duracaoMin: 15,
     objetivo: "Explorar a superioridade numérica na transição rápida.",
     descricao:
@@ -161,6 +170,7 @@ export const BIBLIOTECA_ARRANQUE: ExercicioArranque[] = [
   {
     nome: "Situação 1x1 com apoio",
     categoriaPrincipal: "ATAQUE",
+    parteTreino: "PRINCIPAL",
     duracaoMin: 12,
     objetivo: "Resolver o 1x1 ofensivo com uso do apoio para fixar e encarar.",
     descricao:
@@ -186,6 +196,7 @@ export const BIBLIOTECA_ARRANQUE: ExercicioArranque[] = [
   {
     nome: "Jogo reduzido 3x3 com balizas pequenas",
     categoriaPrincipal: "ATAQUE",
+    parteTreino: "JOGO_REDUZIDO",
     duracaoMin: 20,
     objetivo: "Tomada de decisão, transições e ocupação de espaços em contexto real.",
     descricao:
@@ -206,6 +217,7 @@ export const BIBLIOTECA_ARRANQUE: ExercicioArranque[] = [
   {
     nome: "Canto ofensivo — bloqueio e cortina",
     categoriaPrincipal: "BOLAS_PARADAS",
+    parteTreino: "PRINCIPAL",
     duracaoMin: 12,
     objetivo: "Criar espaço no canto com bloqueio direto e finalização.",
     descricao:
@@ -228,6 +240,7 @@ export const BIBLIOTECA_ARRANQUE: ExercicioArranque[] = [
   {
     nome: "Circuito físico com bola",
     categoriaPrincipal: "FISICO",
+    parteTreino: "AQUECIMENTO",
     duracaoMin: 15,
     objetivo: "Trabalho de resistência específica intercalado com técnica.",
     descricao:
@@ -251,6 +264,7 @@ export const BIBLIOTECA_ARRANQUE: ExercicioArranque[] = [
   {
     nome: "Saída de bola pressionada (4-0)",
     categoriaPrincipal: "ATAQUE",
+    parteTreino: "PRINCIPAL",
     duracaoMin: 18,
     objetivo: "Construir a saída sob pressão alta com estrutura 4-0.",
     descricao:
@@ -270,6 +284,29 @@ export const BIBLIOTECA_ARRANQUE: ExercicioArranque[] = [
           { x: 48, y: 100 },
           { x: 108, y: 62 },
         ]),
+      ],
+    },
+  },
+  {
+    // F3: retorno à calma — fecha os templates de sessão de arranque (secção 3.4).
+    nome: "Retorno à calma — mobilidade e alongamentos",
+    categoriaPrincipal: "FISICO",
+    parteTreino: "RETORNO_CALMA",
+    duracaoMin: 8,
+    objetivo: "Baixar a frequência cardíaca e trabalhar mobilidade articular.",
+    descricao:
+      "Corrida muito leve à volta do campo, seguida de alongamentos dinâmicos e estáticos (adutores, isquiotibiais, quadricípites, gémeos). Momento de balanço do treino com o grupo.",
+    diagrama: {
+      versao: 1,
+      elementos: [
+        j("a1", 120, 70, "azul", 1),
+        j("a2", 170, 70, "azul", 2),
+        j("a3", 220, 70, "azul", 3),
+        j("a4", 270, 70, "azul", 4),
+        j("a5", 120, 130, "azul", 5),
+        j("a6", 170, 130, "azul", 6),
+        j("a7", 220, 130, "azul", 7),
+        j("a8", 270, 130, "azul", 8),
       ],
     },
   },

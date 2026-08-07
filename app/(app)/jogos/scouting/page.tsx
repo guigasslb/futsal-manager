@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { listarObservacoes } from "@/lib/actions/scouting";
 import { ScoutingLista } from "@/components/jogos/ScoutingLista";
 import { EstadoErro } from "@/components/layout/EstadosUI";
+
+export const metadata: Metadata = { title: "Scouting" };
 
 export default async function ScoutingPage() {
   const res = await listarObservacoes();

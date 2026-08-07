@@ -1,14 +1,18 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, Pencil, MapPin, Clock, AlertTriangle } from "lucide-react";
+import { Pencil, MapPin, Clock, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
 import { obterSessao } from "@/lib/actions/treinos";
 import { listarExercicios } from "@/lib/actions/exercicios";
 import { listarAtletas } from "@/lib/actions/atletas";
 import { obterEpocaAtiva } from "@/lib/epoca-context";
 import { GestorExercicios } from "@/components/treinos/GestorExercicios";
-import { MarcadorPresencas } from "@/components/treinos/MarcadorPresencas";
-import type { EstadoPresenca } from "@prisma/client";
+import {
+  MarcadorPresencas,
+  type PresencaInicial,
+} from "@/components/treinos/MarcadorPresencas";
 
 function formatarDataHora(data: Date): string {
   return new Date(data).toLocaleString("pt-PT", {
@@ -19,6 +23,8 @@ function formatarDataHora(data: Date): string {
     minute: "2-digit",
   });
 }
+
+export const metadata: Metadata = { title: "Detalhe do treino" };
 
 export default async function DetalheSessaoPage({
   params,
@@ -40,8 +46,9 @@ export default async function DetalheSessaoPage({
   const biblioteca = resExercicios.sucesso ? resExercicios.dados : [];
   const atletas = resAtletas.sucesso ? resAtletas.dados : [];
 
-  const presencasIniciais: Record<string, EstadoPresenca> = {};
-  for (const p of s.presencas) presencasIniciais[p.atletaId] = p.estado;
+  const presencasIniciais: Record<string, PresencaInicial> = {};
+  for (const p of s.presencas)
+    presencasIniciais[p.atletaId] = { estado: p.estado, motivo: p.motivo };
 
   const foraDaEpoca =
     epoca && (new Date(s.data) < epoca.dataInicio || new Date(s.data) > epoca.dataFim);
@@ -50,13 +57,12 @@ export default async function DetalheSessaoPage({
     <div className="space-y-6">
       {/* Navegação */}
       <div className="flex items-center justify-between">
-        <Link
-          href="/treinos"
-          className="flex items-center gap-1 text-corpo-sec text-cinza-600 hover:text-cinza-900 transition-colors"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Treinos
-        </Link>
+        <Breadcrumbs
+          items={[
+            { label: "Treinos", href: "/treinos" },
+            { label: s.escalao.nome },
+          ]}
+        />
         <Button asChild variant="outline">
           <Link href={`/treinos/${s.id}/editar`}>
             <Pencil className="h-4 w-4" />
@@ -120,7 +126,12 @@ export default async function DetalheSessaoPage({
 
         <MarcadorPresencas
           sessaoId={s.id}
-          atletas={atletas.map((a) => ({ id: a.id, nome: a.nome, numero: a.numero }))}
+          atletas={atletas.map((a) => ({
+            id: a.id,
+            nome: a.nome,
+            // Número da participação neste escalão (F1).
+            numero: a.participacaoContexto?.numero ?? s.numeroPorAtleta[a.id] ?? null,
+          }))}
           presencasIniciais={presencasIniciais}
         />
       </div>

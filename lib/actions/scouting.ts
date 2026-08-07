@@ -10,12 +10,19 @@ import type { ObservacaoAdversario } from "@prisma/client";
 
 const PATH = "/jogos/scouting";
 
-export async function listarObservacoes(): Promise<Resultado<ObservacaoAdversario[]>> {
+/**
+ * Lista observações do clube. Com `jogoId`, devolve apenas as observações
+ * contextualizadas nesse jogo (dia de jogo — F5/M15); sem argumento, devolve
+ * todas (comportamento avulso original).
+ */
+export async function listarObservacoes(
+  jogoId?: string,
+): Promise<Resultado<ObservacaoAdversario[]>> {
   const clubeId = await obterClubeIdAtual();
   if (!clubeId) return erro("Não autenticado");
 
   const observacoes = await prisma.observacaoAdversario.findMany({
-    where: { clubeId },
+    where: { clubeId, ...(jogoId ? { jogoId } : {}) },
     orderBy: { criadoEm: "desc" },
   });
   return ok(observacoes);
@@ -39,10 +46,20 @@ export async function criarObservacao(dados: unknown): Promise<Resultado<Observa
   const parsed = observacaoAdversarioSchema.safeParse(dados);
   if (!parsed.success) return erroDeValidacao(parsed.error);
 
+  // F5 (M15): se o scouting está ligado a um jogo, esse jogo tem de ser do clube.
+  if (parsed.data.jogoId) {
+    const jogo = await prisma.jogo.findFirst({
+      where: { id: parsed.data.jogoId, escalao: { clubeId: perm.ctx.clube.id } },
+      select: { id: true },
+    });
+    if (!jogo) return erro("Jogo não encontrado");
+  }
+
   const obs = await prisma.observacaoAdversario.create({
     data: {
       clubeId: perm.ctx.clube.id,
       escalaoId: parsed.data.escalaoId ?? null,
+      jogoId: parsed.data.jogoId ?? null,
       equipa: parsed.data.equipa,
       jogoObservado: parsed.data.jogoObservado ?? null,
       competicao: parsed.data.competicao ?? null,
@@ -71,11 +88,21 @@ export async function atualizarObservacao(
   });
   if (!existe) return erro("Observação não encontrada");
 
+  // F5 (M15): valida a ligação ao jogo (tem de ser do clube).
+  if (parsed.data.jogoId) {
+    const jogo = await prisma.jogo.findFirst({
+      where: { id: parsed.data.jogoId, escalao: { clubeId: perm.ctx.clube.id } },
+      select: { id: true },
+    });
+    if (!jogo) return erro("Jogo não encontrado");
+  }
+
   const obs = await prisma.observacaoAdversario.update({
     where: { id },
     data: {
       equipa: parsed.data.equipa,
       escalaoId: parsed.data.escalaoId ?? null,
+      jogoId: parsed.data.jogoId ?? null,
       jogoObservado: parsed.data.jogoObservado ?? null,
       competicao: parsed.data.competicao ?? null,
       sistemaTatico: parsed.data.sistemaTatico ?? null,

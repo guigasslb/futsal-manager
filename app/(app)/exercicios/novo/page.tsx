@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { ExercicioForm } from "@/components/exercicios/ExercicioForm";
+
+export const metadata: Metadata = { title: "Novo exercício" };
 
 export default function NovoExercicioPage() {
   return (

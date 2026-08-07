@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
@@ -6,6 +7,8 @@ import { listarEscaloes } from "@/lib/actions/escaloes";
 import { AtletaForm } from "@/components/plantel/AtletaForm";
 import { ApagarAtletaButton } from "@/components/plantel/ApagarAtletaButton";
 import { EstadoErro } from "@/components/layout/EstadosUI";
+
+export const metadata: Metadata = { title: "Editar atleta" };
 
 export default async function EditarAtletaPage({
   params,

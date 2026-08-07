@@ -2,11 +2,17 @@ import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import {
   CAPACIDADES_POR_ESCALAO,
+  capacidadesEfetivas,
   type Capacidade,
 } from "@/lib/permissoes-catalogo";
 import type { Clube, Perfil, Utilizador } from "@prisma/client";
 
 export type UtilizadorSemHash = Omit<Utilizador, "passwordHash">;
+
+// `capacidadesEfetivas` (secção 6.4) vive no módulo PURO `permissoes-catalogo`
+// para poder ser partilhada com o cliente; é reexportada aqui porque este é o
+// ponto de entrada habitual das permissões no servidor.
+export { capacidadesEfetivas };
 
 export interface ContextoMembro {
   utilizadorId: string;
@@ -59,7 +65,13 @@ export async function obterMembroAtual(): Promise<ContextoMembro | null> {
     membroId: membro.id,
     clube: membro.clube,
     perfil: membro.perfil,
-    capacidades: membro.perfil.capacidades as Capacidade[],
+    capacidades: [
+      ...capacidadesEfetivas(
+        membro.perfil.capacidades,
+        membro.capacidadesExtra,
+        membro.capacidadesRevogadas,
+      ),
+    ],
     ambito: membro.perfil.ambito,
     escaloesAtribuidos: membro.atribuicoes.map((a) => a.escalaoId),
   };
@@ -118,6 +130,61 @@ export async function podeLerEscalao(escalaoId: string): Promise<boolean> {
     select: { visivelOutrosTreinadores: true },
   });
   return escalao?.visivelOutrosTreinadores ?? false;
+}
+
+/**
+ * Pode ler PELO MENOS UM dos escalões dados (F1 — participações N-N).
+ * Um atleta com participações em vários escalões é legível se o membro
+ * puder ler qualquer um deles (secção 8.5).
+ * Devolve false se a lista estiver vazia (atleta sem participações).
+ */
+export async function podeLerAlgumEscalao(escalaoIds: string[]): Promise<boolean> {
+  const ids = [...new Set(escalaoIds)];
+  if (ids.length === 0) return false;
+
+  const ctx = await obterMembroAtual();
+  if (!ctx) return false;
+  if (ctx.ambito === "TODO_CLUBE") return true;
+  if (ids.some((id) => ctx.escaloesAtribuidos.includes(id))) return true;
+
+  const visivel = await prisma.escalao.findFirst({
+    where: {
+      id: { in: ids },
+      clubeId: ctx.clube.id,
+      visivelOutrosTreinadores: true,
+    },
+    select: { id: true },
+  });
+  return visivel !== null;
+}
+
+/**
+ * Como exigirCapacidade, mas basta ter o âmbito sobre PELO MENOS UM dos escalões
+ * dados (F1 — o atleta pode participar em vários escalões).
+ * Mantém a convenção Resultado (não lança) para uso direto em Server Actions.
+ */
+export async function exigirCapacidadeEmAlgumEscalao(
+  cap: Capacidade,
+  escalaoIds: string[],
+): Promise<ResultadoPermissao> {
+  const ctx = await obterMembroAtual();
+  if (!ctx) return { ok: false, erro: "Sem acesso a este clube" };
+
+  if (!ctx.capacidades.includes(cap)) {
+    return { ok: false, erro: "Sem permissão" };
+  }
+
+  const limitadaPorEscalao =
+    CAPACIDADES_POR_ESCALAO.includes(cap) && ctx.ambito === "PROPRIOS_ESCALOES";
+
+  if (limitadaPorEscalao) {
+    const ids = [...new Set(escalaoIds)];
+    if (!ids.some((id) => ctx.escaloesAtribuidos.includes(id))) {
+      return { ok: false, erro: "Sem permissão neste escalão" };
+    }
+  }
+
+  return { ok: true, ctx };
 }
 
 /**
