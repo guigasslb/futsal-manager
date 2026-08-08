@@ -56,24 +56,28 @@ export function LogoIcon({
 export function Logo({
   size = 22,
   iconSize,
-  variant = "light",
+  variant = "auto",
   iconOnly = false,
   className,
   style,
 }: {
   size?: number;
   iconSize?: number;
-  variant?: "light" | "dark";
+  /** "auto" adapta ao tema CSS; "light" força modo claro; "dark" força modo escuro */
+  variant?: "auto" | "light" | "dark";
   iconOnly?: boolean;
   className?: string;
   style?: React.CSSProperties;
 }) {
+  // Ícone com fundo laranja (inverted) é visível em ambos os fundos
+  const inverted = variant === "dark" || variant === "auto";
+
   return (
     <span
       className={className}
       style={{ display: "inline-flex", alignItems: "center", gap: 10, ...style }}
     >
-      <LogoIcon size={iconSize ?? Math.round(size * 1.72)} inverted={variant === "dark"} />
+      <LogoIcon size={iconSize ?? Math.round(size * 1.72)} inverted={inverted} />
       {!iconOnly && (
         <span
           style={{
@@ -84,7 +88,11 @@ export function Logo({
             whiteSpace: "nowrap",
           }}
         >
-          <span style={{ fontWeight: 800, color: variant === "dark" ? "#FFFFFF" : INK }}>
+          {/* Cor do texto adapta via Tailwind: escuro em light mode, branco em dark mode */}
+          <span
+            className="text-[#141210] dark:text-white"
+            style={{ fontWeight: 800 }}
+          >
             Futsal
           </span>
           <span style={{ fontWeight: 500, color: ORANGE }}>coach</span>
