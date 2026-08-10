@@ -17,7 +17,8 @@
     "db:backfill:f1b": "tsx prisma/data-migrations/f1b_backfill_participacoes.ts",
     "db:seed:comunicacao": "tsx prisma/data-migrations/f7_seed_comunicacao.ts",
     "db:seed:sle": "tsx --env-file=.env prisma/data-migrations/seed_sport_lisboa_evora.ts",
-    "db:seed:sle-extra": "tsx --env-file=.env prisma/data-migrations/seed_sport_lisboa_evora_extra.ts"
+    "db:seed:sle-extra": "tsx --env-file=.env prisma/data-migrations/seed_sport_lisboa_evora_extra.ts",
+    "db:seed:sle-fix": "tsx --env-file=.env prisma/data-migrations/seed_sport_lisboa_evora_fix.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
