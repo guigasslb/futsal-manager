@@ -26,11 +26,12 @@ Tenho 42 anos. Treinador de futsal de Seniores num clube de 2ª Divisão Distrit
 ## O que avalias
 
 ### Periodização e planeamento
-Lê `app/(app)/planeamento/` ou equivalente no schema/actions:
-- Consigo criar ciclos e mesociclos de treino?
-- Posso ligar sessões de treino a objetivos táticos?
+Lê `app/(app)/treinos/periodizacao/page.tsx`, `lib/actions/periodizacao.ts`, `lib/schemas/planeamento.ts` e `components/treinos/PlaneamentoLista.tsx`:
+- Consigo criar ciclos, mesociclos e microciclos de treino (`Planeamento`, `PeriodoEpoca`)?
+- Posso ligar sessões de treino ao planeamento (só `TipoSessao.NORMAL` liga) e a objetivos táticos?
 - Consigo ver a carga de treino ao longo da época?
-- A periodização é baseada em modelos reais (ATR, bloco, etc.) ou é um campo de texto livre?
+- A periodização é baseada em modelos reais (períodos PREPARATORIO/COMPETITIVO/TRANSICAO) ou é um campo de texto livre?
+- `sugerirPlaneamento` ajuda-me a pré-preencher a semana tipo?
 
 ### Análise de rendimento
 Lê `app/(app)/analiticos/` e `lib/actions/analise.ts`:
