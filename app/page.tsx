@@ -92,7 +92,7 @@ const PLANOS: Plano[] = [
     sufixo: "/mês",
     destaque: true,
     itens: [
-      "Tudo o do plano Individual",
+      "Tudo o que tens no plano Individual",
       "Vários escalões e treinadores",
       "Permissões por perfil e branding do clube",
       "Analytics transversais e relatórios de clube",
