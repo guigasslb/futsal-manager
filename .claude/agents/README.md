@@ -1,8 +1,11 @@
-# Equipa de QA — FutsalCoach
+# Equipa de QA & Personas — FutsalCoach
 
 Agentes autónomos e críticos para garantir a qualidade do produto antes de ir a mercado.
+Dois tipos: **Técnicos** (auditam o código) e **Personas** (simulam utilizadores reais).
 
-## Agentes disponíveis
+---
+
+## Agentes Técnicos
 
 | Agente | Foco | Quando usar |
 |---|---|---|
@@ -15,39 +18,59 @@ Agentes autónomos e críticos para garantir a qualidade do produto antes de ir 
 | `qa-testes` | Suite Vitest, cobertura, gaps | Após novas features, pré-release |
 | `qa-produto` | Experiência comercial, prontidão para venda | Revisões de produto, decisões de roadmap |
 
+---
+
+## Agentes Persona (utilizadores reais simulados)
+
+| Agente | Persona | Contexto |
+|---|---|---|
+| `persona-treinador-solo-miudos` | Rui Santos, 34 anos | Treinador solo de Traquinas, sem clube na app, paga €4.99/mês |
+| `persona-treinador-solo-seniores` | Miguel Ferreira, 42 anos | Treinador solo de Seniores, Nível 2 FPF, exigente analiticamente |
+| `persona-treinador-clube-miudos` | Joana Rodrigues, 28 anos | Treinadora de Benjamins dentro do SLE, membro com perfil Treinador |
+| `persona-treinador-clube-seniores` | André Costa, 38 anos | Treinador Sub-17 no SLE, exige analytics avançados |
+| `persona-diretor-tecnico` | Carlos Mendes, 52 anos | DT do SLE, supervisiona 5 escalões, decide subscrição de clube |
+| `persona-presidente` | Dr. António Silva, 58 anos | Presidente do SLE, decide o orçamento, vê a app 1x/mês |
+
+---
+
 ## Como usar
 
-### Revisão completa (pré-release)
-Lança todos em paralelo:
+### Auditoria técnica completa (pré-release)
 ```
-@qa-negocio faz auditoria completa de lógica de negócio
-@qa-funcional faz auditoria completa de cobertura funcional
-@qa-frontend faz auditoria completa de UI/UX
-@qa-backend faz auditoria completa de Server Actions
-@qa-database faz auditoria completa de schema e queries
-@qa-seguranca faz auditoria completa de segurança
-@qa-testes faz auditoria completa da suite de testes
+@qa-negocio faz auditoria completa
+@qa-funcional faz auditoria completa
+@qa-frontend faz auditoria completa
+@qa-backend faz auditoria completa
+@qa-database faz auditoria completa
+@qa-seguranca faz auditoria completa
+@qa-testes faz auditoria completa
 @qa-produto faz avaliação de prontidão comercial
+```
+
+### Teste de personas (perspectiva de utilizador)
+```
+@persona-treinador-solo-miudos avalia a experiência de onboarding e uso diário
+@persona-treinador-solo-seniores avalia analytics e periodização
+@persona-treinador-clube-miudos avalia permissões e fluxos de clube
+@persona-treinador-clube-seniores avalia profundidade de análise
+@persona-diretor-tecnico avalia visão de clube e coordenação
+@persona-presidente avalia imagem, segurança e ROI
 ```
 
 ### Revisão focada (após feature específica)
 ```
-@qa-negocio verifica a lógica de convocatória implementada
-@qa-frontend verifica o novo ecrã de analíticos do escalão
-@qa-database verifica se há N+1 nas novas queries de analíticos
+@qa-negocio verifica a lógica de convocatória
+@persona-treinador-solo-miudos testa o novo fluxo de onboarding
+@persona-diretor-tecnico avalia o novo relatório de clube
 ```
 
-### Revisão rápida pré-commit
-```
-@qa-backend verifica as Server Actions alteradas hoje
-@qa-frontend verifica os componentes alterados hoje
-```
+---
 
 ## Filosofia
 
-Estes agentes são **críticos por design**. Não estão aqui para validar — estão aqui para encontrar problemas. Um agente que diz "tudo bem" sem evidência é inútil. Cada finding tem:
-- Ficheiro e linha exactos
-- Impacto concreto
-- Severidade justificada
+Estes agentes são **críticos por design**. Não estão aqui para validar — estão aqui para encontrar problemas.
+
+Os agentes técnicos reportam com ficheiro e linha exactos.
+Os agentes persona falam na primeira pessoa — como o utilizador real pensaria e sentiria.
 
 O produto vai ser vendido a treinadores com dinheiro real. A barra é alta.
