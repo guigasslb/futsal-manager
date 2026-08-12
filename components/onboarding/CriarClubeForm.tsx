@@ -27,7 +27,7 @@ export function CriarClubeForm() {
       });
       if (res.sucesso) {
         toast.success("Clube criado");
-        router.push("/dashboard");
+        router.push("/onboarding");
         router.refresh();
       } else {
         setErro(res.erro);

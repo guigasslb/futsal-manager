@@ -2,7 +2,14 @@
 
 import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { Prisma, type Posicao, type TipoEventoJogo, type TipoRelatorio, type TipoSessao } from "@prisma/client";
+import {
+  Prisma,
+  type Posicao,
+  type TipoEventoJogo,
+  type TipoMetrica,
+  type TipoRelatorio,
+  type TipoSessao,
+} from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { obterEpocaAtiva, obterClubeIdAtual } from "@/lib/epoca-context";
 import {
@@ -226,6 +233,19 @@ export interface ComparacaoEquipa {
   tempoJogoMedioEquipa: number;
 }
 
+/**
+ * Métrica configurável agregada para um atleta (bíblia §8.14 — métricas do clube).
+ * `total` = soma (NUMERO/ESCALA) ou nº de registos «verdadeiros» (BOOLEANO);
+ * `media` = total / jogos com registo; `jogos` = nº de jogos com valor registado.
+ */
+export interface MetricaAgregadaAtleta {
+  nome: string;
+  tipo: TipoMetrica;
+  total: number;
+  media: number;
+  jogos: number;
+}
+
 export interface AnaliticoAtleta {
   atleta: { id: string; nome: string; posicoes: Posicao[]; eGR: boolean };
   epoca: { id: string; nome: string };
@@ -237,6 +257,46 @@ export interface AnaliticoAtleta {
   caderneta: AnaliticoCaderneta;
   /** Comparação com a média da equipa; só disponível na vista de um escalão. */
   comparacaoEquipa: ComparacaoEquipa | null;
+  /** Métricas configuráveis do clube agregadas para o atleta (default `[]`). */
+  metricas: MetricaAgregadaAtleta[];
+}
+
+/** Uma linha crua de `ValorMetrica` já com o tipo/ordem da métrica associada. */
+interface ValorMetricaLinha {
+  valor: number;
+  metrica: { id: string; nome: string; tipo: TipoMetrica; ordem: number };
+}
+
+/**
+ * Agrega valores de métricas configuráveis por métrica (vista de um atleta).
+ * BOOLEANO conta registos com valor ≠ 0; NUMERO/ESCALA somam o valor.
+ */
+function agregarMetricasAtleta(valores: ValorMetricaLinha[]): MetricaAgregadaAtleta[] {
+  const map = new Map<
+    string,
+    { nome: string; tipo: TipoMetrica; ordem: number; soma: number; trues: number; jogos: number }
+  >();
+  for (const v of valores) {
+    const m = v.metrica;
+    const acc =
+      map.get(m.id) ?? { nome: m.nome, tipo: m.tipo, ordem: m.ordem, soma: 0, trues: 0, jogos: 0 };
+    acc.soma += v.valor;
+    if (v.valor !== 0) acc.trues++;
+    acc.jogos++;
+    map.set(m.id, acc);
+  }
+  return [...map.values()]
+    .sort((a, b) => a.ordem - b.ordem)
+    .map((a) => {
+      const total = a.tipo === "BOOLEANO" ? a.trues : a.soma;
+      return {
+        nome: a.nome,
+        tipo: a.tipo,
+        total,
+        media: a.jogos > 0 ? total / a.jogos : 0,
+        jogos: a.jogos,
+      };
+    });
 }
 
 export async function obterAnaliticoAtleta(
@@ -293,8 +353,15 @@ export async function obterAnaliticoAtleta(
   const ingresso = atleta.dataIngresso ?? atleta.criadoEm;
   const filtroJogo = { epocaId: epoca.id, escalaoId: { in: escaloesCtx } };
 
-  const [jogosConvocado, estatisticas, sessoes, presencas, totalHabilidades, progressos] =
-    await Promise.all([
+  const [
+    jogosConvocado,
+    estatisticas,
+    sessoes,
+    presencas,
+    totalHabilidades,
+    progressos,
+    valoresMetricas,
+  ] = await Promise.all([
       prisma.convocatoria.count({
         where: { convocado: true, atletaId, jogo: filtroJogo },
       }),
@@ -334,6 +401,14 @@ export async function obterAnaliticoAtleta(
       prisma.progressoHabilidade.findMany({
         where: { atletaId, epocaId: epoca.id },
         select: { estado: true },
+      }),
+      // Métricas configuráveis registadas por jogo (bíblia §8.14) — surgem agregadas.
+      prisma.valorMetrica.findMany({
+        where: { estatistica: { atletaId, jogo: filtroJogo } },
+        select: {
+          valor: true,
+          metrica: { select: { id: true, nome: true, tipo: true, ordem: true } },
+        },
       }),
     ]);
 
@@ -386,6 +461,7 @@ export async function obterAnaliticoAtleta(
     evolucaoJogos,
     caderneta,
     comparacaoEquipa,
+    metricas: agregarMetricasAtleta(valoresMetricas),
   });
 }
 
@@ -449,6 +525,13 @@ export interface ResultadoJogoResumo {
   resultado: "V" | "E" | "D" | null;
 }
 
+/** Ranking de atletas por uma métrica configurável (vista de equipa). */
+export interface RankingMetrica {
+  metrica: string;
+  tipo: TipoMetrica;
+  top: Array<{ atletaId: string; atletaNome: string; valor: number }>;
+}
+
 export interface AnaliticoEscalao {
   escalao: { id: string; nome: string };
   epoca: { id: string; nome: string };
@@ -470,6 +553,66 @@ export interface AnaliticoEscalao {
   presencaMensal: PresencaMensal[];
   distribuicaoTipoTreino: Record<TipoSessao, number>;
   resultados: ResultadoJogoResumo[];
+  /** Rankings dos melhores atletas por cada métrica configurável (default `[]`). */
+  rankingsMetricas: RankingMetrica[];
+}
+
+/** Uma linha crua de `ValorMetrica` com métrica + atleta (vista de equipa). */
+interface ValorMetricaEquipaLinha {
+  valor: number;
+  metrica: { id: string; nome: string; tipo: TipoMetrica; ordem: number };
+  estatistica: { atletaId: string; atleta: { nome: string } };
+}
+
+/**
+ * Constrói rankings por métrica configurável para toda a equipa.
+ * Agrega por atleta (BOOLEANO conta registos ≠ 0; NUMERO soma; ESCALA média),
+ * ordena decrescente e devolve o top 10 por métrica.
+ */
+function montarRankingsMetricas(valores: ValorMetricaEquipaLinha[]): RankingMetrica[] {
+  interface AccMetrica {
+    nome: string;
+    tipo: TipoMetrica;
+    ordem: number;
+    atletas: Map<string, { nome: string; soma: number; trues: number; jogos: number }>;
+  }
+  const metricas = new Map<string, AccMetrica>();
+  for (const v of valores) {
+    const m = v.metrica;
+    const accM =
+      metricas.get(m.id) ?? { nome: m.nome, tipo: m.tipo, ordem: m.ordem, atletas: new Map() };
+    const atletaId = v.estatistica.atletaId;
+    const accA =
+      accM.atletas.get(atletaId) ??
+      { nome: v.estatistica.atleta.nome, soma: 0, trues: 0, jogos: 0 };
+    accA.soma += v.valor;
+    if (v.valor !== 0) accA.trues++;
+    accA.jogos++;
+    accM.atletas.set(atletaId, accA);
+    metricas.set(m.id, accM);
+  }
+
+  return [...metricas.values()]
+    .sort((a, b) => a.ordem - b.ordem)
+    .map((m) => {
+      const top = [...m.atletas.entries()]
+        .map(([atletaId, a]) => {
+          const valor =
+            m.tipo === "BOOLEANO"
+              ? a.trues
+              : m.tipo === "ESCALA"
+                ? a.jogos > 0
+                  ? a.soma / a.jogos
+                  : 0
+                : a.soma;
+          return { atletaId, atletaNome: a.nome, valor };
+        })
+        .filter((a) => a.valor > 0)
+        .sort((a, b) => b.valor - a.valor)
+        .slice(0, 10);
+      return { metrica: m.nome, tipo: m.tipo, top };
+    })
+    .filter((r) => r.top.length > 0);
 }
 
 function resultadoJogo(m: number | null, s: number | null): "V" | "E" | "D" | null {
@@ -500,7 +643,8 @@ export async function obterAnaliticoEscalao(
   const epoca = await resolverEpoca(clubeId, epocaId);
   if (!epoca) return erro("Nenhuma época ativa");
 
-  const [jogos, sessoes, nAtletas, estatisticas, eventos, presencas] = await Promise.all([
+  const [jogos, sessoes, nAtletas, estatisticas, eventos, presencas, valoresMetricas] =
+    await Promise.all([
     prisma.jogo.findMany({
       where: { epocaId: epoca.id, escalaoId },
       select: { id: true, data: true, adversario: true, golosMarcados: true, golosSofridos: true },
@@ -535,6 +679,15 @@ export async function obterAnaliticoEscalao(
         sessao: { epocaId: epoca.id },
       },
       select: { sessaoId: true },
+    }),
+    // Métricas configuráveis registadas por jogo (bíblia §8.14) — rankings de equipa.
+    prisma.valorMetrica.findMany({
+      where: { estatistica: { jogo: { epocaId: epoca.id, escalaoId } } },
+      select: {
+        valor: true,
+        metrica: { select: { id: true, nome: true, tipo: true, ordem: true } },
+        estatistica: { select: { atletaId: true, atleta: { select: { nome: true } } } },
+      },
     }),
   ]);
 
@@ -665,6 +818,7 @@ export async function obterAnaliticoEscalao(
     presencaMensal,
     distribuicaoTipoTreino,
     resultados,
+    rankingsMetricas: montarRankingsMetricas(valoresMetricas),
   });
 }
 

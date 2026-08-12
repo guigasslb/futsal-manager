@@ -9,7 +9,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         // Ações principais — cor primária (marca/clube via --primary)
-        default: "bg-primary text-white hover:bg-primary/50",
+        default: "bg-primary text-white hover:bg-primary/90",
         outline:
           "border border-cinza-200 bg-white text-cinza-900 hover:bg-primary/5",
         destructive: "bg-vermelho-600 text-white hover:bg-vermelho-600/90",

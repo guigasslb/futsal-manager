@@ -1613,6 +1613,14 @@ taxaPresenca        = presencas / sessoesTotais   (0 se sessoesTotais == 0)
 ```
 Regras: ATRASADO conta; FALTA/FALTA_JUSTIFICADA/LESIONADO não contam. `totalMinutos = null` distingue "não registado" de "zero". A vista conjunta soma as participações do atleta.
 
+**Métricas configuráveis (`obterAnaliticoAtleta` → `metricas`)** — os `ValorMetrica` registados por jogo (§8.14) são agregados por `MetricaConfig` e devolvidos em `metricas: Array<{ nome, tipo, total, media, jogos }>` (ordenadas por `MetricaConfig.ordem`):
+```
+jogos  = nº de EstatisticaAtleta (do contexto época/escalão) com valor registado para a métrica
+total  = NUMERO/ESCALA → Σ valor ; BOOLEANO → nº de registos com valor ≠ 0
+media  = total / jogos   (0 se jogos == 0)
+```
+Inclui métricas **desativadas** com valores históricos (nunca se apagam — §9). `[]` quando não há valores registados.
+
 ### 10.2 Agregado da equipa (escalão + época)
 ```
 jogos, vitorias, empates, derrotas (de golosMarcados vs golosSofridos)
@@ -1620,7 +1628,9 @@ golos marcados/sofridos totais e médias · taxaPresençaMédia
 melhores marcadores/assistentes (ranking por atletaId)
 faltas acumuladas médias por parte · jogadores mais utilizados (tempo por blocos)
 distribuição de tipos de treino (NORMAL/ABERTO/CAPTACAO/EVENTO)
+rankings por métrica configurável (top 10 atletas por cada MetricaConfig)
 ```
+**Rankings de métricas configuráveis (`obterAnaliticoEscalao` → `rankingsMetricas`)** — para cada `MetricaConfig` com valores na equipa, agrega por atleta (NUMERO → Σ; BOOLEANO → nº registos ≠ 0; ESCALA → média) e devolve `rankingsMetricas: Array<{ metrica, tipo, top: Array<{ atletaId, atletaNome, valor }> }>` — top 10 por valor decrescente, ordenado por `MetricaConfig.ordem`; omite métricas sem atletas com valor > 0. `[]` quando não há valores.
 
 ### 10.3 Agregado do clube (transversal — decisão 2026-08-05)
 ```
@@ -1936,6 +1946,12 @@ A propriedade do conteúdo metodológico é **decidida pelo treinador na criaç�
 ## 19. Changelog da documentação
 
 Do mais recente para o mais antigo.
+
+- **2026-08-11** — **Agregação de métricas configuráveis nos analíticos (§10.1, §10.2).** Os `ValorMetrica` registados por jogo (§8.14) eram *write-only*: gravavam-se mas nunca eram lidos em `lib/actions/analise.ts`. Passam a ser agregados e devolvidos:
+  - **Nível 1 — `obterAnaliticoAtleta` → `metricas: MetricaAgregadaAtleta[]`:** agregação por `MetricaConfig` no contexto época/escalão — `total` (NUMERO/ESCALA = Σ valor; BOOLEANO = nº registos ≠ 0), `media` (total/jogos) e `jogos` (nº de jogos com valor). Ordenado por `MetricaConfig.ordem`; inclui métricas desativadas com histórico (nunca se apagam — §9); `[]` quando não há valores.
+  - **Nível 2 — `obterAnaliticoEscalao` → `rankingsMetricas: RankingMetrica[]`:** por métrica, agrega por atleta (NUMERO = Σ; BOOLEANO = nº registos ≠ 0; ESCALA = média) e produz o **top 10** (`{ atletaId, atletaNome, valor }`) por valor decrescente; omite métricas sem atletas com valor > 0.
+  - **Compatibilidade:** campos **aditivos**; os painéis presentacionais (`PainelAtleta`/`PainelEscalao`) acedem por `dados.X` e não quebram (a UI de visualização das novas coleções fica para o `frontend-specialist`). O snapshot imutável do relatório partilhável (§10.6) passa a incluir estes campos automaticamente.
+  - **Verificação:** `npm run typecheck` **0 erros**; `npm run test` **600/600** (3 novos testes em `tests/analise-f9.test.ts` a cobrir a agregação por atleta e os rankings de equipa).
 
 - **2026-08-06** — **F10 (Fase 20) — Frontend do onboarding com vitória rápida (§8.1, §16 fase 20).** Camada de apresentação (Server Components para leitura + Client Components para escrita via Server Actions existentes) do fluxo guiado pós-primeiro-login e do percurso de valor rápido. Sem alterações a `prisma/schema.prisma`, schemas ou actions; **não toca em auth** (`middleware.ts`/`lib/auth.ts` intactos — as rotas novas já ficam protegidas pelo matcher existente).
   - **Wizard de setup do clube — `app/(app)/onboarding/page.tsx` (novo) + `components/onboarding/WizardOnboarding.tsx` (novo):** fluxo de 3 passos, cada um **saltável** — (1) **Identidade** (nome, cor primária e logótipo por URL → `atualizarBrandingClube`), (2) **Escalões** (criar/remover inline, ≥1 recomendado → `criarEscalao`/`apagarEscalao`), (3) **Época** (confirmar a ativa, tornar ativa outra ou criar a primeira → `criarEpoca` + `definirEpocaAtiva`). Indicador de progresso e botões "Saltar"/"Continuar"; "Começar a usar" encaminha para `/dashboard`. A conclusão é marcada como **flag local por browser** (`localStorage: fc:onboarding:concluido`) — o campo `Clube.onboardingConcluido` fica deferido para a fase de base de dados (a rota mantém-se acessível por URL). O passo Individual (clube técnico) reutiliza diretamente a vitória rápida.

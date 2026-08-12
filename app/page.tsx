@@ -83,7 +83,7 @@ const PLANOS: Plano[] = [
       "Estatísticas e caderneta do atleta",
       "Comunicação via WhatsApp",
     ],
-    cta: "Registar grátis",
+    cta: "Começar agora",
   },
   {
     nome: "Clube",
@@ -127,7 +127,7 @@ export default function RootPage() {
               className="rounded-lg px-4 py-2 text-corpo font-semibold text-white transition-transform hover:-translate-y-0.5"
               style={{ backgroundColor: LARANJA }}
             >
-              Registar grátis
+              Começar agora
             </Link>
           </nav>
         </header>
@@ -152,7 +152,7 @@ export default function RootPage() {
                 className="inline-flex items-center justify-center gap-2 rounded-xl px-7 py-3.5 text-base font-semibold text-white shadow-lg transition-transform hover:-translate-y-0.5"
                 style={{ backgroundColor: LARANJA }}
               >
-                Registar grátis
+                Começar agora
                 <ArrowRight size={18} aria-hidden />
               </Link>
               <Link

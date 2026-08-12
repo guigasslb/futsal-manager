@@ -67,6 +67,31 @@ export async function criarClube(dados: unknown): Promise<Resultado<{ clubeId: s
       },
     });
 
+    // Época inicial: nome/datas derivados do ano corrente. A época de futsal
+    // arranca em setembro; antes de agosto ainda estamos na época iniciada no
+    // ano anterior. Fica ativa para que obterEpocaAtiva() não devolva null.
+    const agora = new Date();
+    const mes = agora.getMonth(); // 0 = janeiro, 7 = agosto
+    const anoInicio = mes >= 7 ? agora.getFullYear() : agora.getFullYear() - 1;
+    const anoFim = anoInicio + 1;
+    await tx.epoca.create({
+      data: {
+        clubeId: clube.id,
+        nome: `${anoInicio}/${anoFim}`,
+        dataInicio: new Date(anoInicio, 8, 1), // 1 de setembro
+        dataFim: new Date(anoFim, 5, 30), // 30 de junho
+        ativa: true,
+      },
+    });
+
+    // Escalão de arranque, customizável depois no onboarding.
+    await tx.escalao.create({
+      data: {
+        clubeId: clube.id,
+        nome: "Seniores",
+      },
+    });
+
     let perfilAdminId = "";
     for (const p of PERFIS_ARRANQUE) {
       const perfil = await tx.perfil.create({

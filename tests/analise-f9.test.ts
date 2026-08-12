@@ -30,6 +30,7 @@ vi.mock("@/lib/db", () => ({
     jogo: { findMany: vi.fn() },
     habilidade: { count: vi.fn() },
     progressoHabilidade: { findMany: vi.fn() },
+    valorMetrica: { findMany: vi.fn() },
     relatorioPartilhado: {
       create: vi.fn(),
       findUnique: vi.fn(),
@@ -95,6 +96,8 @@ beforeEach(() => {
   (escaloesLegiveis as ReturnType<typeof vi.fn>).mockResolvedValue("TODOS");
   (obterMembroAtual as ReturnType<typeof vi.fn>).mockResolvedValue(membroComRelatorios());
   p.epoca.findFirst.mockResolvedValue({ id: EPOCA, nome: "2025/26" });
+  // Métricas configuráveis: sem valores por omissão (cada teste pode sobrepor).
+  p.valorMetrica.findMany.mockResolvedValue([]);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -216,6 +219,63 @@ describe("obterAnaliticoAtleta", () => {
     expect(r.dados.comparacaoEquipa).toBeNull();
   });
 
+  it("agrega métricas configuráveis (NUMERO soma, BOOLEANO conta, ESCALA média)", async () => {
+    p.atleta.findFirst.mockResolvedValue({
+      id: ATLETA,
+      nome: "João",
+      posicoes: ["ALA"],
+      criadoEm: new Date("2025-08-01"),
+      dataIngresso: null,
+      participacoes: [{ escalaoId: ESCALAO, escalao: { nome: "Sub-13" } }],
+    });
+    p.convocatoria.count.mockResolvedValue(2);
+    p.estatisticaAtleta.findMany.mockResolvedValue([]);
+    p.sessao.findMany.mockResolvedValue([]);
+    p.presenca.findMany.mockResolvedValue([]);
+    p.habilidade.count.mockResolvedValue(0);
+    p.progressoHabilidade.findMany.mockResolvedValue([]);
+    p.valorMetrica.findMany.mockResolvedValue([
+      { valor: 3, metrica: { id: "m1", nome: "Remates", tipo: "NUMERO", ordem: 0 } },
+      { valor: 2, metrica: { id: "m1", nome: "Remates", tipo: "NUMERO", ordem: 0 } },
+      { valor: 1, metrica: { id: "m2", nome: "Foco", tipo: "BOOLEANO", ordem: 1 } },
+      { valor: 0, metrica: { id: "m2", nome: "Foco", tipo: "BOOLEANO", ordem: 1 } },
+      { valor: 4, metrica: { id: "m3", nome: "Atitude", tipo: "ESCALA", ordem: 2 } },
+      { valor: 5, metrica: { id: "m3", nome: "Atitude", tipo: "ESCALA", ordem: 2 } },
+    ]);
+
+    const r = await obterAnaliticoAtleta(ATLETA);
+    expect(r.sucesso).toBe(true);
+    if (!r.sucesso) return;
+    // Ordenadas por `ordem` da métrica.
+    expect(r.dados.metricas).toEqual([
+      { nome: "Remates", tipo: "NUMERO", total: 5, media: 2.5, jogos: 2 },
+      { nome: "Foco", tipo: "BOOLEANO", total: 1, media: 0.5, jogos: 2 },
+      { nome: "Atitude", tipo: "ESCALA", total: 9, media: 4.5, jogos: 2 },
+    ]);
+  });
+
+  it("devolve métricas vazias quando não há valores registados", async () => {
+    p.atleta.findFirst.mockResolvedValue({
+      id: ATLETA,
+      nome: "João",
+      posicoes: ["ALA"],
+      criadoEm: new Date("2025-08-01"),
+      dataIngresso: null,
+      participacoes: [{ escalaoId: ESCALAO, escalao: { nome: "Sub-13" } }],
+    });
+    p.convocatoria.count.mockResolvedValue(0);
+    p.estatisticaAtleta.findMany.mockResolvedValue([]);
+    p.sessao.findMany.mockResolvedValue([]);
+    p.presenca.findMany.mockResolvedValue([]);
+    p.habilidade.count.mockResolvedValue(0);
+    p.progressoHabilidade.findMany.mockResolvedValue([]);
+
+    const r = await obterAnaliticoAtleta(ATLETA);
+    expect(r.sucesso).toBe(true);
+    if (!r.sucesso) return;
+    expect(r.dados.metricas).toEqual([]);
+  });
+
   it("recusa escalão onde o atleta não participa", async () => {
     p.atleta.findFirst.mockResolvedValue({
       id: ATLETA,
@@ -276,6 +336,35 @@ describe("obterAnaliticoEscalao", () => {
     expect(r.dados.distribuicaoTipoTreino.CAPTACAO).toBe(0);
     // taxa média = 3 presenças / (10 atletas × 2 sessões) = 0.15
     expect(r.dados.taxaPresencaMedia).toBeCloseTo(0.15);
+  });
+
+  it("constrói rankings de métricas configuráveis por equipa", async () => {
+    p.escalao.findFirst.mockResolvedValue({ id: ESCALAO, nome: "Sub-13" });
+    p.jogo.findMany.mockResolvedValue([]);
+    p.sessao.findMany.mockResolvedValue([]);
+    p.atletaEscalao.count.mockResolvedValue(2);
+    p.estatisticaAtleta.findMany.mockResolvedValue([]);
+    p.eventoJogo.findMany.mockResolvedValue([]);
+    p.presenca.findMany.mockResolvedValue([]);
+    p.valorMetrica.findMany.mockResolvedValue([
+      { valor: 3, metrica: { id: "m1", nome: "Remates", tipo: "NUMERO", ordem: 0 }, estatistica: { atletaId: ATLETA, atleta: { nome: "João" } } },
+      { valor: 2, metrica: { id: "m1", nome: "Remates", tipo: "NUMERO", ordem: 0 }, estatistica: { atletaId: ATLETA, atleta: { nome: "João" } } },
+      { valor: 1, metrica: { id: "m1", nome: "Remates", tipo: "NUMERO", ordem: 0 }, estatistica: { atletaId: ATLETA2, atleta: { nome: "Rui" } } },
+    ]);
+
+    const r = await obterAnaliticoEscalao(ESCALAO);
+    expect(r.sucesso).toBe(true);
+    if (!r.sucesso) return;
+    expect(r.dados.rankingsMetricas).toEqual([
+      {
+        metrica: "Remates",
+        tipo: "NUMERO",
+        top: [
+          { atletaId: ATLETA, atletaNome: "João", valor: 5 },
+          { atletaId: ATLETA2, atletaNome: "Rui", valor: 1 },
+        ],
+      },
+    ]);
   });
 
   it("nega escalão inexistente", async () => {
