@@ -166,6 +166,7 @@ export const PERFIS_ARRANQUE: PerfilArranque[] = [
       "EXERCICIOS_GERIR",
       "RELATORIOS_VER",
       "COMUNICACOES_GERIR",
+      "LEMBRETES_EQUIPA_GERIR",
     ],
   },
   {

@@ -162,7 +162,7 @@ export function AtletaForm({
                   key={p}
                   type="button"
                   onClick={() => alternarPosicao(p)}
-                  className={`rounded-full border px-3 py-1.5 text-corpo-sec transition-colors ${
+                  className={`inline-flex min-h-[44px] items-center rounded-full border px-4 py-1.5 text-corpo-sec transition-colors ${
                     ativo
                       ? "border-primary bg-primary/5 text-primary"
                       : "border-cinza-200 text-cinza-600 hover:bg-cinza-50"

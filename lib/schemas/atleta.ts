@@ -40,6 +40,14 @@ export const criarAtletaSchema = atletaPessoalSchema.extend({
   }),
 });
 
+/**
+ * Hard-delete definitivo de um atleta (P1.3 — RGPD, direito ao apagamento).
+ * O id é um cuid (convenção de IDs do projeto), não um uuid.
+ */
+export const apagarAtletaDefinitivamenteSchema = z.object({
+  atletaId: z.string().cuid("Atleta inválido"),
+});
+
 export type AtletaPessoalInput = z.infer<typeof atletaPessoalSchema>;
 export type CriarAtletaInput = z.infer<typeof criarAtletaSchema>;
 

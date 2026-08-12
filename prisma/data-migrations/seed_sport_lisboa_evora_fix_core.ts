@@ -1,4 +1,5 @@
 // prisma/data-migrations/seed_sport_lisboa_evora_fix_core.ts
+// DADOS DE TESTE — anonimizados em 2026-08-12. Não usar em produção com dados reais.
 //
 // Lógica PARTILHADA da CORRECÇÃO do seed do clube "Sport Lisboa e Évora".
 // Usada tanto pela rota temporária (app/api/seed-sle-fix/route.ts) como pelo
@@ -51,29 +52,31 @@ type AtletaSeed = {
   golos: number; // total de golos na época
 };
 
-// Ordem = número da camisola (1..21). Cópia exacta da lista ATLETAS do seed original.
+// Ordem = número da camisola (1..21). Cópia EXACTA da lista ATLETAS do seed original
+// (nomes fictícios anonimizados). Tem de coincidir com o seed base, pois os atletas
+// são resolvidos por nome normalizado (ver normalizar()).
 const ATLETAS: readonly AtletaSeed[] = [
-  { nome: "martim", numero: 1, pct: 70, golos: 0 },
-  { nome: "rodrigo", numero: 2, pct: 100, golos: 4 },
-  { nome: "beira", numero: 3, pct: 0, golos: 12 },
-  { nome: "matheus", numero: 4, pct: 70, golos: 12 },
-  { nome: "laura", numero: 5, pct: 58.75, golos: 4 },
-  { nome: "Santiago", numero: 6, pct: 73.75, golos: 30 },
-  { nome: "tiago", numero: 7, pct: 42.5, golos: 0 },
-  { nome: "Boa fé", numero: 8, pct: 68.75, golos: 2 },
-  { nome: "Rendeiro", numero: 9, pct: 7.5, golos: 3 },
-  { nome: "lipe", numero: 10, pct: 60, golos: 0 },
-  { nome: "gabriel", numero: 11, pct: 41.25, golos: 7 },
-  { nome: "Rafael", numero: 12, pct: 15, golos: 1 },
-  { nome: "henrique", numero: 13, pct: 83.75, golos: 67 },
-  { nome: "davi", numero: 14, pct: 87.5, golos: 42 },
-  { nome: "eduardo", numero: 15, pct: 92.5, golos: 57 },
-  { nome: "enrico", numero: 16, pct: 26.25, golos: 0 },
-  { nome: "João Risso", numero: 17, pct: 73.75, golos: 33 },
-  { nome: "Tariq", numero: 18, pct: 76.25, golos: 54 },
-  { nome: "afonso", numero: 19, pct: 38.75, golos: 3 },
-  { nome: "dinis", numero: 20, pct: 42.5, golos: 5 },
-  { nome: "ruben", numero: 21, pct: 75, golos: 8 },
+  { nome: "Diogo", numero: 1, pct: 70, golos: 0 },
+  { nome: "Miguel", numero: 2, pct: 100, golos: 4 },
+  { nome: "Tomás", numero: 3, pct: 0, golos: 12 },
+  { nome: "Guilherme", numero: 4, pct: 70, golos: 12 },
+  { nome: "Beatriz", numero: 5, pct: 58.75, golos: 4 },
+  { nome: "Salvador", numero: 6, pct: 73.75, golos: 30 },
+  { nome: "Vasco", numero: 7, pct: 42.5, golos: 0 },
+  { nome: "Duarte", numero: 8, pct: 68.75, golos: 2 },
+  { nome: "Simão", numero: 9, pct: 7.5, golos: 3 },
+  { nome: "Leonardo", numero: 10, pct: 60, golos: 0 },
+  { nome: "Bernardo", numero: 11, pct: 41.25, golos: 7 },
+  { nome: "Xavier", numero: 12, pct: 15, golos: 1 },
+  { nome: "Lourenço", numero: 13, pct: 83.75, golos: 67 },
+  { nome: "Gaspar", numero: 14, pct: 87.5, golos: 42 },
+  { nome: "Martinho", numero: 15, pct: 92.5, golos: 57 },
+  { nome: "Nuno", numero: 16, pct: 26.25, golos: 0 },
+  { nome: "Bruno Costa", numero: 17, pct: 73.75, golos: 33 },
+  { nome: "Ivan", numero: 18, pct: 76.25, golos: 54 },
+  { nome: "Hugo", numero: 19, pct: 38.75, golos: 3 },
+  { nome: "Fábio", numero: 20, pct: 42.5, golos: 5 },
+  { nome: "Renato", numero: 21, pct: 75, golos: 8 },
 ] as const;
 
 // Distribuição dos 30 jogos pelas competições existentes na BD (buscadas por nome).

@@ -1,4 +1,5 @@
 // prisma/data-migrations/seed_sport_lisboa_evora_extra.ts
+// DADOS DE TESTE — anonimizados em 2026-08-12. Não usar em produção com dados reais.
 //
 // Seed suplementar (standalone) do clube "Sport Lisboa e Évora".
 // Equivalente à rota temporária app/api/seed-sle-extra/route.ts — ambos usam a
@@ -17,6 +18,13 @@ import { PrismaClient } from "@prisma/client";
 import { seedSleExtra } from "./seed_sport_lisboa_evora_extra_core";
 
 const prisma = new PrismaClient();
+
+// Guarda de produção: este seed cria DADOS DE TESTE e NUNCA deve correr em produção.
+if (process.env.NODE_ENV === "production") {
+  throw new Error(
+    "Seed abortado: seed de dados de teste (SLE) não pode correr em produção (NODE_ENV=production).",
+  );
+}
 
 async function main() {
   const resultado = await seedSleExtra(prisma);

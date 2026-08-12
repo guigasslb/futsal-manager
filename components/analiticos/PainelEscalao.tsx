@@ -2,9 +2,11 @@
 // Presentacional: recebe o AnaliticoEscalao já calculado (Server Action).
 
 import type { TipoSessao } from "@prisma/client";
-import type { AnaliticoEscalao } from "@/lib/actions/analise";
+import type { AnaliticoEscalao, CompeticaoOpcao } from "@/lib/actions/analise";
 import { GraficoBarrasH } from "@/components/graficos/GraficoBarrasH";
 import { GraficoBarrasV } from "@/components/graficos/GraficoBarrasV";
+import { FiltroCompeticao } from "./FiltroCompeticao";
+import { RankingsMetricas } from "./RankingsMetricas";
 import { Cartao, pct, n1 } from "./Cartao";
 
 const LABEL_TIPO_SESSAO: Record<TipoSessao, string> = {
@@ -19,7 +21,17 @@ function formatarData(iso: string): string {
   return d.toLocaleDateString("pt-PT", { day: "2-digit", month: "2-digit" });
 }
 
-export function PainelEscalao({ dados }: { dados: AnaliticoEscalao }) {
+export function PainelEscalao({
+  dados,
+  competicoes,
+  competicaoId,
+}: {
+  dados: AnaliticoEscalao;
+  /** Competições com jogos no escalão/época; quando presentes, mostra o filtro (P2.5). */
+  competicoes?: CompeticaoOpcao[];
+  /** Competição atualmente selecionada (undefined = «Todas»). */
+  competicaoId?: string;
+}) {
   const pontosMarcadores = dados.marcadores.map((m) => ({
     label: m.nome,
     valor: m.valor,
@@ -41,10 +53,19 @@ export function PainelEscalao({ dados }: { dados: AnaliticoEscalao }) {
     .map((t) => ({ tipo: t, n: dados.distribuicaoTipoTreino[t] }))
     .filter((x) => x.n > 0);
 
+  // Snapshots de relatórios antigos (pré-agregação de métricas) não têm o
+  // campo — o default garante zero regressão na vista pública.
+  const rankingsMetricas = dados.rankingsMetricas ?? [];
+
   const semJogos = dados.jogos === 0;
 
   return (
     <div className="space-y-6">
+      {/* Filtro por competição (P2.5) — só quando há competições com jogos. */}
+      {competicoes && competicoes.length > 0 && (
+        <FiltroCompeticao competicoes={competicoes} competicaoId={competicaoId} />
+      )}
+
       {/* Resultados */}
       <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
         <Cartao valor={dados.jogos} label="jogos" />
@@ -132,6 +153,11 @@ export function PainelEscalao({ dados }: { dados: AnaliticoEscalao }) {
             unidade="min"
           />
         </div>
+      )}
+
+      {/* Ranking por métrica configurável (§10.2) — só com métricas do clube. */}
+      {rankingsMetricas.length > 0 && (
+        <RankingsMetricas rankings={rankingsMetricas} />
       )}
 
       {/* Assiduidade mensal */}

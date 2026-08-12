@@ -336,3 +336,69 @@ export async function listarParticipacoes(
     })),
   );
 }
+
+// ─── Leitura (carreira / percurso do atleta) ─────────────────────────────────
+
+/**
+ * Uma etapa do percurso do atleta (época/escalão), para a aba «Carreira».
+ * Vista só-de-leitura: os campos `dataIngresso`/`dataSaida` correspondem ao
+ * início e fim da participação (AtletaEscalao.dataInicio/dataFim).
+ */
+export interface CarreiraEntry {
+  id: string;
+  epocaNome: string;
+  /** A época em contexto é a época ativa do clube (marca a etapa atual). */
+  epocaAtiva: boolean;
+  escalaoNome: string;
+  numero: number | null;
+  estado: AtletaEscalao["estado"];
+  dataIngresso: Date;
+  dataSaida: Date | null;
+}
+
+/**
+ * Percurso completo do atleta ao longo das épocas (aba «Carreira», secção 8.5).
+ * Vista só-de-leitura sobre AtletaEscalao — sem ações de gestão (essas vivem na
+ * aba «Participações»). Ordenado da época mais recente para a mais antiga.
+ */
+export async function obterCarreiraAtleta(
+  atletaId: string,
+): Promise<Resultado<CarreiraEntry[]>> {
+  const clubeId = await obterClubeIdAtual();
+  if (!clubeId) return erro("Não autenticado");
+
+  const atleta = await prisma.atleta.findFirst({
+    where: { id: atletaId, clubeId },
+    select: { id: true },
+  });
+  if (!atleta) return erro("Atleta não encontrado");
+
+  const participacoes = await prisma.atletaEscalao.findMany({
+    where: { atletaId, escalao: { clubeId } },
+    include: {
+      escalao: { select: { nome: true } },
+      epoca: { select: { nome: true, ativa: true } },
+    },
+    // Época mais recente primeiro; dentro da época, a etapa mais recente primeiro.
+    orderBy: [{ epoca: { dataInicio: "desc" } }, { dataInicio: "desc" }],
+  });
+
+  // Âmbito de leitura (secção 6.4): o percurso só é visível a quem possa ler
+  // pelo menos um dos escalões onde o atleta participou.
+  const escalaoIds = participacoes.map((p) => p.escalaoId);
+  if (escalaoIds.length > 0 && !(await podeLerAlgumEscalao(escalaoIds)))
+    return erro("Sem permissão para ler estes escalões");
+
+  return ok(
+    participacoes.map((p) => ({
+      id: p.id,
+      epocaNome: p.epoca.nome,
+      epocaAtiva: p.epoca.ativa,
+      escalaoNome: p.escalao.nome,
+      numero: p.numero,
+      estado: p.estado,
+      dataIngresso: p.dataInicio,
+      dataSaida: p.dataFim,
+    })),
+  );
+}

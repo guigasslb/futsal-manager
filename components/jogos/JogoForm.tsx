@@ -38,7 +38,6 @@ type JogoParaEdicao = Pick<
   | "casaFora"
   | "tipo"
   | "escalaoId"
-  | "competicao"
   | "competicaoId"
   | "local"
   | "golosMarcados"
@@ -67,6 +66,21 @@ export function JogoForm({
   const [competicaoId, setCompeticaoId] = useState<string>(
     jogo?.competicaoId ?? SEM_COMPETICAO,
   );
+  const [dataValor, setDataValor] = useState<string>(paraInputDateTime(jogo?.data));
+
+  // O grupo "Resultado" só faz sentido depois do jogo. Mostra-se quando: o jogo
+  // já aconteceu (data no passado), já tem resultado registado, ou o treinador
+  // pede explicitamente para o registar (ex.: adicionar um jogo histórico).
+  const jaTemResultado =
+    jogo != null &&
+    (jogo.golosMarcados != null ||
+      jogo.golosSofridos != null ||
+      jogo.faltas1aParte != null ||
+      jogo.faltas2aParte != null ||
+      (jogo.videoUrl != null && jogo.videoUrl !== ""));
+  const dataNoPassado = dataValor !== "" && new Date(dataValor) < new Date();
+  const [resultadoManual, setResultadoManual] = useState(false);
+  const mostrarResultado = dataNoPassado || jaTemResultado || resultadoManual;
 
   // Só as competições do escalão selecionado podem ser associadas ao jogo.
   const competicoesDoEscalao = competicoes.filter((c) => c.escalaoId === escalaoId);
@@ -88,6 +102,8 @@ export function JogoForm({
     setErros({});
     setErroGeral(null);
 
+    // Campos de resultado só são lidos quando o respetivo grupo está visível;
+    // caso contrário mantêm-se nulos (agendar um jogo futuro não pede resultado).
     const gm = String(fd.get("golosMarcados") ?? "").trim();
     const gs = String(fd.get("golosSofridos") ?? "").trim();
     const f1 = String(fd.get("faltas1aParte") ?? "").trim();
@@ -99,7 +115,6 @@ export function JogoForm({
       casaFora,
       tipo,
       escalaoId: escalaoId || undefined,
-      competicao: String(fd.get("competicao") ?? "").trim() || undefined,
       competicaoId: competicaoId === SEM_COMPETICAO ? null : competicaoId,
       local: String(fd.get("local") ?? "").trim() || undefined,
       golosMarcados: gm !== "" ? Number(gm) : null,
@@ -128,6 +143,7 @@ export function JogoForm({
         <p className="text-corpo-sec text-vermelho-600">{erroGeral}</p>
       )}
 
+      {/* ─── Agendar ─────────────────────────────────────────────────────── */}
       <div className="space-y-1.5">
         <Label htmlFor="data">Data e hora *</Label>
         <Input
@@ -135,7 +151,8 @@ export function JogoForm({
           name="data"
           type="datetime-local"
           required
-          defaultValue={paraInputDateTime(jogo?.data)}
+          value={dataValor}
+          onChange={(e) => setDataValor(e.target.value)}
         />
         {erros.data && <p className="text-legenda text-vermelho-600">{erros.data}</p>}
       </div>
@@ -170,6 +187,21 @@ export function JogoForm({
         </div>
 
         <div className="space-y-1.5">
+          <Label>Tipo</Label>
+          <Select value={tipo} onValueChange={(v) => setTipo(v as TipoJogo)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="OFICIAL">{LABEL_TIPO_JOGO.OFICIAL}</SelectItem>
+              <SelectItem value="AMIGAVEL">{LABEL_TIPO_JOGO.AMIGAVEL}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
           <Label>Escalão *</Label>
           <Select value={escalaoId} onValueChange={mudarEscalao}>
             <SelectTrigger>
@@ -187,9 +219,7 @@ export function JogoForm({
             <p className="text-legenda text-vermelho-600">{erros.escalaoId}</p>
           )}
         </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <Label>Competição</Label>
           <Select
@@ -213,83 +243,102 @@ export function JogoForm({
             <p className="text-legenda text-cinza-500">Sem competições neste escalão.</p>
           )}
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="local">Recinto</Label>
-          <Input
-            id="local"
-            name="local"
-            maxLength={100}
-            defaultValue={jogo?.local ?? ""}
-            placeholder="ex: Pavilhão"
-          />
-        </div>
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="competicao">Competição (texto livre)</Label>
+        <Label htmlFor="local">Recinto</Label>
         <Input
-          id="competicao"
-          name="competicao"
+          id="local"
+          name="local"
           maxLength={100}
-          defaultValue={jogo?.competicao ?? ""}
-          placeholder="ex: Liga distrital"
+          defaultValue={jogo?.local ?? ""}
+          placeholder="ex: Pavilhão"
         />
-        <p className="text-legenda text-cinza-500">
-          Nota opcional. Para classificação, associa uma competição acima.
-        </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="golosMarcados">Golos marcados</Label>
-          <Input
-            id="golosMarcados"
-            name="golosMarcados"
-            type="number"
-            min={0}
-            max={99}
-            defaultValue={jogo?.golosMarcados ?? ""}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="golosSofridos">Golos sofridos</Label>
-          <Input
-            id="golosSofridos"
-            name="golosSofridos"
-            type="number"
-            min={0}
-            max={99}
-            defaultValue={jogo?.golosSofridos ?? ""}
-          />
-        </div>
-      </div>
+      {/* ─── Resultado (só após o jogo) ──────────────────────────────────── */}
+      {mostrarResultado ? (
+        <div className="space-y-5 border-t border-cinza-100 pt-5">
+          <h2 className="text-corpo font-semibold text-cinza-700">Resultado (opcional)</h2>
 
-      <div className="grid grid-cols-3 gap-4">
-        <div className="space-y-1.5">
-          <Label>Tipo</Label>
-          <Select value={tipo} onValueChange={(v) => setTipo(v as TipoJogo)}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="OFICIAL">{LABEL_TIPO_JOGO.OFICIAL}</SelectItem>
-              <SelectItem value="AMIGAVEL">{LABEL_TIPO_JOGO.AMIGAVEL}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="faltas1aParte">Faltas 1ª parte</Label>
-          <Input id="faltas1aParte" name="faltas1aParte" type="number" min={0} max={50} defaultValue={jogo?.faltas1aParte ?? ""} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="faltas2aParte">Faltas 2ª parte</Label>
-          <Input id="faltas2aParte" name="faltas2aParte" type="number" min={0} max={50} defaultValue={jogo?.faltas2aParte ?? ""} />
-        </div>
-      </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="golosMarcados">Golos marcados</Label>
+              <Input
+                id="golosMarcados"
+                name="golosMarcados"
+                type="number"
+                min={0}
+                max={99}
+                defaultValue={jogo?.golosMarcados ?? ""}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="golosSofridos">Golos sofridos</Label>
+              <Input
+                id="golosSofridos"
+                name="golosSofridos"
+                type="number"
+                min={0}
+                max={99}
+                defaultValue={jogo?.golosSofridos ?? ""}
+              />
+            </div>
+          </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="videoUrl">Vídeo (link YouTube)</Label>
-        <Input id="videoUrl" name="videoUrl" defaultValue={jogo?.videoUrl ?? ""} placeholder="https://youtube.com/…" />
-        {erros.videoUrl && <p className="text-legenda text-vermelho-600">{erros.videoUrl}</p>}
-      </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="faltas1aParte">Faltas 1ª parte</Label>
+              <Input
+                id="faltas1aParte"
+                name="faltas1aParte"
+                type="number"
+                min={0}
+                max={50}
+                defaultValue={jogo?.faltas1aParte ?? ""}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="faltas2aParte">Faltas 2ª parte</Label>
+              <Input
+                id="faltas2aParte"
+                name="faltas2aParte"
+                type="number"
+                min={0}
+                max={50}
+                defaultValue={jogo?.faltas2aParte ?? ""}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="videoUrl">Vídeo (link YouTube)</Label>
+            <Input
+              id="videoUrl"
+              name="videoUrl"
+              defaultValue={jogo?.videoUrl ?? ""}
+              placeholder="https://youtube.com/…"
+            />
+            {erros.videoUrl && (
+              <p className="text-legenda text-vermelho-600">{erros.videoUrl}</p>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="border-t border-cinza-100 pt-5">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setResultadoManual(true)}
+          >
+            Registar resultado
+          </Button>
+          <p className="mt-1.5 text-legenda text-cinza-500">
+            O resultado é normalmente registado depois do jogo.
+          </p>
+        </div>
+      )}
 
       <div className="flex gap-3 pt-2">
         <Button type="submit" disabled={pending || !escalaoId}>

@@ -126,6 +126,13 @@ export async function criarSessao(dados: unknown): Promise<Resultado<Sessao>> {
   const parsed = sessaoSchema.safeParse(dados);
   if (!parsed.success) return erroDeValidacao(parsed.error);
 
+  // Guarda de dupla validação: só treinos NORMAL podem ligar a periodização.
+  if (parsed.data.tipoSessao !== "NORMAL" && parsed.data.planeamentoId) {
+    return erro("Só treinos normais podem estar associados a uma periodização.", {
+      planeamentoId: "Só treinos normais podem estar associados a uma periodização.",
+    });
+  }
+
   const perm = await exigirCapacidade("TREINOS_GERIR", parsed.data.escalaoId);
   if (!perm.ok) return erro(perm.erro);
 
@@ -167,6 +174,13 @@ export async function atualizarSessao(id: string, dados: unknown): Promise<Resul
 
   const parsed = sessaoSchema.safeParse(dados);
   if (!parsed.success) return erroDeValidacao(parsed.error);
+
+  // Guarda de dupla validação: só treinos NORMAL podem ligar a periodização.
+  if (parsed.data.tipoSessao !== "NORMAL" && parsed.data.planeamentoId) {
+    return erro("Só treinos normais podem estar associados a uma periodização.", {
+      planeamentoId: "Só treinos normais podem estar associados a uma periodização.",
+    });
+  }
 
   const existe = await prisma.sessao.findFirst({ where: { id, escalao: { clubeId } } });
   if (!existe) return erro("Sessão não encontrada");

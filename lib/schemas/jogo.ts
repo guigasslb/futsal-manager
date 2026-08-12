@@ -29,7 +29,9 @@ export const jogoSchema = z.object({
   casaFora: z.enum(["CASA", "FORA"]),
   tipo: z.enum(["OFICIAL", "AMIGAVEL"]).default("OFICIAL"),
   escalaoId: z.string().cuid("Escalão inválido"),
-  competicao: z.string().max(100).optional(),
+  // `competicao` (texto livre) foi deprecado no formulário (P4.3); a associação
+  // faz-se por `competicaoId`. O campo legado mantém-se no modelo Prisma só para
+  // leitura de jogos antigos.
   competicaoId: z.string().cuid().nullable().optional(),
   local: z.string().max(100).optional(),
   golosMarcados: z.number().int().min(0).max(99).nullable().optional(),

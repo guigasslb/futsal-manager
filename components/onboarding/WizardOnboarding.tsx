@@ -362,7 +362,7 @@ function PassoEscaloes({
                 type="button"
                 onClick={() => remover(e.id)}
                 disabled={pending}
-                className="flex h-9 w-9 items-center justify-center rounded-md text-cinza-400 transition-colors hover:bg-vermelho-600/5 hover:text-vermelho-600 disabled:opacity-50"
+                className="flex h-11 w-11 items-center justify-center rounded-md text-cinza-400 transition-colors hover:bg-vermelho-600/5 hover:text-vermelho-600 disabled:opacity-50"
                 aria-label={`Remover escalão ${e.nome}`}
               >
                 <Trash2 className="h-4 w-4" />

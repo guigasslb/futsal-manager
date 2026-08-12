@@ -110,7 +110,10 @@ export default async function AppLayout({
       />
 
       <div className="flex flex-1 overflow-hidden">
-        <Navegacao mostrarComecar={plantelVazio} />
+        <Navegacao
+          mostrarComecar={plantelVazio}
+          mostrarAgenda={membro.ambito === "TODO_CLUBE"}
+        />
 
         <ScrollTopo />
         <main className="app-surface flex-1 overflow-y-auto p-4 pb-20 md:pb-8 md:p-8">

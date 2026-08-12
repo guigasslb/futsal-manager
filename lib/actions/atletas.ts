@@ -11,7 +11,11 @@ import {
   escaloesLegiveis,
 } from "@/lib/permissoes";
 import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
-import { criarAtletaSchema, atualizarAtletaSchema } from "@/lib/schemas/atleta";
+import {
+  criarAtletaSchema,
+  atualizarAtletaSchema,
+  apagarAtletaDefinitivamenteSchema,
+} from "@/lib/schemas/atleta";
 import { agregarEstatisticas, type EstatisticasAgregadas } from "@/lib/estatisticas";
 import type {
   Atleta,
@@ -412,6 +416,58 @@ export async function apagarAtleta(id: string): Promise<Resultado<void>> {
   await prisma.atleta.update({ where: { id }, data: { ativo: false } });
   revalidatePath(PATH);
   revalidatePath(`${PATH}/${id}`);
+  revalidatePath(PATH_DASHBOARD);
+  return ok(undefined);
+}
+
+/**
+ * Hard-delete definitivo do atleta (P1.3 — RGPD, direito ao apagamento de menores).
+ *
+ * Ao contrário de `apagarAtleta` (soft-delete: ativo=false), esta ação remove
+ * IRREVERSIVELMENTE o atleta e todos os dados pessoais associados. As FK com
+ * onDelete: Cascade (presenças, convocatórias, participações, caderneta, eventos
+ * de jogo, consentimentos e — transitivamente — valores de métricas) garantem a
+ * limpeza em cadeia.
+ *
+ * Guarda de segurança: recusa apagar atletas com estatísticas de jogo registadas,
+ * para que o clube possa exportar/preservar os dados desportivos antes do apagamento.
+ */
+export async function apagarAtletaDefinitivamente(
+  atletaId: string,
+): Promise<Resultado<void>> {
+  const parsed = apagarAtletaDefinitivamenteSchema.safeParse({ atletaId });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
+
+  const clubeId = await obterClubeIdAtual();
+  if (!clubeId) return erro("Não autenticado");
+
+  const existe = await prisma.atleta.findFirst({
+    where: { id: parsed.data.atletaId, clubeId },
+    select: {
+      id: true,
+      participacoes: { select: { escalaoId: true } },
+      _count: { select: { estatisticas: true } },
+    },
+  });
+  if (!existe) return erro("Atleta não encontrado");
+
+  const perm = await exigirCapacidadeEmAlgumEscalao(
+    "PLANTEL_GERIR",
+    existe.participacoes.map((p) => p.escalaoId),
+  );
+  if (!perm.ok) return erro(perm.erro);
+
+  if (existe._count.estatisticas > 0) {
+    return erro(
+      "Atleta com estatísticas registadas — exportar dados antes de apagar",
+    );
+  }
+
+  // Os cascades do schema removem os dados relacionados (P1.3).
+  await prisma.atleta.delete({ where: { id: parsed.data.atletaId } });
+
+  revalidatePath(PATH);
+  revalidatePath(`${PATH}/${atletaId}`);
   revalidatePath(PATH_DASHBOARD);
   return ok(undefined);
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { toast } from "sonner";
 import { registar } from "@/lib/actions/onboarding";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export function RegistarForm() {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [erros, setErros] = useState<Record<string, string>>({});
 
@@ -17,15 +16,17 @@ export function RegistarForm() {
     e.preventDefault();
     setErros({});
     const fd = new FormData(e.currentTarget);
+    const email = fd.get("email") as string;
+    const password = fd.get("password") as string;
     startTransition(async () => {
       const res = await registar({
         nome: fd.get("nome"),
-        email: fd.get("email"),
-        password: fd.get("password"),
+        email,
+        password,
       });
       if (res.sucesso) {
-        toast.success("Conta criada. Inicia sessão.");
-        router.push("/login");
+        toast.success("Conta criada. A entrar…");
+        await signIn("credentials", { email, password, callbackUrl: "/onboarding" });
       } else {
         if (res.camposInvalidos) setErros(res.camposInvalidos);
         toast.error(res.erro);

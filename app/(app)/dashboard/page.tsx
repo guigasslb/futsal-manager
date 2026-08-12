@@ -25,6 +25,7 @@ import {
   type EventoLite,
   type Lembrete,
 } from "@/lib/dashboard-lembretes";
+import { ListaLembretes } from "@/components/lembretes/ListaLembretes";
 
 function dataLonga(data: Date): string {
   return new Date(data).toLocaleString("pt-PT", {
@@ -405,6 +406,9 @@ export default async function DashboardPage() {
           <AcaoRapida href="/plantel" icon={Users} titulo="Ver plantel" desc="Consultar atletas" />
         </div>
       </div>
+
+      {/* Lembretes / tarefas persistidos — P2.1 / §3.15/§8.19 */}
+      <ListaLembretes />
     </div>
   );
 }

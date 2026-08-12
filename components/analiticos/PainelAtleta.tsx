@@ -17,6 +17,9 @@ export function PainelAtleta({ dados }: { dados: AnaliticoAtleta }) {
     evolucaoJogos,
     presencasMensais,
     escalaoContexto,
+    // Snapshots de relatórios antigos (pré-agregação de métricas) não têm o
+    // campo — o default garante zero regressão na vista pública.
+    metricas = [],
   } = dados;
   const eGR = atleta.eGR;
 
@@ -120,6 +123,39 @@ export function PainelAtleta({ dados }: { dados: AnaliticoAtleta }) {
           )}
           .
         </p>
+      </div>
+
+      {/* Métricas personalizadas (§8.14 / §10.1) — configuráveis pelo clube. */}
+      <div className="rounded-lg border border-cinza-200 bg-white p-5 shadow-card">
+        <p className="mb-3 text-legenda font-medium uppercase tracking-wide text-cinza-400">
+          Métricas personalizadas
+        </p>
+        {metricas.length === 0 ? (
+          <p className="text-corpo-sec text-cinza-500">
+            Nenhuma métrica personalizada registada.
+          </p>
+        ) : (
+          <ul className="divide-y divide-cinza-100">
+            {metricas.map((m) => (
+              <li
+                key={m.nome}
+                className="flex items-center justify-between gap-3 py-2.5"
+              >
+                <span className="min-w-0 truncate text-corpo text-cinza-900">
+                  {m.nome}
+                </span>
+                <div className="flex items-baseline gap-3">
+                  <span className="text-titulo-seccao font-bold text-primary">
+                    {n1(m.total)}
+                  </span>
+                  <span className="text-legenda text-cinza-500">
+                    média {n1(m.media)}/jogo
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Evolução por jogo */}

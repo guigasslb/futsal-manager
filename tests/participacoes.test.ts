@@ -62,6 +62,7 @@ import {
   transferirEscalao,
   terminarParticipacao,
   listarParticipacoes,
+  obterCarreiraAtleta,
 } from "@/lib/actions/participacoes";
 import { obterClubeIdAtual, obterEpocaAtiva } from "@/lib/epoca-context";
 import { exigirCapacidade, podeLerAlgumEscalao } from "@/lib/permissoes";
@@ -1001,6 +1002,97 @@ describe("listarParticipacoes (histórico)", () => {
     mocked(prisma.atletaEscalao.findMany).mockResolvedValue([]);
 
     const r = await listarParticipacoes("atleta1");
+    expect(r.sucesso).toBe(true);
+    if (r.sucesso) expect(r.dados).toEqual([]);
+    expect(podeLerAlgumEscalao).not.toHaveBeenCalled();
+  });
+});
+
+describe("obterCarreiraAtleta (percurso)", () => {
+  const registo = {
+    id: "ae1",
+    escalaoId: ESC_A,
+    epocaId: "ep1",
+    tipo: "PRINCIPAL",
+    estado: "ATIVO",
+    numero: 7,
+    dataInicio: new Date("2026-09-01"),
+    dataFim: null,
+    escalao: { nome: "Sub-15" },
+    epoca: { nome: "2026/27", ativa: true },
+  };
+
+  it("falha sem sessão/clube ativo", async () => {
+    mocked(obterClubeIdAtual).mockResolvedValue(null);
+    const r = await obterCarreiraAtleta("atleta1");
+    expect(r.sucesso).toBe(false);
+    if (!r.sucesso) expect(r.erro).toMatch(/não autenticado/i);
+    expect(prisma.atletaEscalao.findMany).not.toHaveBeenCalled();
+  });
+
+  it("isola por clube: falha se o atleta não pertence ao clube ativo", async () => {
+    mocked(prisma.atleta.findFirst).mockResolvedValue(null);
+    const r = await obterCarreiraAtleta("atleta1");
+    expect(r.sucesso).toBe(false);
+    if (!r.sucesso) expect(r.erro).toMatch(/atleta não encontrado/i);
+  });
+
+  it("recusa quem não pode ler nenhum dos escalões do percurso (âmbito, secção 6.4)", async () => {
+    mocked(prisma.atletaEscalao.findMany).mockResolvedValue([registo]);
+    mocked(podeLerAlgumEscalao).mockResolvedValue(false);
+
+    const r = await obterCarreiraAtleta("atleta1");
+    expect(r.sucesso).toBe(false);
+    if (!r.sucesso) expect(r.erro).toMatch(/permissão/i);
+  });
+
+  it("mapeia dataIngresso/dataSaida e assinala a época ativa", async () => {
+    mocked(prisma.atletaEscalao.findMany).mockResolvedValue([
+      registo,
+      {
+        ...registo,
+        id: "ae2",
+        escalaoId: ESC_B,
+        estado: "INATIVO",
+        numero: null,
+        dataInicio: new Date("2025-09-01"),
+        dataFim: new Date("2026-06-30"),
+        escalao: { nome: "Sub-13" },
+        epoca: { nome: "2025/26", ativa: false },
+      },
+    ]);
+
+    const r = await obterCarreiraAtleta("atleta1");
+    expect(r.sucesso).toBe(true);
+    if (r.sucesso) {
+      expect(r.dados).toHaveLength(2);
+      expect(r.dados[0]).toEqual({
+        id: "ae1",
+        epocaNome: "2026/27",
+        epocaAtiva: true,
+        escalaoNome: "Sub-15",
+        numero: 7,
+        estado: "ATIVO",
+        dataIngresso: new Date("2026-09-01"),
+        dataSaida: null,
+      });
+      expect(r.dados[1]).toEqual({
+        id: "ae2",
+        epocaNome: "2025/26",
+        epocaAtiva: false,
+        escalaoNome: "Sub-13",
+        numero: null,
+        estado: "INATIVO",
+        dataIngresso: new Date("2025-09-01"),
+        dataSaida: new Date("2026-06-30"),
+      });
+    }
+  });
+
+  it("um atleta sem percurso devolve lista vazia sem verificar âmbito", async () => {
+    mocked(prisma.atletaEscalao.findMany).mockResolvedValue([]);
+
+    const r = await obterCarreiraAtleta("atleta1");
     expect(r.sucesso).toBe(true);
     if (r.sucesso) expect(r.dados).toEqual([]);
     expect(podeLerAlgumEscalao).not.toHaveBeenCalled();

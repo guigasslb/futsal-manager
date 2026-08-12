@@ -8,8 +8,9 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // Ações principais — cor primária (marca/clube via --primary)
-        default: "bg-primary text-white hover:bg-primary/90",
+        // Ações principais — texto branco sobre laranja-600 (#C7430F) p/ AA (4.95:1).
+        // Nota: usa laranja-600 fixo (não --primary) porque #F0531E c/ branco = 3.51:1 (< AA).
+        default: "bg-laranja-600 text-white hover:bg-[#A8370C]",
         outline:
           "border border-cinza-200 bg-white text-cinza-900 hover:bg-primary/5",
         destructive: "bg-vermelho-600 text-white hover:bg-vermelho-600/90",

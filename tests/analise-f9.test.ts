@@ -28,6 +28,7 @@ vi.mock("@/lib/db", () => ({
     presenca: { findMany: vi.fn(), count: vi.fn() },
     eventoJogo: { findMany: vi.fn() },
     jogo: { findMany: vi.fn() },
+    competicao: { findMany: vi.fn() },
     habilidade: { count: vi.fn() },
     progressoHabilidade: { findMany: vi.fn() },
     valorMetrica: { findMany: vi.fn() },
@@ -44,6 +45,7 @@ vi.mock("@/lib/db", () => ({
 import {
   obterAnaliticoAtleta,
   obterAnaliticoEscalao,
+  obterCompeticoesEscalao,
   obterAnaliticoClubeEpoca,
   gerarRelatorioPartilhado,
   obterRelatorioPorToken,
@@ -66,6 +68,7 @@ const EPOCA = "ckv9v0z1w0001abcd1234efgh";
 const ESCALAO = "ckv9v0z1w0002abcd1234efgh";
 const ATLETA = "ckv9v0z1w0003abcd1234efgh";
 const ATLETA2 = "ckv9v0z1w0004abcd1234efgh";
+const COMPETICAO = "ckv9v0z1w0005abcd1234efgh";
 
 const p = prisma as unknown as Record<string, Record<string, ReturnType<typeof vi.fn>>>;
 
@@ -367,9 +370,108 @@ describe("obterAnaliticoEscalao", () => {
     ]);
   });
 
+  it("filtra os jogos pela competição quando é indicada (P2.5)", async () => {
+    p.escalao.findFirst.mockResolvedValue({ id: ESCALAO, nome: "Sub-13" });
+    p.jogo.findMany.mockResolvedValue([]);
+    p.sessao.findMany.mockResolvedValue([]);
+    p.atletaEscalao.count.mockResolvedValue(0);
+    p.estatisticaAtleta.findMany.mockResolvedValue([]);
+    p.eventoJogo.findMany.mockResolvedValue([]);
+    p.presenca.findMany.mockResolvedValue([]);
+
+    const r = await obterAnaliticoEscalao(ESCALAO, undefined, COMPETICAO);
+    expect(r.sucesso).toBe(true);
+
+    // Jogos e derivados filtram por competicaoId; treinos/presenças ficam globais.
+    expect(p.jogo.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { epocaId: EPOCA, escalaoId: ESCALAO, competicaoId: COMPETICAO },
+      }),
+    );
+    expect(p.estatisticaAtleta.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { jogo: { epocaId: EPOCA, escalaoId: ESCALAO, competicaoId: COMPETICAO } },
+      }),
+    );
+    expect(p.eventoJogo.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { jogo: { epocaId: EPOCA, escalaoId: ESCALAO, competicaoId: COMPETICAO } },
+      }),
+    );
+    // Presenças não são filtradas por competição (treinos são transversais).
+    expect(p.presenca.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ escalaoId: ESCALAO }),
+      }),
+    );
+    const presencaArg = p.presenca.findMany.mock.calls[0][0];
+    expect(presencaArg.where).not.toHaveProperty("competicaoId");
+  });
+
+  it("sem competição, não aplica filtro de competição (comportamento por defeito)", async () => {
+    p.escalao.findFirst.mockResolvedValue({ id: ESCALAO, nome: "Sub-13" });
+    p.jogo.findMany.mockResolvedValue([]);
+    p.sessao.findMany.mockResolvedValue([]);
+    p.atletaEscalao.count.mockResolvedValue(0);
+    p.estatisticaAtleta.findMany.mockResolvedValue([]);
+    p.eventoJogo.findMany.mockResolvedValue([]);
+    p.presenca.findMany.mockResolvedValue([]);
+
+    const r = await obterAnaliticoEscalao(ESCALAO);
+    expect(r.sucesso).toBe(true);
+    expect(p.jogo.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { epocaId: EPOCA, escalaoId: ESCALAO } }),
+    );
+  });
+
   it("nega escalão inexistente", async () => {
     p.escalao.findFirst.mockResolvedValue(null);
     const r = await obterAnaliticoEscalao(ESCALAO);
+    expect(r.sucesso).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// P2.5 — competições de um escalão (filtro do painel)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("obterCompeticoesEscalao", () => {
+  it("devolve as competições com jogos do escalão/época", async () => {
+    p.escalao.findFirst.mockResolvedValue({ id: ESCALAO });
+    p.competicao.findMany.mockResolvedValue([
+      { id: COMPETICAO, nome: "Campeonato Distrital", tipo: "OFICIAL" },
+      { id: "ckv9v0z1w0006abcd1234efgh", nome: "Torneio de Verão", tipo: "AMIGAVEL" },
+    ]);
+
+    const r = await obterCompeticoesEscalao(ESCALAO);
+    expect(r.sucesso).toBe(true);
+    if (!r.sucesso) return;
+    expect(r.dados).toEqual([
+      { id: COMPETICAO, nome: "Campeonato Distrital", tipo: "OFICIAL" },
+      { id: "ckv9v0z1w0006abcd1234efgh", nome: "Torneio de Verão", tipo: "AMIGAVEL" },
+    ]);
+    expect(p.competicao.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          clubeId: CLUBE,
+          escalaoId: ESCALAO,
+          epocaId: EPOCA,
+          jogos: { some: { epocaId: EPOCA, escalaoId: ESCALAO } },
+        }),
+      }),
+    );
+  });
+
+  it("nega escalão inexistente", async () => {
+    p.escalao.findFirst.mockResolvedValue(null);
+    const r = await obterCompeticoesEscalao(ESCALAO);
+    expect(r.sucesso).toBe(false);
+  });
+
+  it("nega sem permissão no escalão", async () => {
+    p.escalao.findFirst.mockResolvedValue({ id: ESCALAO });
+    (podeLerEscalao as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+    const r = await obterCompeticoesEscalao(ESCALAO);
     expect(r.sucesso).toBe(false);
   });
 });

@@ -166,7 +166,8 @@ export async function criarJogo(dados: unknown): Promise<Resultado<Jogo>> {
       casaFora: parsed.data.casaFora,
       tipo: parsed.data.tipo,
       escalaoId: parsed.data.escalaoId,
-      competicao: parsed.data.competicao ?? null,
+      // `competicao` (texto livre) foi deprecado no formulário (P4.3); usar
+      // `competicaoId`. Novos jogos ficam com o campo legado a null.
       competicaoId: parsed.data.competicaoId ?? null,
       local: parsed.data.local ?? null,
       golosMarcados: parsed.data.golosMarcados ?? null,
@@ -221,7 +222,8 @@ export async function atualizarJogo(id: string, dados: unknown): Promise<Resulta
       casaFora: parsed.data.casaFora,
       tipo: parsed.data.tipo,
       escalaoId: parsed.data.escalaoId,
-      competicao: parsed.data.competicao ?? null,
+      // `competicao` (texto livre) foi deprecado no formulário (P4.3): não é
+      // reescrito aqui, preservando eventuais valores legados existentes.
       competicaoId: parsed.data.competicaoId ?? null,
       local: parsed.data.local ?? null,
       golosMarcados: parsed.data.golosMarcados ?? null,

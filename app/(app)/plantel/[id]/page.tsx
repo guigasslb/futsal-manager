@@ -19,9 +19,11 @@ import { AvatarAtleta } from "@/components/plantel/AvatarAtleta";
 import { EstatisticasAtleta } from "@/components/plantel/EstatisticasAtleta";
 import { CadernetaAtleta } from "@/components/plantel/CadernetaAtleta";
 import { ParticipacoesAtleta } from "@/components/plantel/ParticipacoesAtleta";
+import { CarreiraAtleta } from "@/components/plantel/CarreiraAtleta";
 import { PainelAtleta } from "@/components/analiticos/PainelAtleta";
 import { GerarRelatorioBotao } from "@/components/relatorios/GerarRelatorioBotao";
 import { EstadoVazio } from "@/components/layout/EstadosUI";
+import { ApagarAtletaDefinitivamenteButton } from "@/components/plantel/ApagarAtletaDefinitivamenteButton";
 import { LABEL_POSICAO } from "@/lib/schemas/atleta";
 
 function calcularIdade(dataNascimento: Date): number {
@@ -151,6 +153,7 @@ export default async function PerfilAtletaPage({
           <TabsTrigger value="analiticos">Analíticos</TabsTrigger>
           <TabsTrigger value="caderneta">Caderneta</TabsTrigger>
           <TabsTrigger value="participacoes">Participações</TabsTrigger>
+          <TabsTrigger value="carreira">Carreira</TabsTrigger>
           <TabsTrigger value="dados">Dados</TabsTrigger>
         </TabsList>
 
@@ -218,6 +221,10 @@ export default async function PerfilAtletaPage({
           )}
         </TabsContent>
 
+        <TabsContent value="carreira">
+          <CarreiraAtleta atletaId={a.id} />
+        </TabsContent>
+
         <TabsContent value="dados" className="space-y-4">
           {a.dataNascimento || a.observacoes ? (
             <div className="rounded-lg border border-cinza-200 bg-white p-5 shadow-card space-y-4">
@@ -267,6 +274,20 @@ export default async function PerfilAtletaPage({
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Zona de perigo — hard-delete RGPD (P1.3). Só para quem gere o plantel. */}
+          {podeGerirPlantel && (
+            <div className="rounded-lg border border-vermelho-600/40 bg-vermelho-600/5 p-5 space-y-3">
+              <p className="text-corpo font-semibold text-vermelho-600">Zona de perigo</p>
+              <p className="text-corpo-sec text-cinza-600">
+                Apagar definitivamente remove o atleta e todos os dados pessoais associados
+                (presenças, caderneta, convocatórias, participações). A ação é irreversível
+                e destina-se ao cumprimento do direito ao apagamento (RGPD). Para apenas o
+                retirar das listas, usa «Arquivar atleta» no ecrã de edição.
+              </p>
+              <ApagarAtletaDefinitivamenteButton atletaId={a.id} nomeAtleta={a.nome} />
             </div>
           )}
         </TabsContent>

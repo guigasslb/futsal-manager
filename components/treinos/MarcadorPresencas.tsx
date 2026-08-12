@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Check } from "lucide-react";
+import { Check, ListChecks, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -51,13 +51,17 @@ export function MarcadorPresencas({
   presencasIniciais: Record<string, PresencaInicial>;
 }) {
   const [pending, startTransition] = useTransition();
-  const [registos, setRegistos] = useState<Record<string, PresencaInicial>>(() => {
+
+  // Estado original (o que veio da base de dados; ausência → PRESENTE por defeito).
+  const construirInicial = useCallback((): Record<string, PresencaInicial> => {
     const inicial: Record<string, PresencaInicial> = {};
     for (const a of atletas) {
       inicial[a.id] = presencasIniciais[a.id] ?? { estado: "PRESENTE", motivo: null };
     }
     return inicial;
-  });
+  }, [atletas, presencasIniciais]);
+
+  const [registos, setRegistos] = useState<Record<string, PresencaInicial>>(construirInicial);
 
   const valores = Object.values(registos);
   const presentes = valores.filter((r) => PRESENTES.has(r.estado)).length;
@@ -79,6 +83,20 @@ export function MarcadorPresencas({
         motivo: valor === SEM_MOTIVO ? null : (valor as MotivoFalta),
       },
     }));
+  }
+
+  /** Marca todos os atletas como PRESENTE (limpa motivos de falta). */
+  function marcarTodosPresentes() {
+    setRegistos((prev) => {
+      const proximo: Record<string, PresencaInicial> = {};
+      for (const id of Object.keys(prev)) proximo[id] = { estado: "PRESENTE", motivo: null };
+      return proximo;
+    });
+  }
+
+  /** Repõe o estado tal como estava guardado (descarta alterações não guardadas). */
+  function repor() {
+    setRegistos(construirInicial());
   }
 
   function guardar() {
@@ -108,6 +126,19 @@ export function MarcadorPresencas({
   return (
     <div className="space-y-3">
       <h2 className="text-subtitulo text-cinza-900">Presenças</h2>
+
+      {/* Controlo rápido (P4.1) — atalhos client-side, não submetem o formulário. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" variant="outline" onClick={marcarTodosPresentes}>
+          <ListChecks className="h-4 w-4" />
+          Marcar todos presentes
+        </Button>
+        <Button type="button" variant="ghost" onClick={repor}>
+          <RotateCcw className="h-4 w-4" />
+          Repor
+        </Button>
+      </div>
+
       <ul className="space-y-2">
         {atletas.map((a) => {
           const registo = registos[a.id];
@@ -179,11 +210,16 @@ export function MarcadorPresencas({
           );
         })}
       </ul>
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      {/* Barra de guardar fixa (P4.2) — sempre visível ao percorrer a lista. */}
+      <div className="sticky bottom-0 z-10 -mx-1 flex flex-wrap items-center justify-between gap-2 border-t border-cinza-200 bg-white px-1 py-3">
         <p className="text-corpo-sec text-cinza-600">
           {presentes} presentes · {faltas} faltas
         </p>
-        <Button onClick={guardar} disabled={pending}>
+        <Button
+          onClick={guardar}
+          disabled={pending}
+          className="min-h-[44px] w-full sm:w-auto"
+        >
           <Check className="h-4 w-4" />
           {pending ? "A guardar…" : "Guardar presenças"}
         </Button>

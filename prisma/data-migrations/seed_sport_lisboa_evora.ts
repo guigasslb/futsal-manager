@@ -1,6 +1,10 @@
 // prisma/data-migrations/seed_sport_lisboa_evora.ts
-// Seed de DADOS REAIS para demonstração/testes — clube "Sport Lisboa e Évora",
+// DADOS DE TESTE — anonimizados em 2026-08-12. Não usar em produção com dados reais.
+// Seed de DEMONSTRAÇÃO/TESTES — clube "Sport Lisboa e Évora",
 // época 2025/2026, escalão Traquinas (Sub-8).
+// Os nomes dos atletas são FICTÍCIOS (anonimizados para conformidade RGPD, dado
+// tratar-se de um escalão de menores). As datas de nascimento são geradas
+// (não reais) e os valores de assiduidade/golos são apenas ilustrativos.
 //
 // Cria: clube + perfil Administrador + treinador (membro) + época ativa +
 // escalão + 21 atletas (com AtletaEscalao PRINCIPAL/ATIVO) + 10 competições +
@@ -32,13 +36,20 @@ import { PERFIS_ARRANQUE } from "../../lib/permissoes-catalogo";
 
 const prisma = new PrismaClient();
 
+// Guarda de produção: este seed cria DADOS DE TESTE e NUNCA deve correr em produção.
+if (process.env.NODE_ENV === "production") {
+  throw new Error(
+    "Seed abortado: seed de dados de teste (SLE) não pode correr em produção (NODE_ENV=production).",
+  );
+}
+
 const BCRYPT_COST = 12;
 const NOME_CLUBE = "Sport Lisboa e Évora";
 const EMAIL_TREINADOR = "treinador@sle.pt";
 const PASS_TREINADOR = "SLE2026!";
 
 // ─────────────────────────────────────────────
-// Dados de referência (do PDF do clube)
+// Dados de referência (fictícios, para testes)
 // ─────────────────────────────────────────────
 
 type AtletaSeed = {
@@ -49,28 +60,30 @@ type AtletaSeed = {
 };
 
 // Ordem = número da camisola (1..21).
+// NOMES ANONIMIZADOS: nomes fictícios, sem relação com pessoas reais (RGPD).
+// numero/pct/golos preservados para manter o seed útil em testes.
 const ATLETAS: readonly AtletaSeed[] = [
-  { nome: "martim", numero: 1, pct: 70, golos: 0 },
-  { nome: "rodrigo", numero: 2, pct: 100, golos: 4 },
-  { nome: "beira", numero: 3, pct: 0, golos: 12 },
-  { nome: "matheus", numero: 4, pct: 70, golos: 12 },
-  { nome: "laura", numero: 5, pct: 58.75, golos: 4 },
-  { nome: "Santiago", numero: 6, pct: 73.75, golos: 30 },
-  { nome: "tiago", numero: 7, pct: 42.5, golos: 0 },
-  { nome: "Boa fé", numero: 8, pct: 68.75, golos: 2 },
-  { nome: "Rendeiro", numero: 9, pct: 7.5, golos: 3 },
-  { nome: "lipe", numero: 10, pct: 60, golos: 0 },
-  { nome: "gabriel", numero: 11, pct: 41.25, golos: 7 },
-  { nome: "Rafael", numero: 12, pct: 15, golos: 1 },
-  { nome: "henrique", numero: 13, pct: 83.75, golos: 67 },
-  { nome: "davi", numero: 14, pct: 87.5, golos: 42 },
-  { nome: "eduardo", numero: 15, pct: 92.5, golos: 57 },
-  { nome: "enrico", numero: 16, pct: 26.25, golos: 0 },
-  { nome: "João Risso", numero: 17, pct: 73.75, golos: 33 },
-  { nome: "Tariq", numero: 18, pct: 76.25, golos: 54 },
-  { nome: "afonso", numero: 19, pct: 38.75, golos: 3 },
-  { nome: "dinis", numero: 20, pct: 42.5, golos: 5 },
-  { nome: "ruben", numero: 21, pct: 75, golos: 8 },
+  { nome: "Diogo", numero: 1, pct: 70, golos: 0 },
+  { nome: "Miguel", numero: 2, pct: 100, golos: 4 },
+  { nome: "Tomás", numero: 3, pct: 0, golos: 12 },
+  { nome: "Guilherme", numero: 4, pct: 70, golos: 12 },
+  { nome: "Beatriz", numero: 5, pct: 58.75, golos: 4 },
+  { nome: "Salvador", numero: 6, pct: 73.75, golos: 30 },
+  { nome: "Vasco", numero: 7, pct: 42.5, golos: 0 },
+  { nome: "Duarte", numero: 8, pct: 68.75, golos: 2 },
+  { nome: "Simão", numero: 9, pct: 7.5, golos: 3 },
+  { nome: "Leonardo", numero: 10, pct: 60, golos: 0 },
+  { nome: "Bernardo", numero: 11, pct: 41.25, golos: 7 },
+  { nome: "Xavier", numero: 12, pct: 15, golos: 1 },
+  { nome: "Lourenço", numero: 13, pct: 83.75, golos: 67 },
+  { nome: "Gaspar", numero: 14, pct: 87.5, golos: 42 },
+  { nome: "Martinho", numero: 15, pct: 92.5, golos: 57 },
+  { nome: "Nuno", numero: 16, pct: 26.25, golos: 0 },
+  { nome: "Bruno Costa", numero: 17, pct: 73.75, golos: 33 },
+  { nome: "Ivan", numero: 18, pct: 76.25, golos: 54 },
+  { nome: "Hugo", numero: 19, pct: 38.75, golos: 3 },
+  { nome: "Fábio", numero: 20, pct: 42.5, golos: 5 },
+  { nome: "Renato", numero: 21, pct: 75, golos: 8 },
 ] as const;
 
 type CompeticaoSeed = { nome: string; formato: FormatoCompeticao };

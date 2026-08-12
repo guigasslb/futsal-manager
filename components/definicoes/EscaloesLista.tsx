@@ -6,6 +6,7 @@ import { Pencil, Trash2, ChevronUp, ChevronDown, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -39,12 +40,18 @@ function EscalaoForm({
   onSubmit,
   pending,
   erro,
+  mostrarVisibilidade = false,
 }: {
   defaultValues?: Partial<Escalao>;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   pending: boolean;
   erro: string | null;
+  mostrarVisibilidade?: boolean;
 }) {
+  const [visivel, setVisivel] = useState(
+    defaultValues?.visivelOutrosTreinadores ?? true,
+  );
+
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       {erro && <p className="text-corpo-sec text-vermelho-600">{erro}</p>}
@@ -78,6 +85,30 @@ function EscalaoForm({
           />
         </div>
       </div>
+      {mostrarVisibilidade && (
+        <div className="flex items-start justify-between gap-4 rounded-md border border-cinza-200 p-3">
+          <div className="space-y-0.5">
+            <Label htmlFor="visivelOutrosTreinadores" className="cursor-pointer">
+              Visível para outros treinadores do clube
+            </Label>
+            <p className="text-legenda text-cinza-600">
+              Permite que outros treinadores vejam os treinos e jogos deste escalão no calendário do clube.
+            </p>
+          </div>
+          {/* Radix Switch não emite valor em FormData — sincronizamos via input escondido. */}
+          <input
+            type="hidden"
+            name="visivelOutrosTreinadores"
+            value={visivel ? "true" : "false"}
+          />
+          <Switch
+            id="visivelOutrosTreinadores"
+            checked={visivel}
+            onCheckedChange={setVisivel}
+            aria-label="Visível para outros treinadores do clube"
+          />
+        </div>
+      )}
       <div className="flex justify-end gap-2 pt-2">
         <Button type="submit" disabled={pending}>
           {pending ? "A guardar…" : "Guardar"}
@@ -147,6 +178,7 @@ function EditarEscalaoDialog({ escalao }: { escalao: Escalao }) {
         nome: fd.get("nome"),
         idadeMin: fd.get("idadeMin") || null,
         idadeMax: fd.get("idadeMax") || null,
+        visivelOutrosTreinadores: fd.get("visivelOutrosTreinadores") === "true",
       });
       if (res.sucesso) {
         toast.success("Escalão atualizado");
@@ -168,7 +200,13 @@ function EditarEscalaoDialog({ escalao }: { escalao: Escalao }) {
         <DialogHeader>
           <DialogTitle>Editar escalão</DialogTitle>
         </DialogHeader>
-        <EscalaoForm defaultValues={escalao} onSubmit={handleSubmit} pending={pending} erro={erro} />
+        <EscalaoForm
+          defaultValues={escalao}
+          onSubmit={handleSubmit}
+          pending={pending}
+          erro={erro}
+          mostrarVisibilidade
+        />
       </DialogContent>
     </Dialog>
   );

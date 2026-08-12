@@ -1,4 +1,5 @@
 // prisma/data-migrations/seed_sport_lisboa_evora_extra_core.ts
+// DADOS DE TESTE — anonimizados em 2026-08-12. Não usar em produção com dados reais.
 //
 // Lógica PARTILHADA do seed suplementar do clube "Sport Lisboa e Évora".
 // Usada tanto pela rota temporária (app/api/seed-sle-extra/route.ts) como pelo

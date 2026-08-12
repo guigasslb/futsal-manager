@@ -12,7 +12,10 @@ import { obterMembroAtual } from "@/lib/permissoes";
 import { JogoDetalhe } from "@/components/jogos/JogoDetalhe";
 import { ApagarJogoButton } from "@/components/jogos/ApagarJogoButton";
 import { ConvocatoriaWhatsApp } from "@/components/jogos/ConvocatoriaWhatsApp";
+import { BotoesPartilhaJogo } from "@/components/social/BotoesPartilhaJogo";
 import { LABEL_CASA_FORA } from "@/lib/schemas/jogo";
+import { eEscalaoFormacaoJovem } from "@/lib/schemas/social";
+import { urlCard } from "@/lib/social/token";
 
 function formatarData(data: Date): string {
   return new Date(data).toLocaleDateString("pt-PT", {
@@ -100,6 +103,13 @@ export default async function DetalheJogoPage({
 
   const temResultado = j.golosMarcados != null && j.golosSofridos != null;
 
+  // P4.7: cards sociais. Bloqueados para escalões de formação jovem (RGPD).
+  const escalaoJovem = eEscalaoFormacaoJovem(j.escalao.nome);
+  const urlCardResultado =
+    temResultado && !escalaoJovem ? urlCard("resultado", { jogoId: j.id }) : null;
+  const urlCardMvp =
+    !escalaoJovem && j.estatisticas.length > 0 ? urlCard("mvp", { jogoId: j.id }) : null;
+
   return (
     <div className="space-y-6">
       {/* Navegação */}
@@ -112,6 +122,7 @@ export default async function DetalheJogoPage({
         />
         <div className="flex flex-wrap gap-2">
           {podeComunicar && <ConvocatoriaWhatsApp jogoId={j.id} />}
+          <BotoesPartilhaJogo urlResultado={urlCardResultado} urlMvp={urlCardMvp} />
           <Button asChild variant="outline">
             <Link href={`/jogos/${j.id}/editar`}>
               <Pencil className="h-4 w-4" />

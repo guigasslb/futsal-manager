@@ -19,6 +19,7 @@ export const escalaoSchema = z
       .nullable()
       .optional()
       .transform((v) => v ?? null),
+    visivelOutrosTreinadores: z.boolean().optional(),
   })
   .refine(
     (d) =>

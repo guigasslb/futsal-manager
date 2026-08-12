@@ -3,8 +3,34 @@ import { atletaPessoalSchema, criarAtletaSchema } from "@/lib/schemas/atleta";
 import { exercicioSchema, diagramaSchema } from "@/lib/schemas/exercicio";
 import { jogoSchema, estatisticaSchema } from "@/lib/schemas/jogo";
 import { sessaoSchema, presencaSchema } from "@/lib/schemas/treino";
+import { escalaoSchema } from "@/lib/schemas/escalao";
 
 const CUID = "ckv9v0z1w0000abcd1234efgh";
+
+describe("escalaoSchema (P2.8 — visibilidade para outros treinadores)", () => {
+  it("aceita um escalão válido sem visivelOutrosTreinadores (campo opcional)", () => {
+    const r = escalaoSchema.safeParse({ nome: "Sub-15" });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.visivelOutrosTreinadores).toBeUndefined();
+  });
+
+  it("aceita e preserva visivelOutrosTreinadores = false", () => {
+    const r = escalaoSchema.safeParse({ nome: "Sub-15", visivelOutrosTreinadores: false });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.visivelOutrosTreinadores).toBe(false);
+  });
+
+  it("aceita e preserva visivelOutrosTreinadores = true", () => {
+    const r = escalaoSchema.safeParse({ nome: "Sub-15", visivelOutrosTreinadores: true });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.visivelOutrosTreinadores).toBe(true);
+  });
+
+  it("rejeita visivelOutrosTreinadores não-booleano", () => {
+    const r = escalaoSchema.safeParse({ nome: "Sub-15", visivelOutrosTreinadores: "sim" });
+    expect(r.success).toBe(false);
+  });
+});
 
 describe("atletaPessoalSchema (F1 — só dados pessoais)", () => {
   it("aceita um atleta válido mínimo", () => {
@@ -180,6 +206,51 @@ describe("jogoSchema", () => {
     });
     expect(r.success).toBe(false);
   });
+
+  it("agendar sem resultado é válido (P4.3) — golos/faltas/vídeo opcionais", () => {
+    const r = jogoSchema.safeParse({
+      data: "2026-12-10T18:00",
+      adversario: "CD Aves",
+      casaFora: "FORA",
+      escalaoId: CUID,
+      competicaoId: CUID,
+      local: "Pavilhão",
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.golosMarcados).toBeUndefined();
+      expect(r.data.faltas1aParte).toBeUndefined();
+    }
+  });
+
+  it("aceita jogo já disputado com resultado completo (P4.3)", () => {
+    const r = jogoSchema.safeParse({
+      data: "2026-01-10T18:00",
+      adversario: "CD Aves",
+      casaFora: "CASA",
+      escalaoId: CUID,
+      golosMarcados: 3,
+      golosSofridos: 1,
+      faltas1aParte: 2,
+      faltas2aParte: 4,
+      videoUrl: "https://youtu.be/abc",
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("ignora o campo legado `competicao` (texto livre) — deprecado (P4.3)", () => {
+    const r = jogoSchema.safeParse({
+      data: "2026-01-10T18:00",
+      adversario: "CD Aves",
+      casaFora: "CASA",
+      escalaoId: CUID,
+      competicao: "Liga distrital",
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect("competicao" in r.data).toBe(false);
+    }
+  });
 });
 
 describe("estatisticaSchema", () => {
@@ -216,6 +287,29 @@ describe("sessaoSchema", () => {
 
   it("rejeita sem escalão", () => {
     expect(sessaoSchema.safeParse({ data: "2026-01-10T18:00" }).success).toBe(false);
+  });
+
+  it("rejeita planeamentoId numa sessão não-NORMAL (ex.: ABERTO)", () => {
+    const r = sessaoSchema.safeParse({
+      data: "2026-01-10T18:00",
+      escalaoId: CUID,
+      tipoSessao: "ABERTO",
+      planeamentoId: CUID,
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues.some((i) => i.path.join(".") === "planeamentoId")).toBe(true);
+    }
+  });
+
+  it("aceita planeamentoId numa sessão NORMAL", () => {
+    const r = sessaoSchema.safeParse({
+      data: "2026-01-10T18:00",
+      escalaoId: CUID,
+      tipoSessao: "NORMAL",
+      planeamentoId: CUID,
+    });
+    expect(r.success).toBe(true);
   });
 });
 

@@ -6,6 +6,7 @@ import {
   Prisma,
   type Posicao,
   type TipoEventoJogo,
+  type TipoJogo,
   type TipoMetrica,
   type TipoRelatorio,
   type TipoSessao,
@@ -30,6 +31,7 @@ import {
   analiticoAtletaSchema,
   analiticoEscalaoSchema,
   analiticoClubeSchema,
+  competicoesEscalaoSchema,
   gerarRelatorioSchema,
 } from "@/lib/schemas/analise";
 
@@ -625,8 +627,9 @@ function resultadoJogo(m: number | null, s: number | null): "V" | "E" | "D" | nu
 export async function obterAnaliticoEscalao(
   escalaoId: string,
   epocaId?: string,
+  competicaoId?: string,
 ): Promise<Resultado<AnaliticoEscalao>> {
-  const parsed = analiticoEscalaoSchema.safeParse({ escalaoId, epocaId });
+  const parsed = analiticoEscalaoSchema.safeParse({ escalaoId, epocaId, competicaoId });
   if (!parsed.success) return erroDeValidacao(parsed.error);
 
   const perm = await exigirRelatorios();
@@ -643,10 +646,16 @@ export async function obterAnaliticoEscalao(
   const epoca = await resolverEpoca(clubeId, epocaId);
   if (!epoca) return erro("Nenhuma época ativa");
 
+  // P2.5: filtro opcional por competição (campeonato / taça / particulares).
+  // Só afeta jogos e o que deles deriva (estatísticas, eventos, métricas);
+  // treinos e presenças são transversais à competição, logo mantêm-se globais.
+  const filtroCompeticao = competicaoId ? { competicaoId } : {};
+  const filtroJogo = { epocaId: epoca.id, escalaoId, ...filtroCompeticao };
+
   const [jogos, sessoes, nAtletas, estatisticas, eventos, presencas, valoresMetricas] =
     await Promise.all([
     prisma.jogo.findMany({
-      where: { epocaId: epoca.id, escalaoId },
+      where: filtroJogo,
       select: { id: true, data: true, adversario: true, golosMarcados: true, golosSofridos: true },
       orderBy: { data: "asc" },
     }),
@@ -658,7 +667,7 @@ export async function obterAnaliticoEscalao(
       where: { epocaId: epoca.id, escalaoId, estado: "ATIVO", atleta: { ativo: true } },
     }),
     prisma.estatisticaAtleta.findMany({
-      where: { jogo: { epocaId: epoca.id, escalaoId } },
+      where: { jogo: filtroJogo },
       select: {
         atletaId: true,
         golos: true,
@@ -669,7 +678,7 @@ export async function obterAnaliticoEscalao(
       },
     }),
     prisma.eventoJogo.findMany({
-      where: { jogo: { epocaId: epoca.id, escalaoId } },
+      where: { jogo: filtroJogo },
       select: { tipo: true },
     }),
     prisma.presenca.findMany({
@@ -682,7 +691,7 @@ export async function obterAnaliticoEscalao(
     }),
     // Métricas configuráveis registadas por jogo (bíblia §8.14) — rankings de equipa.
     prisma.valorMetrica.findMany({
-      where: { estatistica: { jogo: { epocaId: epoca.id, escalaoId } } },
+      where: { estatistica: { jogo: filtroJogo } },
       select: {
         valor: true,
         metrica: { select: { id: true, nome: true, tipo: true, ordem: true } },
@@ -820,6 +829,53 @@ export async function obterAnaliticoEscalao(
     resultados,
     rankingsMetricas: montarRankingsMetricas(valoresMetricas),
   });
+}
+
+/** Opção do filtro por competição (bíblia §10.2 — separar contextos). */
+export interface CompeticaoOpcao {
+  id: string;
+  nome: string;
+  tipo: TipoJogo;
+}
+
+/**
+ * Competições de um escalão/época que têm pelo menos um jogo registado.
+ * Alimenta o filtro do painel de analíticos (P2.5). Só as competições com
+ * jogos aparecem — evita opções vazias no seletor.
+ */
+export async function obterCompeticoesEscalao(
+  escalaoId: string,
+  epocaId?: string,
+): Promise<Resultado<CompeticaoOpcao[]>> {
+  const parsed = competicoesEscalaoSchema.safeParse({ escalaoId, epocaId });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
+
+  const perm = await exigirRelatorios();
+  if (!perm.ok) return erro(perm.erro);
+  const clubeId = perm.ctx.clube.id;
+
+  const escalao = await prisma.escalao.findFirst({
+    where: { id: escalaoId, clubeId },
+    select: { id: true },
+  });
+  if (!escalao) return erro("Escalão não encontrado");
+  if (!(await podeLerEscalao(escalaoId))) return erro("Sem permissão neste escalão");
+
+  const epoca = await resolverEpoca(clubeId, epocaId);
+  if (!epoca) return erro("Nenhuma época ativa");
+
+  const competicoes = await prisma.competicao.findMany({
+    where: {
+      clubeId,
+      escalaoId,
+      epocaId: epoca.id,
+      jogos: { some: { epocaId: epoca.id, escalaoId } },
+    },
+    select: { id: true, nome: true, tipo: true },
+    orderBy: [{ tipo: "asc" }, { nome: "asc" }],
+  });
+
+  return ok(competicoes);
 }
 
 // Valores dos enums (Prisma gera os enums como objetos runtime).

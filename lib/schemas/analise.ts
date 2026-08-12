@@ -11,8 +11,16 @@ export const analiticoAtletaSchema = z.object({
   epocaId: z.string().cuid().optional(),
 });
 
-/** Nível 2 — analítico do escalão/equipa. */
+/** Nível 2 — analítico do escalão/equipa (opcionalmente filtrado por competição). */
 export const analiticoEscalaoSchema = z.object({
+  escalaoId: z.string().cuid(),
+  epocaId: z.string().cuid().optional(),
+  // P2.5: separa campeonato / taça / particulares no mesmo escalão (bíblia §10.2).
+  competicaoId: z.string().cuid().optional(),
+});
+
+/** Lista de competições com jogos de um escalão/época (para o filtro do painel). */
+export const competicoesEscalaoSchema = z.object({
   escalaoId: z.string().cuid(),
   epocaId: z.string().cuid().optional(),
 });
@@ -62,6 +70,7 @@ export const gerarRelatorioSchema = z
 
 export type AnaliticoAtletaInput = z.infer<typeof analiticoAtletaSchema>;
 export type AnaliticoEscalaoInput = z.infer<typeof analiticoEscalaoSchema>;
+export type CompeticoesEscalaoInput = z.infer<typeof competicoesEscalaoSchema>;
 export type AnaliticoClubeInput = z.infer<typeof analiticoClubeSchema>;
 export type GerarRelatorioInput = z.infer<typeof gerarRelatorioSchema>;
 

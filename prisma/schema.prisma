@@ -52,6 +52,15 @@ model Clube {
 
   // F11 (§3.11): licença de clube (se real). Titular exclusivo (clubeId @unique em Licenca).
   licenca Licenca? @relation("LicencaClube")
+
+  // P1.5: constraints de FK em falta — relações inversas para dados scoped ao clube.
+  planeamentos            Planeamento[]
+  competicoes             Competicao[]
+  observacoesAdversario   ObservacaoAdversario[]
+  modelosJogoProprietario ModeloJogo[]           @relation("ModeloJogoClube")
+
+  // P2.1 (§3.15/§8.19): lembretes/tarefas persistidos do clube.
+  lembretes Lembrete[]
 }
 
 // ─────────────────────────────────────────────
@@ -149,6 +158,41 @@ model Utilizador {
   // F11 (§3.11): licença Individual (se ativa) e carteira de crédito (🎒 portátil).
   licencaIndividual Licenca?  @relation("LicencaIndividual")
   carteira          Carteira?
+
+  // P2.1 (§3.15/§8.19): lembretes criados e lembretes recebidos como destinatário.
+  // NOTA: a pessoa é o `Utilizador` (o `Perfil` no modelo é um pacote de
+  // capacidades/papel, não uma pessoa) — o estado `visto` é por pessoa.
+  lembretesCriados   Lembrete[]             @relation("LembreteCriadoPor")
+  lembretesRecebidos LembreteDestinatario[] @relation("LembreteDestinatario")
+
+  // P2.4 (§8.17): histórico de carreira do treinador (portátil, pertence à pessoa,
+  // não ao clube — âncora do "o que crias é teu para toda a carreira", §17.3).
+  registosCarreira RegistoCarreira[]
+}
+
+// ─────────────────────────────────────────────
+// P2.4 — PERFIL DO TREINADOR / HISTÓRICO DE CARREIRA (§8.17)
+// ─────────────────────────────────────────────
+
+// Registo de uma passagem na carreira do treinador (clube/escalão/épocas/conquistas).
+// Pertence ao Utilizador (a pessoa), é portátil e independente de qualquer clube:
+// o treinador pode ter treinado em clubes fora do sistema, por isso `clube` é texto
+// livre. Alimenta o perfil profissional (diferenciador da licença Individual, §17.3).
+model RegistoCarreira {
+  id           String     @id @default(cuid())
+  utilizadorId String
+  utilizador   Utilizador @relation(fields: [utilizadorId], references: [id], onDelete: Cascade)
+  clube        String // nome do clube (texto livre — pode ter treinado fora do sistema)
+  escalao      String // ex. "Seniores", "Sub-17"
+  epocaInicio  String // ex. "2022/2023"
+  epocaFim     String? // null = ainda em curso
+  conquistas   String? // texto livre — ex. "Campeão Distrital"
+  notas        String?
+  ordem        Int        @default(0) // para ordenação manual
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([utilizadorId])
 }
 
 // ─────────────────────────────────────────────
@@ -162,6 +206,10 @@ model ModeloJogo {
   autor               Utilizador          @relation("ModeloJogoAutor", fields: [autorId], references: [id])
   proprietario        PropriedadeConteudo @default(CLUBE)
   clubeProprietarioId String?
+  // P1.5: FK explícita. Nullable (só preenchido quando proprietario = CLUBE);
+  // SetNull segue o mesmo padrão de escalaoId/epocaId — se o clube for removido,
+  // o modelo degrada para metodologia pessoal/portátil do autor (conteúdo preservado).
+  clubeProprietario   Clube?              @relation("ModeloJogoClube", fields: [clubeProprietarioId], references: [id], onDelete: SetNull)
   nome                String
   momento             MomentoJogo
   principios          String?             @db.Text
@@ -374,6 +422,10 @@ model Atleta {
   progressos     ProgressoHabilidade[]
   consentimentos Consentimento[]
   participacoes  AtletaEscalao[]
+  // P1.5: eventos de jogo (ao vivo) associados ao atleta.
+  eventosJogo    EventoJogo[]
+  // P4.8 (§8.20): RPE individual reportado pelo atleta por sessão.
+  rpesAtletas    RpeAtleta[]
 
   @@index([clubeId])
   @@index([escalaoId])
@@ -617,6 +669,8 @@ enum CategoriaExercicioPrincipal {
 model Planeamento {
   id         String          @id @default(cuid())
   clubeId    String
+  // P1.5: FK explícita para o clube proprietário do planeamento.
+  clube      Clube           @relation(fields: [clubeId], references: [id], onDelete: Cascade)
   escalaoId  String
   escalao    Escalao         @relation(fields: [escalaoId], references: [id], onDelete: Cascade)
   epocaId    String
@@ -634,6 +688,7 @@ model Planeamento {
 
   @@index([epocaId, escalaoId])
   @@index([escalaoId])
+  @@index([clubeId])
 }
 
 enum TipoPlaneamento {
@@ -655,6 +710,9 @@ model Sessao {
   id            String       @id @default(cuid())
   data          DateTime
   duracaoMin    Int?
+  // P4.8 (§8.20): RPE da sessão atribuído pelo treinador (1-10). Multiplicado pela
+  // duração dá a carga da sessão (sRPE); base do cálculo semanal de ACWR.
+  rpeSessao     Int? // 1-10: carga percebida da sessão (RPE do treinador)
   objetivo      String?      @db.Text
   local         String?
   notas         String?      @db.Text
@@ -675,12 +733,30 @@ model Sessao {
   // F8 (§3.12): id do evento correspondente no Google Calendar (idempotência da sincronização).
   googleEventId String?
 
-  exercicios SessaoExercicio[]
-  presencas  Presenca[]
+  exercicios  SessaoExercicio[]
+  presencas   Presenca[]
+  // P4.8 (§8.20): RPE individual reportado por cada atleta para esta sessão.
+  rpesAtletas RpeAtleta[]
 
   @@index([epocaId, escalaoId, data])
   @@index([escalaoId])
   @@index([planeamentoId])
+}
+
+// P4.8 (§8.20): RPE individual do atleta para uma sessão (1-10). Permite carga
+// percebida por jogador; agregado (média) alimenta a carga semanal do escalão.
+model RpeAtleta {
+  id        String   @id @default(cuid())
+  sessaoId  String
+  sessao    Sessao   @relation(fields: [sessaoId], references: [id], onDelete: Cascade)
+  atletaId  String
+  atleta    Atleta   @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  rpe       Int // 1-10
+  createdAt DateTime @default(now())
+
+  @@unique([sessaoId, atletaId])
+  @@index([atletaId])
+  @@index([sessaoId])
 }
 
 model SessaoExercicio {
@@ -703,7 +779,8 @@ model Presenca {
   sessaoId     String
   sessao       Sessao         @relation(fields: [sessaoId], references: [id], onDelete: Cascade)
   atletaId     String
-  atleta       Atleta         @relation(fields: [atletaId], references: [id])
+  // P1.3 (RGPD): Cascade — o hard-delete do atleta apaga as suas presenças.
+  atleta       Atleta         @relation(fields: [atletaId], references: [id], onDelete: Cascade)
   // Escalão da presença. Nullable nesta fase (expand); passará a NOT NULL em M4.
   escalaoId    String?
   escalao      Escalao?       @relation("PresencaEscalao", fields: [escalaoId], references: [id])
@@ -795,6 +872,8 @@ enum TipoJogo {
 model Competicao {
   id        String            @id @default(cuid())
   clubeId   String
+  // P1.5: FK explícita para o clube proprietário da competição.
+  clube     Clube             @relation(fields: [clubeId], references: [id], onDelete: Cascade)
   escalaoId String
   escalao   Escalao           @relation(fields: [escalaoId], references: [id], onDelete: Cascade)
   epocaId   String
@@ -852,10 +931,13 @@ model EventoJogo {
   // F5 (M15): bloco de tempo associado (útil em substituições / tempos por blocos).
   bloco              BlocoTempo?
   atletaId           String?
+  // P1.5: FK explícita. Cascade — apagar o atleta apaga os seus eventos de jogo.
+  atleta             Atleta?        @relation(fields: [atletaId], references: [id], onDelete: Cascade)
   atletaSecundarioId String?
   criadoEm           DateTime       @default(now())
 
   @@index([jogoId])
+  @@index([atletaId])
 }
 
 enum TipoEventoJogo {
@@ -874,6 +956,8 @@ enum TipoEventoJogo {
 model ObservacaoAdversario {
   id            String   @id @default(cuid())
   clubeId       String
+  // P1.5: FK explícita para o clube proprietário da observação de scouting.
+  clube         Clube    @relation(fields: [clubeId], references: [id], onDelete: Cascade)
   escalaoId     String?
   // F5 (M15): scouting pode ser contextualizado num jogo (dia de jogo) ou avulso.
   jogoId        String?
@@ -911,7 +995,8 @@ model Convocatoria {
   jogoId    String
   jogo      Jogo    @relation(fields: [jogoId], references: [id], onDelete: Cascade)
   atletaId  String
-  atleta    Atleta  @relation(fields: [atletaId], references: [id])
+  // P1.3 (RGPD): Cascade — o hard-delete do atleta apaga as suas convocatórias.
+  atleta    Atleta  @relation(fields: [atletaId], references: [id], onDelete: Cascade)
   convocado Boolean @default(true)
 
   // F5 (M15): plano de dia de jogo — posição/titularidade prevista.
@@ -927,10 +1012,13 @@ model EstatisticaAtleta {
   jogoId   String
   jogo     Jogo   @relation(fields: [jogoId], references: [id], onDelete: Cascade)
   atletaId String
-  atleta   Atleta @relation(fields: [atletaId], references: [id])
+  // P1.3 (RGPD): Cascade — o hard-delete do atleta apaga as suas estatísticas
+  // (e, transitivamente, os ValorMetrica). O action bloqueia por defeito quando
+  // existem estatísticas; a Cascade é a garantia ao nível do schema.
+  atleta   Atleta @relation(fields: [atletaId], references: [id], onDelete: Cascade)
 
   // Utilização (adaptado às rotações do futsal)
-  utilizacao Utilizacao @default(NAO_UTILIZADO)
+  utilizacao Utilizacao  @default(NAO_UTILIZADO)
   // F5 (M15): tempo de jogo por bloco pré-definido (alternativa/complemento a `minutos`).
   blocoTempo BlocoTempo?
   minutos    Int? // aproximado, opcional (derivável do bloco; null = não registado)
@@ -1108,7 +1196,7 @@ model IntegracaoCalendario {
 // Licença ativa de um utilizador (Individual) OU de um clube (Clube).
 // Um titular tem no máximo uma ativa (utilizadorId @unique OU clubeId @unique).
 model Licenca {
-  id            String        @id @default(cuid())
+  id            String         @id @default(cuid())
   tipo          TipoLicenca // INDIVIDUAL | CLUBE
   tier          TierClube? // só se tipo=CLUBE: PEQUENO | MEDIO | GRANDE | PARCEIRO
   estado        EstadoLicenca  @default(ATIVA) // ATIVA | EXPIRADA | CANCELADA | SUSPENSA
@@ -1186,4 +1274,49 @@ enum TipoMovimento {
   DEBITO_COMPRA
   REEMBOLSO
   AJUSTE
+}
+
+// ─────────────────────────────────────────────
+// P2.1 — LEMBRETES / TAREFAS DE EQUIPA (§3.15/§8.19)
+// ─────────────────────────────────────────────
+
+// Lembrete/tarefa persistido, criado por um utilizador e opcionalmente dirigido
+// a um conjunto de destinatários (membros do clube). Distinto dos "lembretes de
+// hoje" derivados no dashboard (lib/dashboard-lembretes.ts), que são efémeros.
+//
+// NOTA de modelação: o campo `criadoPor` referencia `Utilizador` (a pessoa), não
+// `Perfil` — no FutsalCoach o `Perfil` é um pacote de capacidades (papel), pelo
+// que criador e destinatário têm de ser pessoas para que o estado `visto` e o
+// filtro "criados por mim / onde sou destinatário" façam sentido.
+model Lembrete {
+  id          String     @id @default(cuid())
+  clubeId     String
+  clube       Clube      @relation(fields: [clubeId], references: [id], onDelete: Cascade)
+  criadoPorId String
+  criadoPor   Utilizador @relation("LembreteCriadoPor", fields: [criadoPorId], references: [id], onDelete: Cascade)
+  titulo      String
+  descricao   String?
+  dataLimite  DateTime?
+  concluido   Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  destinatarios LembreteDestinatario[]
+
+  @@index([clubeId])
+  @@index([criadoPorId])
+}
+
+// Destinatário de um lembrete + estado de leitura (`visto`) por pessoa.
+model LembreteDestinatario {
+  id           String     @id @default(cuid())
+  lembreteId   String
+  lembrete     Lembrete   @relation(fields: [lembreteId], references: [id], onDelete: Cascade)
+  utilizadorId String
+  utilizador   Utilizador @relation("LembreteDestinatario", fields: [utilizadorId], references: [id], onDelete: Cascade)
+  visto        Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+
+  @@unique([lembreteId, utilizadorId])
+  @@index([utilizadorId])
 }

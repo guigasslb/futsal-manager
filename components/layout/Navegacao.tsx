@@ -13,12 +13,15 @@ import {
   Users2,
   MessageSquare,
   BarChart3,
+  CalendarRange,
   MoreHorizontal,
   Rocket,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ITEM_COMECAR = { href: "/vitoria-rapida", label: "Começar", icon: Rocket };
+// Agenda agregada de todos os escalões — só para Admin/DT (âmbito TODO_CLUBE, F P2.2).
+const ITEM_AGENDA = { href: "/agenda", label: "Agenda", icon: CalendarRange };
 
 const ITENS_BASE = [
   { href: "/dashboard", label: "Início", icon: LayoutDashboard },
@@ -35,15 +38,33 @@ const ITENS_BASE = [
 /**
  * @param mostrarComecar Mostra o atalho "Começar" (vitória rápida) — só quando
  * o plantel está vazio (F10 / §8.1).
+ * @param mostrarAgenda Mostra o item "Agenda" (vista agregada de todos os
+ * escalões) — só para Admin/DT (âmbito TODO_CLUBE, P2.2 / §8.x).
  */
-export function Navegacao({ mostrarComecar = false }: { mostrarComecar?: boolean }) {
+export function Navegacao({
+  mostrarComecar = false,
+  mostrarAgenda = false,
+}: {
+  mostrarComecar?: boolean;
+  mostrarAgenda?: boolean;
+}) {
   const pathname = usePathname();
   const [maisAberto, setMaisAberto] = useState(false);
 
+  // Base + "Agenda" (Admin/DT): a Agenda entra a seguir a Jogos, junto às vistas
+  // transversais do clube (Analíticos, Comunicações…).
+  const ITENS_COM_AGENDA = mostrarAgenda
+    ? [
+        ...ITENS_BASE.slice(0, 5), // Início, Plantel, Treinos, Exercícios, Jogos
+        ITEM_AGENDA,
+        ...ITENS_BASE.slice(5),
+      ]
+    : ITENS_BASE;
+
   // "Começar" entra logo a seguir ao Início, para ficar visível na bottom-nav.
   const ITENS = mostrarComecar
-    ? [ITENS_BASE[0], ITEM_COMECAR, ...ITENS_BASE.slice(1)]
-    : ITENS_BASE;
+    ? [ITENS_COM_AGENDA[0], ITEM_COMECAR, ...ITENS_COM_AGENDA.slice(1)]
+    : ITENS_COM_AGENDA;
   const ITENS_BOTTOM = ITENS.slice(0, 4);
   const ITENS_MAIS = ITENS.slice(4);
 

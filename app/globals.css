@@ -407,3 +407,96 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LANDING PÚBLICA (app/page.tsx) — legível para visitantes anónimos (P1.2)
+   ─────────────────────────────────────────────────────────────────────────
+   O tema base do produto é escuro e o bloco `.dark` (acima) remapeia os
+   utilitários claros (text-cinza-*, bg-white, bg-cinza-50, …) para tons
+   escuros. Para um visitante NÃO autenticado, a landing — desenhada para tema
+   claro — herdava esse remapeamento e ficava com secções, preços e CTAs de
+   baixo contraste. Aqui fixamos os tons claros da marca dentro da landing,
+   independentemente do tema persistido em localStorage ou do default escuro,
+   sem alterar a estrutura nem fazer redesign. As secções escuras da landing
+   (hero e footer) usam cores inline e não são afetadas.
+   A maior especificidade (`.dark .landing-root .util` = 0,3,0) vence os
+   remaps de `.dark .util` (0,2,0).
+   ═══════════════════════════════════════════════════════════════════════════ */
+.landing-root {
+  background-color: #ffffff;
+  color: #141210; /* ink / cinza-900 */
+}
+.dark .landing-root .bg-white { background-color: #ffffff; }
+.dark .landing-root .bg-cinza-50 { background-color: #f7f5f2; } /* superfície clara */
+.dark .landing-root .text-cinza-900 { color: #141210; }
+.dark .landing-root .text-cinza-700 { color: #2e2a25; }
+.dark .landing-root .text-cinza-600 { color: #57514a; }
+.dark .landing-root .text-cinza-500 { color: #6c665f; }
+.dark .landing-root .border-cinza-200 { border-color: #e4e1db; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   IMPRESSÃO / PDF — relatórios partilhados (/r/[token]) legíveis (P1.1)
+   ─────────────────────────────────────────────────────────────────────────
+   O tema base do produto é escuro; o bloco `.dark` remapeia o texto para tons
+   claros. Ao imprimir ou guardar como PDF, esse texto claro fica ilegível
+   sobre papel branco (e os fundos escuros são descartados pelo browser). Este
+   bloco força um tema claro de alto contraste APENAS na impressão, sem afetar
+   a apresentação no ecrã. Usa `!important` para vencer os remaps de `.dark`
+   independentemente do tema persistido pelo visitante.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media print {
+  html,
+  body {
+    background: #ffffff !important;
+    color: #141210 !important;
+  }
+
+  /* Superfícies (cartões, painéis, fundos) → branco, sem sombra nem gradiente */
+  .bg-white,
+  .bg-cinza-50,
+  .bg-cinza-100,
+  .bg-cinza-200,
+  .app-surface {
+    background-color: #ffffff !important;
+    background-image: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Texto → tons escuros de alto contraste sobre papel branco */
+  .text-cinza-900 { color: #141210 !important; }
+  .text-cinza-800 { color: #2e2a25 !important; }
+  .text-cinza-700 { color: #2e2a25 !important; }
+  .text-cinza-600 { color: #57514a !important; }
+  .text-cinza-500 { color: #6c665f !important; }
+  .text-cinza-400 { color: #6c665f !important; }
+  .text-cinza-300 { color: #6c665f !important; }
+  h1,
+  h2,
+  h3 {
+    color: #141210 !important;
+  }
+
+  /* Bordas e separadores → cinza claro visível */
+  .border-cinza-100,
+  .border-cinza-200,
+  .border-cinza-300 { border-color: #d9d5ce !important; }
+  .divide-cinza-100 > :not([hidden]) ~ :not([hidden]),
+  .divide-cinza-200 > :not([hidden]) ~ :not([hidden]) { border-color: #d9d5ce !important; }
+
+  /* Cartões: sem sombra; contorno leve para delimitar no papel */
+  .shadow-card { box-shadow: none !important; }
+  article { border-color: #d9d5ce !important; }
+
+  /* Garantir impressão das cores de acento: badges de resultado e gráficos SVG
+     (barras/linhas usam a cor do clube e realces suaves). */
+  svg,
+  [class*="bg-verde-"],
+  [class*="bg-ambar-"],
+  [class*="bg-vermelho-"],
+  [class*="text-verde-"],
+  [class*="text-ambar-"],
+  [class*="text-vermelho-"] {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

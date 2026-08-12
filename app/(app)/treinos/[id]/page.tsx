@@ -13,6 +13,7 @@ import {
   MarcadorPresencas,
   type PresencaInicial,
 } from "@/components/treinos/MarcadorPresencas";
+import { RegistoRpeSessao } from "@/components/treinos/RegistoRpeSessao";
 
 function formatarDataHora(data: Date): string {
   return new Date(data).toLocaleString("pt-PT", {
@@ -102,39 +103,47 @@ export default async function DetalheSessaoPage({
         )}
       </div>
 
-      {/* Duas colunas */}
+      {/* Duas colunas. Em mobile as presenças vêm primeiro (tarefa mais frequente
+          no arranque do treino); em desktop mantém-se exercícios à esquerda. */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <GestorExercicios
-          sessaoId={s.id}
-          exercicios={s.exercicios.map((se) => ({
-            id: se.id,
-            ordem: se.ordem,
-            duracaoMin: se.duracaoMin,
-            exercicio: {
-              id: se.exercicio.id,
-              nome: se.exercicio.nome,
-              categoriaPrincipal: se.exercicio.categoriaPrincipal,
-            },
-          }))}
-          biblioteca={biblioteca.map((b) => ({
-            id: b.id,
-            nome: b.nome,
-            categoriaPrincipal: b.categoriaPrincipal,
-            duracaoMin: b.duracaoMin,
-          }))}
-        />
+        <div className="order-2 lg:order-1">
+          <GestorExercicios
+            sessaoId={s.id}
+            exercicios={s.exercicios.map((se) => ({
+              id: se.id,
+              ordem: se.ordem,
+              duracaoMin: se.duracaoMin,
+              exercicio: {
+                id: se.exercicio.id,
+                nome: se.exercicio.nome,
+                categoriaPrincipal: se.exercicio.categoriaPrincipal,
+              },
+            }))}
+            biblioteca={biblioteca.map((b) => ({
+              id: b.id,
+              nome: b.nome,
+              categoriaPrincipal: b.categoriaPrincipal,
+              duracaoMin: b.duracaoMin,
+            }))}
+          />
+        </div>
 
-        <MarcadorPresencas
-          sessaoId={s.id}
-          atletas={atletas.map((a) => ({
-            id: a.id,
-            nome: a.nome,
-            // Número da participação neste escalão (F1).
-            numero: a.participacaoContexto?.numero ?? s.numeroPorAtleta[a.id] ?? null,
-          }))}
-          presencasIniciais={presencasIniciais}
-        />
+        <div className="order-1 lg:order-2">
+          <MarcadorPresencas
+            sessaoId={s.id}
+            atletas={atletas.map((a) => ({
+              id: a.id,
+              nome: a.nome,
+              // Número da participação neste escalão (F1).
+              numero: a.participacaoContexto?.numero ?? s.numeroPorAtleta[a.id] ?? null,
+            }))}
+            presencasIniciais={presencasIniciais}
+          />
+        </div>
       </div>
+
+      {/* P4.8 (§8.20): RPE da sessão — alimenta a análise de carga/ACWR do escalão. */}
+      <RegistoRpeSessao sessaoId={s.id} rpeInicial={s.rpeSessao} />
 
       {s.notas && (
         <div className="rounded-lg border border-cinza-200 bg-white p-5 shadow-card">

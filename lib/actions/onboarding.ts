@@ -84,11 +84,14 @@ export async function criarClube(dados: unknown): Promise<Resultado<{ clubeId: s
       },
     });
 
-    // Escalão de arranque, customizável depois no onboarding.
+    // Escalão de arranque, customizável depois no onboarding. Fica visível a
+    // outros treinadores (default) e com ordem definida para listar em primeiro.
     await tx.escalao.create({
       data: {
         clubeId: clube.id,
         nome: "Seniores",
+        ordem: 1,
+        visivelOutrosTreinadores: true,
       },
     });
 

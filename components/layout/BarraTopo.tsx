@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import Link from "next/link";
-import { LogOut, KeyRound, Bell } from "lucide-react";
+import { LogOut, KeyRound, Bell, UserRound } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,7 +55,7 @@ export function BarraTopo({
           aria-label={
             eventoHoje ? "Tens um evento hoje — ver dashboard" : "Ir para o dashboard"
           }
-          className="relative flex h-9 w-9 items-center justify-center rounded-full text-cinza-500 transition-colors hover:bg-cinza-100 hover:text-cinza-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1"
+          className="relative flex h-11 w-11 items-center justify-center rounded-full text-cinza-500 transition-colors hover:bg-cinza-100 hover:text-cinza-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1"
         >
           <Bell className="h-[18px] w-[18px]" aria-hidden />
           {eventoHoje && (
@@ -73,7 +73,7 @@ export function BarraTopo({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className="flex h-9 w-9 items-center justify-center rounded-full text-white text-legenda font-semibold select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+              className="flex h-11 w-11 items-center justify-center rounded-full text-white text-legenda font-semibold select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
               style={{ backgroundColor: "var(--cor-primaria, #F0531E)" }}
               aria-label={`Menu de ${nomeUtilizador}`}
             >
@@ -87,6 +87,12 @@ export function BarraTopo({
               </p>
             </div>
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/perfil" className="flex items-center gap-2">
+                <UserRound className="h-4 w-4 text-cinza-400" />
+                Perfil e carreira
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link href="/definicoes/utilizadores" className="flex items-center gap-2">
                 <KeyRound className="h-4 w-4 text-cinza-400" />

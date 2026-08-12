@@ -12,7 +12,8 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/layout/Logo";
 
-const LARANJA = "#F0531E";
+const LARANJA = "#F0531E"; // acento/decorativo (ícones, bordas, texto sobre escuro)
+const LARANJA_ACAO = "#C7430F"; // laranja-600: fundos c/ texto branco (AA 4.95:1)
 const INK = "#141210";
 
 type Funcionalidade = {
@@ -103,7 +104,7 @@ const PLANOS: Plano[] = [
 
 export default function RootPage() {
   return (
-    <main className="min-h-screen bg-white text-cinza-900">
+    <main className="landing-root min-h-screen bg-white text-cinza-900">
       {/* ── Hero (fundo escuro / preto quente) ─────────────────────────── */}
       <section
         className="relative overflow-hidden text-white"
@@ -125,7 +126,7 @@ export default function RootPage() {
             <Link
               href="/registar"
               className="rounded-lg px-4 py-2 text-corpo font-semibold text-white transition-transform hover:-translate-y-0.5"
-              style={{ backgroundColor: LARANJA }}
+              style={{ backgroundColor: LARANJA_ACAO }}
             >
               Começar agora
             </Link>
@@ -150,7 +151,7 @@ export default function RootPage() {
               <Link
                 href="/registar"
                 className="inline-flex items-center justify-center gap-2 rounded-xl px-7 py-3.5 text-base font-semibold text-white shadow-lg transition-transform hover:-translate-y-0.5"
-                style={{ backgroundColor: LARANJA }}
+                style={{ backgroundColor: LARANJA_ACAO }}
               >
                 Começar agora
                 <ArrowRight size={18} aria-hidden />
@@ -229,7 +230,7 @@ export default function RootPage() {
                   {plano.destaque && (
                     <span
                       className="rounded-full px-3 py-1 text-legenda font-semibold text-white"
-                      style={{ backgroundColor: LARANJA }}
+                      style={{ backgroundColor: LARANJA_ACAO }}
                     >
                       Recomendado
                     </span>
@@ -263,7 +264,7 @@ export default function RootPage() {
                   className="mt-8 inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-base font-semibold transition-transform hover:-translate-y-0.5"
                   style={
                     plano.destaque
-                      ? { backgroundColor: LARANJA, color: "#FFFFFF" }
+                      ? { backgroundColor: LARANJA_ACAO, color: "#FFFFFF" }
                       : { backgroundColor: INK, color: "#FFFFFF" }
                   }
                 >
