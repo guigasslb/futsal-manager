@@ -104,7 +104,10 @@ const PLANOS: Plano[] = [
 
 export default function RootPage() {
   return (
-    <main className="landing-root min-h-screen bg-white text-cinza-900">
+    <main
+      className="landing-root min-h-screen"
+      style={{ backgroundColor: "#ffffff", color: "#141210" }}
+    >
       {/* ── Hero (fundo escuro / preto quente) ─────────────────────────── */}
       <section
         className="relative overflow-hidden text-white"

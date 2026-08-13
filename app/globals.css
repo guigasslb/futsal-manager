@@ -419,13 +419,33 @@
    independentemente do tema persistido em localStorage ou do default escuro,
    sem alterar a estrutura nem fazer redesign. As secções escuras da landing
    (hero e footer) usam cores inline e não são afetadas.
-   A maior especificidade (`.dark .landing-root .util` = 0,3,0) vence os
-   remaps de `.dark .util` (0,2,0).
+
+   Porquê `html .landing-root` com `!important`:
+   O seletor `.dark .bg-white` (0,2,0) vencia `.landing-root` (0,1,0) quando
+   ambas as classes estão NO MESMO elemento — o combinador descendente de
+   `.dark .landing-root .bg-white` exige relação pai/filho, não se aplica ao
+   próprio `.landing-root`. Aumentar a especificidade para (0,2,1) e usar
+   `!important` garante que o fundo e a cor de texto base ficam brancos/escuros
+   independentemente de qualquer remapeamento de tema.
    ═══════════════════════════════════════════════════════════════════════════ */
-.landing-root {
-  background-color: #ffffff;
-  color: #141210; /* ink / cinza-900 */
+
+/* Fundo e cor de texto do elemento raiz — vence qualquer remapeamento de tema */
+html .landing-root,
+html.dark .landing-root {
+  background-color: #ffffff !important;
+  color: #141210 !important; /* ink / cinza-900 */
 }
+
+/* Headings: herdar cor do contexto em vez do remapeamento `.dark h1/h2/h3`.
+   O hero (secção com text-white) passa branco por herança; as secções
+   claras herdam #141210 do main (via inline style e regra acima). */
+html.dark .landing-root h1,
+html.dark .landing-root h2,
+html.dark .landing-root h3 {
+  color: inherit;
+}
+
+/* Descendentes com classes de superfície/texto — restaurar tons claros */
 .dark .landing-root .bg-white { background-color: #ffffff; }
 .dark .landing-root .bg-cinza-50 { background-color: #f7f5f2; } /* superfície clara */
 .dark .landing-root .text-cinza-900 { color: #141210; }
