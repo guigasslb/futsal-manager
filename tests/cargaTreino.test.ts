@@ -36,10 +36,12 @@ import {
   calcularCargaSemanal,
   classificarAcwr,
   inicioSemana,
+  type SessaoCarga,
+} from "@/lib/utils/cargaTreino";
+import {
   registarRpeSessao,
   registarRpeAtleta,
   obterCargaSemanal,
-  type SessaoCarga,
 } from "@/lib/actions/cargaTreino";
 import { auth } from "@/lib/auth";
 import { obterClubeIdAtual, obterEpocaAtiva } from "@/lib/epoca-context";

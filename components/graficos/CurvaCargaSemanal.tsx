@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { DadosCargaSemanal, ZonaCarga } from "@/lib/actions/cargaTreino";
-import { LABEL_ZONA_CARGA } from "@/lib/actions/cargaTreino";
+import type { DadosCargaSemanal, ZonaCarga } from "@/lib/utils/cargaTreino";
+import { LABEL_ZONA_CARGA } from "@/lib/utils/cargaTreino";
 
 // Código de cores por zona de carga (§8.20). Tokens: verde-600 / ambar-500 / vermelho-600.
 const C_IDEAL = "#1E9E5A";
