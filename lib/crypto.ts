@@ -5,7 +5,10 @@
 //
 // Estratégia:
 //   • Se ENCRYPTION_KEY (hex de 64 chars = 32 bytes) estiver definida → AES-256-GCM.
-//   • Caso contrário → Base64 simples com aviso (graceful degradation em dev).
+//   • Em produção sem ENCRYPTION_KEY → erro explícito (a app não arranca sem
+//     encriptação real).
+//   • Em desenvolvimento sem ENCRYPTION_KEY → Base64 simples com aviso
+//     (graceful degradation aceitável para dev local).
 //
 // O texto encriptado é auto-descritivo (prefixo por esquema) para que
 // `desencriptar` saiba como o descodificar independentemente do estado atual
@@ -24,10 +27,24 @@ const PREFIXO_B64 = "b64";
 
 let avisoBase64Emitido = false;
 
-/** Devolve a chave de 32 bytes se ENCRYPTION_KEY for válida; senão null. */
+/**
+ * Devolve a chave de 32 bytes se ENCRYPTION_KEY for válida.
+ * Em produção, lança erro se a chave estiver ausente ou vazia (a app não deve
+ * arrancar sem encriptação real). Em desenvolvimento, devolve null para permitir
+ * o fallback Base64.
+ */
 function obterChave(): Buffer | null {
   const hex = process.env.ENCRYPTION_KEY;
-  if (!hex) return null;
+  if (!hex) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "ENCRYPTION_KEY ausente ou vazia em produção: a aplicação não pode " +
+          "arrancar sem encriptação real. Definir uma string hexadecimal de 64 " +
+          "caracteres (32 bytes). Gerar com `openssl rand -hex 32`.",
+      );
+    }
+    return null;
+  }
 
   if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
     throw new Error(

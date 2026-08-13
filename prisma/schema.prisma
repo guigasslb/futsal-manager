@@ -78,13 +78,17 @@ model Reuniao {
   participantes  String?       @db.Text
   ordemTrabalhos String?       @db.Text
   ata            String?       @db.Text
-  criadorId      String
+  // Criador da reunião. Nullable com SetNull: se o utilizador for apagado, a
+  // reunião fica sem criador mas NÃO é apagada (o histórico preserva-se).
+  criadorId      String?
+  criador        Utilizador?   @relation("ReuniaoCriador", fields: [criadorId], references: [id], onDelete: SetNull)
   criadoEm       DateTime      @default(now())
 
   // F8 (§3.12): id do evento correspondente no Google Calendar (idempotência da sincronização).
   googleEventId String?
 
   @@index([clubeId])
+  @@index([criadorId])
 }
 
 enum AmbitoReuniao {
@@ -168,6 +172,10 @@ model Utilizador {
   // P2.4 (§8.17): histórico de carreira do treinador (portátil, pertence à pessoa,
   // não ao clube — âncora do "o que crias é teu para toda a carreira", §17.3).
   registosCarreira RegistoCarreira[]
+
+  // Reuniões criadas por este utilizador. SetNull ao apagar o utilizador
+  // (a reunião preserva-se sem criador).
+  reunioesCriadas Reuniao[] @relation("ReuniaoCriador")
 }
 
 // ─────────────────────────────────────────────

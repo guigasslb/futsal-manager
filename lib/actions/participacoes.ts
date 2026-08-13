@@ -140,6 +140,14 @@ export async function transferirEscalao(
     tipo: parsed.data.tipo,
   };
 
+  // ⚠️ CAMPO LEGADO NÃO SINCRONIZADO: esta transferência opera exclusivamente
+  // sobre `AtletaEscalao` (fonte de verdade da fase expand). O campo legado
+  // `Atleta.escalaoId` (e `escalaoSecundarioId`) NÃO é atualizado aqui — após
+  // uma transferência, o legado diverge intencionalmente da participação real.
+  // A fase M4 (contract) deve remover a dependência do campo legado e passar a
+  // ler SEMPRE de `AtletaEscalao`, nunca de `Atleta.escalaoId`. Não reintroduzir
+  // escrita ao legado aqui: seria mascarar o problema, não resolvê-lo.
+
   // Tudo — leitura das participações ativas, validação do invariante do
   // principal (secção 9), encerramento da origem, despromoção de um eventual
   // segundo principal e upsert do destino — corre numa única transação
@@ -241,6 +249,13 @@ export async function terminarParticipacao(
 
   const epoca = await resolverEpocaId(clubeId, parsed.data.epocaId);
   if (!epoca.ok) return erro(epoca.erro);
+
+  // ⚠️ CAMPO LEGADO NÃO SINCRONIZADO: o término de participação atua apenas
+  // sobre `AtletaEscalao` (fonte de verdade). O campo legado `Atleta.escalaoId`
+  // NÃO é atualizado aqui — após terminar uma participação, o legado pode
+  // continuar a apontar para um escalão onde o atleta já não participa. A fase
+  // M4 (contract) deve usar `AtletaEscalao` como fonte de verdade única, não o
+  // campo legado. Não reintroduzir escrita ao legado aqui.
 
   // Leitura + escrita na mesma transação Serializable: o invariante «o atleta
   // tem sempre uma participação principal» (secção 9) é imposto na escrita.

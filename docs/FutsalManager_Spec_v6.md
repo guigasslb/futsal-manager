@@ -844,10 +844,12 @@ model Reuniao {
   ordemTrabalhos String?
   ata            String?      // ata exposta aos membros do âmbito
   googleEventId  String?      // sincronização Google Calendar
-  criadorId      String
+  criadorId      String?      // nullable: SetNull ao apagar o utilizador
+  criador        Utilizador?  @relation("ReuniaoCriador", fields: [criadorId], references: [id], onDelete: SetNull)
   criadoEm       DateTime     @default(now())
 
   @@index([clubeId])
+  @@index([criadorId])
 }
 
 enum AmbitoReuniao { CLUBE ESCALAO }
@@ -1990,6 +1992,8 @@ A propriedade do conteúdo metodológico é **decidida pelo treinador na criaç�
 ## 19. Changelog da documentação
 
 Do mais recente para o mais antigo.
+
+- **2026-08-13** — **Dois fixes de integridade de dados (`prisma/schema.prisma` + migração `20260813090000_add_reuniao_criador_fk`; `lib/actions/participacoes.ts`).** (1) **`Reuniao.criadorId` sem FK (MÉDIO):** o campo `criadorId` era `String` NOT NULL e sem relação/FK a `Utilizador` — ao apagar um utilizador, a reunião ficava com `criadorId` órfão. Passa a `String?` (nullable) com relação **`criador Utilizador? @relation("ReuniaoCriador", onDelete: SetNull)`** e back-relation **`reunioesCriadas Reuniao[]`** em `Utilizador`; adicionado `@@index([criadorId])`. Comportamento: ao apagar o utilizador criador, a reunião **preserva-se** sem criador (SetNull), o histórico não é perdido. Migração SQL manual (`DROP NOT NULL` + `CREATE INDEX` + `ADD CONSTRAINT ... ON DELETE SET NULL`) — BD Supabase inacessível no ambiente; aplicar em produção com `db:deploy`. (2) **Campo legado `Atleta.escalaoId` não sincronizado (BAIXO):** `lib/actions/participacoes.ts` opera sobre `AtletaEscalao` (fonte de verdade da fase expand) mas não atualiza o campo legado `Atleta.escalaoId` após transferência/término — o QA identificou a divergência. Adicionados comentários de aviso claros em `transferirEscalao` e `terminarParticipacao` a documentar que o legado NÃO é atualizado aqui e que a fase **M4 (contract)** deve usar `AtletaEscalao` como fonte de verdade única (não reintroduzir escrita ao legado). **Sem correção de contract nesta fase** (é migração futura). Verificação: `npm run typecheck` **0 erros**; `npm run test` **910/910 a passar**. **Não toca em auth.**
 
 - **2026-08-13** — **Cinco fixes visuais/UX (`components/ui/button.tsx`, `components/layout/Logo.tsx`, `components/layout/BarraTopo.tsx`, `app/global-error.tsx`, `app/(app)/layout.tsx`, `components/layout/Navegacao.tsx`).** (1) **Alvo de toque do `Button` `size="sm"` (§19.5):** o variant `sm` era `h-9` (36px), abaixo do mínimo de 44px exigido; passa a `h-11` mantendo `px-3` (só cresce em altura, sem afetar o espaçamento horizontal dos ecrãs que usam `size="sm"`). (2) **Contraste do logótipo na landing:** o span "Futsal" usava `text-[#141210] dark:text-white`; na landing (fundo sempre `#0F0E13`, sem classe `.dark` ativa) ficava tinta sobre escuro = invisível (~1.06:1). A cor do texto passa a depender do `variant` do `Logo` — `dark` → branco fixo (landing/footer), `light` → tinta, `auto` → adaptável ao tema (`text-[#141210] dark:text-white`). Para evitar regressão, a `BarraTopo` (fundo `topbar-glass`, adaptável ao tema) passa de `variant="dark"` para `variant="auto"`, preservando o mesmo ícone (laranja invertido) e o texto adaptável que já tinha. (3) **Cor da marca no `global-error`:** o botão «Tentar novamente» usava `#1A2FD4` (azul do clube demo) → passa a `#C7430F` (laranja-600 da marca); o fundo do body passa de `#F8F9FC` (azulado) para `#FAF9F7` (paper da marca). (4) **Agenda visível a todos os treinadores:** o layout mostrava a Agenda apenas a Admin/DT (`membro.ambito === "TODO_CLUBE"`), escondendo-a de treinadores com âmbito `PROPRIOS_ESCALOES` apesar de `obterAgendaClube` já fazer o scoping correto pelos escalões legíveis (§6.4); passa a `mostrarAgenda={true}` (supera a nota "só Admin/DT" da entrada 2026-08-12). **Não toca em auth.** (5) **Jogos na bottom-nav (móvel):** `ITENS_BASE` reordenado para Jogos vir antes de Exercícios, garantindo que Jogos entra nos 4 itens fixos do fundo (Início, Plantel, Treinos, Jogos) e Exercícios passa para o menu «Mais» — mais alinhado com o dia-a-dia do treinador. **Sem alteração de schema, actions, permissões ou testes; não toca em auth.**
 
