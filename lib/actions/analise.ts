@@ -394,7 +394,8 @@ export async function obterAnaliticoAtleta(
         where: {
           atletaId,
           estado: { in: [...ESTADOS_PRESENTE] },
-          sessao: { epocaId: epoca.id },
+          // Simetria com o denominador (sessoes): só presenças desde o ingresso (secção 22.3).
+          sessao: { epocaId: epoca.id, data: { gte: ingresso } },
           escalaoId: { in: escaloesCtx },
         },
         select: { sessaoId: true },

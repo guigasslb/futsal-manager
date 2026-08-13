@@ -29,7 +29,7 @@ export default function GlobalError({
           justifyContent: "center",
           padding: "24px",
           margin: 0,
-          background: "#F8F9FC",
+          background: "#FAF9F7",
           color: "#1A1D29",
         }}
       >
@@ -47,7 +47,7 @@ export default function GlobalError({
               padding: "0 20px",
               borderRadius: 8,
               border: "none",
-              background: "#1A2FD4",
+              background: "#C7430F",
               color: "#fff",
               fontSize: 14,
               fontWeight: 600,

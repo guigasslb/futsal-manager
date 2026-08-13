@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { z } from "zod";
 import { Plus, AlertTriangle, FileBarChart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { listarAtletas } from "@/lib/actions/atletas";
@@ -17,7 +18,10 @@ export default async function PlantelPage({
 }: {
   searchParams: Promise<{ escalaoId?: string; q?: string }>;
 }) {
-  const { escalaoId, q } = await searchParams;
+  const { escalaoId: escalaoIdRaw, q } = await searchParams;
+  // Query param não confiável: valida como CUID; inválido/ausente → sem filtro (mostra todos), nunca 500.
+  const escParse = z.string().cuid().safeParse(escalaoIdRaw);
+  const escalaoId = escParse.success ? escParse.data : undefined;
 
   const [resEscaloes, resAtletas] = await Promise.all([
     listarEscaloes(),

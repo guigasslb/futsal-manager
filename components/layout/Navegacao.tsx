@@ -20,15 +20,18 @@ import {
 import { cn } from "@/lib/utils";
 
 const ITEM_COMECAR = { href: "/vitoria-rapida", label: "Começar", icon: Rocket };
-// Agenda agregada de todos os escalões — só para Admin/DT (âmbito TODO_CLUBE, F P2.2).
+// Agenda agregada de todos os escalões — visível a todos os treinadores; o
+// scoping pelos escalões legíveis é feito em obterAgendaClube (§6.4, F P2.2).
 const ITEM_AGENDA = { href: "/agenda", label: "Agenda", icon: CalendarRange };
 
+// Ordem pensada para a bottom-nav (móvel): os 4 primeiros são fixos. Jogos vem
+// antes de Exercícios porque, no dia-a-dia do treinador, é mais crítico.
 const ITENS_BASE = [
   { href: "/dashboard", label: "Início", icon: LayoutDashboard },
   { href: "/plantel", label: "Plantel", icon: Users },
   { href: "/treinos", label: "Treinos", icon: CalendarCheck },
-  { href: "/exercicios", label: "Exercícios", icon: Dumbbell },
   { href: "/jogos", label: "Jogos", icon: Trophy },
+  { href: "/exercicios", label: "Exercícios", icon: Dumbbell },
   { href: "/analiticos", label: "Analíticos", icon: BarChart3 },
   { href: "/comunicacoes", label: "Comunicações", icon: MessageSquare },
   { href: "/reunioes", label: "Reuniões", icon: Users2 },
@@ -39,7 +42,8 @@ const ITENS_BASE = [
  * @param mostrarComecar Mostra o atalho "Começar" (vitória rápida) — só quando
  * o plantel está vazio (F10 / §8.1).
  * @param mostrarAgenda Mostra o item "Agenda" (vista agregada de todos os
- * escalões) — só para Admin/DT (âmbito TODO_CLUBE, P2.2 / §8.x).
+ * escalões) — disponível a todos os treinadores; obterAgendaClube faz o
+ * scoping pelos escalões legíveis de cada membro (P2.2 / §8.x, §6.4).
  */
 export function Navegacao({
   mostrarComecar = false,
@@ -55,7 +59,7 @@ export function Navegacao({
   // transversais do clube (Analíticos, Comunicações…).
   const ITENS_COM_AGENDA = mostrarAgenda
     ? [
-        ...ITENS_BASE.slice(0, 5), // Início, Plantel, Treinos, Exercícios, Jogos
+        ...ITENS_BASE.slice(0, 5), // Início, Plantel, Treinos, Jogos, Exercícios
         ITEM_AGENDA,
         ...ITENS_BASE.slice(5),
       ]

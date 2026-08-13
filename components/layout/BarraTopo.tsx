@@ -42,7 +42,9 @@ export function BarraTopo({
     <header className="topbar-glass sticky top-0 z-30 flex h-16 items-center justify-between border-b border-cinza-200/60 px-4 gap-3 print:hidden md:px-6">
       {/* Marca FutsalCoach */}
       <Link href="/dashboard" className="flex items-center shrink-0 transition-transform hover:scale-[1.02]">
-        <Logo size={20} variant="dark" />
+        {/* "auto": ícone invertido (laranja) + texto adaptável ao tema (topbar-glass
+            é claro em light mode e escuro em dark mode). */}
+        <Logo size={20} variant="auto" />
       </Link>
 
       {/* Seletor de época + ações + menu do utilizador */}

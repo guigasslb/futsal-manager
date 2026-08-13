@@ -62,7 +62,8 @@ export type CardQuery = z.infer<typeof cardQuerySchema>;
  * RGPD (bíblia §3.16 / §11): os cards sociais NUNCA podem expor dados de
  * atletas menores. Um escalão é considerado de formação jovem quando o seu
  * nome corresponde a um escalão sub-14 (ou inferior) ou a uma das categorias
- * tradicionais de formação (petizes, traquinas, benjamins, escolas, minis).
+ * tradicionais de formação (petizes, traquinas, benjamins, infantis, escolas,
+ * minis, mirins).
  *
  * A deteção é tolerante a variações de escrita ("Sub-12", "sub 12", "SUB12").
  * O limiar sub-≤14 apanha também sub-9/11/13 (todos menores) por segurança.
@@ -79,8 +80,10 @@ export function eEscalaoFormacaoJovem(nome: string): boolean {
     "traquina",
     "benjamim",
     "benjamin",
+    "infanti", // "Infantil"/"Infantis" (Sub-13) — não colide com "Infanto-juvenil" (>14)
     "escola",
     "mini",
+    "mirim", // "Mirim"/"Pré-mirim"
     "bambi",
   ];
   if (categoriasJovens.some((c) => normalizado.includes(c))) return true;

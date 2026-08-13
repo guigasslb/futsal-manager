@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { listarEpocas } from "@/lib/actions/epocas";
@@ -7,6 +7,7 @@ import { obterMembroAtual } from "@/lib/permissoes";
 import { BarraTopo } from "@/components/layout/BarraTopo";
 import { Navegacao } from "@/components/layout/Navegacao";
 import { ScrollTopo } from "@/components/layout/ScrollTopo";
+import { ServicoIndisponivel } from "@/components/layout/ServicoIndisponivel";
 
 /** Converte um hex (#rrggbb) para "H S% L%" (formato das CSS vars do shadcn). */
 function hexParaHslVar(hex: string): string | null {
@@ -42,100 +43,113 @@ export default async function AppLayout({
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  // Sessão obsoleta (JWT válido mas utilizador já não existe — ex.: BD reseeded):
-  // enviar para /login (e não forçar /criar-clube).
-  const utilizadorExiste = await prisma.utilizador.findUnique({
-    where: { id: session.user.id },
-    select: { id: true },
-  });
-  if (!utilizadorExiste) redirect("/login");
+  // Degradação graciosa: qualquer falha de BD (Supabase P1001 / pool esgotado
+  // P2024) nas queries abaixo renderiza um ecrã amigável em vez de HTTP 500.
+  // `unstable_rethrow` garante que os redirects de auth/onboarding (NEXT_REDIRECT)
+  // continuam a propagar-se normalmente — o fluxo de autenticação fica intocado.
+  try {
+    // Sessão obsoleta (JWT válido mas utilizador já não existe — ex.: BD reseeded):
+    // enviar para /login (e não forçar /criar-clube).
+    const utilizadorExiste = await prisma.utilizador.findUnique({
+      where: { id: session.user.id },
+      select: { id: true },
+    });
+    if (!utilizadorExiste) redirect("/login");
 
-  // Sem clube ativo → onboarding (criar clube ou aceitar convite).
-  const membro = await obterMembroAtual();
-  if (!membro) redirect("/criar-clube");
+    // Sem clube ativo → onboarding (criar clube ou aceitar convite).
+    const membro = await obterMembroAtual();
+    if (!membro) redirect("/criar-clube");
 
-  const [epocasResult, epocaAtiva] = await Promise.all([
-    listarEpocas(),
-    obterEpocaAtiva(),
-  ]);
-  const epocas = epocasResult.sucesso ? epocasResult.dados : [];
-  const clube = membro.clube;
-
-  // Indicador de "evento hoje" no cabeçalho (F14 / §8.16) — treino ou jogo do
-  // clube na época ativa, no dia de hoje. Usa os dados existentes.
-  let eventoHoje = false;
-  // Plantel vazio → mostra o atalho "Começar" (vitória rápida) na navegação (F10 / §8.1).
-  let plantelVazio = false;
-  if (epocaAtiva) {
-    const inicioDia = new Date();
-    inicioDia.setHours(0, 0, 0, 0);
-    const fimDia = new Date();
-    fimDia.setHours(23, 59, 59, 999);
-    const janela = { gte: inicioDia, lte: fimDia };
-    const [nSessoesHoje, nJogosHoje, nAtletas] = await Promise.all([
-      prisma.sessao.count({
-        where: { epocaId: epocaAtiva.id, escalao: { clubeId: clube.id }, data: janela },
-      }),
-      prisma.jogo.count({
-        where: { epocaId: epocaAtiva.id, escalao: { clubeId: clube.id }, data: janela },
-      }),
-      prisma.atleta.count({
-        where: {
-          clubeId: clube.id,
-          ativo: true,
-          participacoes: { some: { epocaId: epocaAtiva.id, estado: "ATIVO" } },
-        },
-      }),
+    const [epocasResult, epocaAtiva] = await Promise.all([
+      listarEpocas(),
+      obterEpocaAtiva(),
     ]);
-    eventoHoje = nSessoesHoje + nJogosHoje > 0;
-    plantelVazio = nAtletas === 0;
-  }
+    const epocas = epocasResult.sucesso ? epocasResult.dados : [];
+    const clube = membro.clube;
 
-  // A cor do clube alimenta os acentos (via --cor-primaria) e a primária do
-  // shadcn/ui (via --primary/--ring), para os botões seguirem o clube.
-  const hslClube = hexParaHslVar(clube.corPrimaria);
-  const estiloClube = {
-    "--cor-primaria": clube.corPrimaria,
-    "--cor-secundaria": clube.corSecundaria,
-    ...(hslClube ? { "--primary": hslClube, "--ring": hslClube } : {}),
-  } as React.CSSProperties;
+    // Indicador de "evento hoje" no cabeçalho (F14 / §8.16) — treino ou jogo do
+    // clube na época ativa, no dia de hoje. Usa os dados existentes.
+    let eventoHoje = false;
+    // Plantel vazio → mostra o atalho "Começar" (vitória rápida) na navegação (F10 / §8.1).
+    let plantelVazio = false;
+    if (epocaAtiva) {
+      const inicioDia = new Date();
+      inicioDia.setHours(0, 0, 0, 0);
+      const fimDia = new Date();
+      fimDia.setHours(23, 59, 59, 999);
+      const janela = { gte: inicioDia, lte: fimDia };
+      const [nSessoesHoje, nJogosHoje, nAtletas] = await Promise.all([
+        prisma.sessao.count({
+          where: { epocaId: epocaAtiva.id, escalao: { clubeId: clube.id }, data: janela },
+        }),
+        prisma.jogo.count({
+          where: { epocaId: epocaAtiva.id, escalao: { clubeId: clube.id }, data: janela },
+        }),
+        prisma.atleta.count({
+          where: {
+            clubeId: clube.id,
+            ativo: true,
+            participacoes: { some: { epocaId: epocaAtiva.id, estado: "ATIVO" } },
+          },
+        }),
+      ]);
+      eventoHoje = nSessoesHoje + nJogosHoje > 0;
+      plantelVazio = nAtletas === 0;
+    }
 
-  return (
-    <div className="flex min-h-screen flex-col" style={estiloClube}>
-      <BarraTopo
-        nomeUtilizador={session.user.name ?? "Utilizador"}
-        epocas={epocas}
-        epocaAtivaId={epocaAtiva?.id ?? null}
-        eventoHoje={eventoHoje}
-      />
+    // A cor do clube alimenta os acentos (via --cor-primaria) e a primária do
+    // shadcn/ui (via --primary/--ring), para os botões seguirem o clube.
+    const hslClube = hexParaHslVar(clube.corPrimaria);
+    const estiloClube = {
+      "--cor-primaria": clube.corPrimaria,
+      "--cor-secundaria": clube.corSecundaria,
+      ...(hslClube ? { "--primary": hslClube, "--ring": hslClube } : {}),
+    } as React.CSSProperties;
 
-      <div className="flex flex-1 overflow-hidden">
-        <Navegacao
-          mostrarComecar={plantelVazio}
-          mostrarAgenda={membro.ambito === "TODO_CLUBE"}
+    return (
+      <div className="flex min-h-screen flex-col" style={estiloClube}>
+        <BarraTopo
+          nomeUtilizador={session.user.name ?? "Utilizador"}
+          epocas={epocas}
+          epocaAtivaId={epocaAtiva?.id ?? null}
+          eventoHoje={eventoHoje}
         />
 
-        <ScrollTopo />
-        <main className="app-surface flex-1 overflow-y-auto p-4 pb-20 md:pb-8 md:p-8">
-          {/* Marca de água do clube (logótipo), visível em todos os tamanhos */}
-          {clube.logoUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={clube.logoUrl} alt="" aria-hidden className="club-watermark" />
-          )}
-          <div className="app-content animar-entrada mx-auto max-w-[1200px]">
-            {!epocaAtiva && (
-              <div className="mb-4 rounded-md border border-ambar-500/30 bg-ambar-500/10 px-4 py-3 text-corpo text-cinza-900">
-                Nenhuma época ativa —{" "}
-                <a href="/definicoes/epocas" className="font-medium underline">
-                  define uma nas Definições
-                </a>
-                .
-              </div>
+        <div className="flex flex-1 overflow-hidden">
+          <Navegacao
+            mostrarComecar={plantelVazio}
+            // Agenda visível a todos os treinadores autenticados: obterAgendaClube
+            // já faz o scoping pelos escalões legíveis de cada membro (§6.4).
+            mostrarAgenda={true}
+          />
+
+          <ScrollTopo />
+          <main className="app-surface flex-1 overflow-y-auto p-4 pb-20 md:pb-8 md:p-8">
+            {/* Marca de água do clube (logótipo), visível em todos os tamanhos */}
+            {clube.logoUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={clube.logoUrl} alt="" aria-hidden className="club-watermark" />
             )}
-            {children}
-          </div>
-        </main>
+            <div className="app-content animar-entrada mx-auto max-w-[1200px]">
+              {!epocaAtiva && (
+                <div className="mb-4 rounded-md border border-ambar-500/30 bg-ambar-500/10 px-4 py-3 text-corpo text-cinza-900">
+                  Nenhuma época ativa —{" "}
+                  <a href="/definicoes/epocas" className="font-medium underline">
+                    define uma nas Definições
+                  </a>
+                  .
+                </div>
+              )}
+              {children}
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
-  );
+    );
+  } catch (err) {
+    // Re-lança erros de controlo do Next (redirect/notFound) — mantém o fluxo
+    // de auth e onboarding. Só erros genuínos (ex.: BD indisponível) chegam aqui.
+    unstable_rethrow(err);
+    return <ServicoIndisponivel />;
+  }
 }

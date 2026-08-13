@@ -72,6 +72,17 @@ export function Logo({
   // Ícone com fundo laranja (inverted) é visível em ambos os fundos
   const inverted = variant === "dark" || variant === "auto";
 
+  // Cor do texto "Futsal" segundo o contexto:
+  // - "dark"  → branco fixo (fundos sempre escuros: landing, footer)
+  // - "light" → tinta fixa
+  // - "auto"  → adapta ao tema (tinta em light mode, branco em .dark)
+  const classeTexto =
+    variant === "dark"
+      ? "text-white"
+      : variant === "light"
+        ? "text-[#141210]"
+        : "text-[#141210] dark:text-white";
+
   return (
     <span
       className={className}
@@ -88,9 +99,9 @@ export function Logo({
             whiteSpace: "nowrap",
           }}
         >
-          {/* Cor do texto adapta via Tailwind: escuro em light mode, branco em dark mode */}
+          {/* Cor do texto depende do variant (ver classeTexto acima) */}
           <span
-            className="text-[#141210] dark:text-white"
+            className={classeTexto}
             style={{ fontWeight: 800 }}
           >
             Futsal

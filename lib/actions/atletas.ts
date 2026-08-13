@@ -549,7 +549,8 @@ export async function obterEstatisticasAtleta(
       where: {
         atletaId: id,
         estado: { in: ["PRESENTE", "ATRASADO"] },
-        sessao: { epocaId: epoca.id },
+        // Simetria com o denominador (sessoesTotais): só presenças desde o ingresso (secção 22.3).
+        sessao: { epocaId: epoca.id, data: { gte: ingresso } },
         ...(escalaoCtx ? { escalaoId: escalaoCtx } : {}),
       },
     }),
