@@ -519,4 +519,32 @@ html.dark .landing-root h3 {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+
+  /* Ocultar navegação/barras da app e blocos marcados como não-imprimíveis.
+     Nota: o <header> NÃO é ocultado por seletor genérico — o relatório
+     partilhado usa <header> para a identidade do clube (cor + logótipo), que
+     TEM de sair na impressão; o chrome pontual usa [data-print-hidden]. */
+  nav,
+  aside,
+  [data-print-hidden] {
+    display: none !important;
+  }
+
+  /* Conteúdo principal a toda a largura, sem margens/paddings de ecrã */
+  main {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Não quebrar tabelas/linhas entre páginas */
+  table,
+  tr {
+    page-break-inside: avoid;
+  }
+
+  /* Logótipo do clube sempre visível na impressão */
+  [data-print-logo] {
+    display: block !important;
+  }
 }

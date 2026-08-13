@@ -1,8 +1,14 @@
 import type { Metadata } from "next";
-import { obterAnaliticoEscalao, obterCompeticoesEscalao } from "@/lib/actions/analise";
-import { obterCargaSemanal } from "@/lib/actions/cargaTreino";
+import {
+  obterAnaliticoEscalao,
+  obterCompeticoesEscalao,
+  exportarAnaliticoEscalaoCsv,
+} from "@/lib/actions/analise";
+import { obterCargaSemanal, obterCargaAtletas } from "@/lib/actions/cargaTreino";
 import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
 import { PainelEscalao } from "@/components/analiticos/PainelEscalao";
+import { ExportarCsvBotao } from "@/components/analiticos/ExportarCsvBotao";
+import { TabelaAcwrAtletas } from "@/components/analiticos/TabelaAcwrAtletas";
 import { CurvaCargaSemanal } from "@/components/graficos/CurvaCargaSemanal";
 import { GerarRelatorioBotao } from "@/components/relatorios/GerarRelatorioBotao";
 import { BotaoPartilhaRanking } from "@/components/social/BotaoPartilhaRanking";
@@ -22,14 +28,18 @@ export default async function AnaliticosEscalaoPage({
   const { id } = await params;
   const { competicao } = await searchParams;
   // P2.5: filtro opcional por competição (campeonato / taça / particulares).
-  const [res, resCompeticoes, resCarga] = await Promise.all([
+  const [res, resCompeticoes, resCarga, resCargaAtletas] = await Promise.all([
     obterAnaliticoEscalao(id, undefined, competicao || undefined),
     obterCompeticoesEscalao(id),
     obterCargaSemanal(id),
+    obterCargaAtletas({ escalaoId: id }),
   ]);
   const competicoes = resCompeticoes.sucesso ? resCompeticoes.dados : [];
   // P4.8 (§8.20): só mostra a secção de carga se houver RPE registado.
   const carga = resCarga.sucesso && resCarga.dados.temDados ? resCarga.dados : null;
+  // F2.2 (§8.20): ACWR individual — só aparece se ≥1 atleta reportou RPE na janela.
+  const cargaAtletas = resCargaAtletas.sucesso ? resCargaAtletas.dados.atletas : [];
+  const temRpeIndividual = cargaAtletas.some((a) => a.zona !== null);
 
   return (
     <div className="space-y-6">
@@ -51,6 +61,12 @@ export default async function AnaliticosEscalaoPage({
                 })}
               />
             )}
+            <ExportarCsvBotao
+              acao={exportarAnaliticoEscalaoCsv.bind(null, {
+                escalaoId: id,
+                competicaoId: competicao || undefined,
+              })}
+            />
             <GerarRelatorioBotao tipo="EPOCA_EQUIPA" escalaoId={id} />
           </div>
         )}
@@ -76,6 +92,15 @@ export default async function AnaliticosEscalaoPage({
                 Carga de treino
               </p>
               <CurvaCargaSemanal dados={carga.semanas} />
+            </div>
+          )}
+          {/* F2.2 (§8.20): ACWR individual por atleta, ordenado por risco. */}
+          {temRpeIndividual && (
+            <div className="rounded-lg border border-cinza-200 bg-white p-5 shadow-card">
+              <p className="mb-3 text-legenda font-medium uppercase tracking-wide text-cinza-400">
+                Carga individual (ACWR)
+              </p>
+              <TabelaAcwrAtletas atletas={cargaAtletas} />
             </div>
           )}
         </>

@@ -11,6 +11,7 @@ import {
   obterEvolucaoAtleta,
   obterPresencasMensal,
   obterAnaliticoAtleta,
+  exportarAnaliticoAtletaCsv,
 } from "@/lib/actions/analise";
 import { listarParticipacoes } from "@/lib/actions/participacoes";
 import { listarEscaloes } from "@/lib/actions/escaloes";
@@ -21,6 +22,7 @@ import { CadernetaAtleta } from "@/components/plantel/CadernetaAtleta";
 import { ParticipacoesAtleta } from "@/components/plantel/ParticipacoesAtleta";
 import { CarreiraAtleta } from "@/components/plantel/CarreiraAtleta";
 import { PainelAtleta } from "@/components/analiticos/PainelAtleta";
+import { ExportarCsvBotao } from "@/components/analiticos/ExportarCsvBotao";
 import { GerarRelatorioBotao } from "@/components/relatorios/GerarRelatorioBotao";
 import { EstadoVazio } from "@/components/layout/EstadosUI";
 import { ApagarAtletaDefinitivamenteButton } from "@/components/plantel/ApagarAtletaDefinitivamenteButton";
@@ -94,6 +96,8 @@ export default async function PerfilAtletaPage({
       : todosEscaloes.filter((e) => membro?.escaloesAtribuidos.includes(e.id));
 
   const ctx = a.participacaoContexto;
+  // Escalão de contexto para o export CSV do histórico do atleta (F1.3).
+  const escalaoCtxId = ctx?.escalaoId;
   // Contexto das estatísticas: escalão da participação em contexto + número desse escalão.
   const erroParticipacoes = !resParticipacoes.sucesso
     ? resParticipacoes.erro
@@ -177,7 +181,16 @@ export default async function PerfilAtletaPage({
           {resAnalitico.sucesso ? (
             <>
               {podeVerRelatorios && (
-                <div className="flex justify-end print:hidden">
+                <div className="flex justify-end gap-2 print:hidden">
+                  {escalaoCtxId && (
+                    <ExportarCsvBotao
+                      acao={exportarAnaliticoAtletaCsv.bind(null, {
+                        atletaId: a.id,
+                        escalaoId: escalaoCtxId,
+                      })}
+                      rotulo="Exportar histórico"
+                    />
+                  )}
                   <GerarRelatorioBotao
                     tipo="EPOCA_ATLETA"
                     atletaId={a.id}

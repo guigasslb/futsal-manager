@@ -92,7 +92,10 @@ export default async function RelatorioPublicoPage({
     <main className="min-h-screen bg-cinza-50 py-8" style={estiloClube}>
       <div className="mx-auto max-w-[900px] px-4">
         {/* Barra de ações (não impressa) */}
-        <div className="mb-6 flex items-center justify-between print:hidden">
+        <div
+          data-print-hidden
+          className="mb-6 flex items-center justify-between print:hidden"
+        >
           <span className="flex items-center gap-2 text-legenda font-medium text-cinza-500">
             <LogoIcon size={22} />
             FutsalCoach
@@ -134,7 +137,10 @@ export default async function RelatorioPublicoPage({
           <PainelRelatorio relatorio={res.dados} />
         </article>
 
-        <p className="mt-6 text-center text-legenda text-cinza-400 print:hidden">
+        <p
+          data-print-hidden
+          className="mt-6 text-center text-legenda text-cinza-400 print:hidden"
+        >
           Relatório gerado por FutsalCoach
         </p>
       </div>

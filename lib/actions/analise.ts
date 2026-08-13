@@ -33,7 +33,10 @@ import {
   analiticoClubeSchema,
   competicoesEscalaoSchema,
   gerarRelatorioSchema,
+  exportarEscalaoCsvSchema,
+  exportarAtletaCsvSchema,
 } from "@/lib/schemas/analise";
+import { paraCsv, juntarBlocosCsv, type ColunaCsv } from "@/lib/utils/csv";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos partilhados com a UI
@@ -1252,4 +1255,270 @@ export async function revogarRelatorioPartilhado(id: string): Promise<Resultado<
   await prisma.relatorioPartilhado.delete({ where: { id } });
   revalidatePath(PATH_RELATORIOS);
   return ok(undefined);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// F1.2 — Export CSV dos analíticos (bíblia §8.15)
+//
+// Serialização das estruturas analíticas JÁ calculadas (`AnaliticoEscalao` /
+// `AnaliticoAtleta`) — zero recálculo. Cada action delega em
+// `obterAnaliticoEscalao` / `obterAnaliticoAtleta`, que já garantem
+// autenticação, capacidade `RELATORIOS_VER` e leitura do escalão (`podeLerEscalao`);
+// os números do CSV batem por construção com os dos painéis (Regra Nº 6 — a
+// fonte é a estrutura analítica, não um cálculo paralelo).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ExportacaoCsv {
+  csv: string;
+  nomeFicheiro: string;
+}
+
+/** Arredonda a no máximo 2 casas decimais (ponto decimal via `String()` no CSV). */
+function arredondar2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/** Percentagem com uma casa decimal e ponto decimal (ex.: 0.153 → "15.3"). */
+function percentagemStr(taxa: number): string {
+  return (taxa * 100).toFixed(1);
+}
+
+/** "YYYY-MM-DD" → "DD/MM/YYYY" (leitura pt-PT no Excel). */
+function dataPt(iso: string): string {
+  const [ano, mes, dia] = iso.split("-");
+  return `${dia}/${mes}/${ano}`;
+}
+
+/** Carimbo de data "YYYY-MM-DD" para o nome do ficheiro. */
+function carimboData(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate(),
+  ).padStart(2, "0")}`;
+}
+
+/** Normaliza um texto para um segmento seguro de nome de ficheiro (sem espaços/acentos). */
+function slugificar(texto: string): string {
+  const base = texto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return base.length > 0 ? base : "export";
+}
+
+/**
+ * Export CSV do analítico de um escalão (bíblia §8.15 / §10.2).
+ * Bloco 1 — tabela por atleta (nome, golos, assistências, jogos utilizados,
+ * minutos acumulados + 1 coluna por métrica configurável).
+ * Bloco 2 — resumo do escalão (jogos, V/E/D, golos, sessões, taxa de presença
+ * média). A taxa de presença é uma métrica de equipa em `AnaliticoEscalao`
+ * (não existe por atleta), pelo que aparece no resumo, não na tabela.
+ */
+export async function exportarAnaliticoEscalaoCsv(
+  input: { escalaoId: string; competicaoId?: string },
+): Promise<Resultado<ExportacaoCsv>> {
+  const parsed = exportarEscalaoCsvSchema.safeParse(input);
+  if (!parsed.success) return erroDeValidacao(parsed.error);
+
+  // Delega no analítico já calculado (auth + RELATORIOS_VER + podeLerEscalao).
+  const analitico = await obterAnaliticoEscalao(
+    parsed.data.escalaoId,
+    undefined,
+    parsed.data.competicaoId,
+  );
+  if (!analitico.sucesso) return erro(analitico.erro, analitico.camposInvalidos);
+  const a = analitico.dados;
+
+  // Une os rankings de `AnaliticoEscalao` por atleta (reshape, sem recálculo).
+  interface LinhaAtleta {
+    atletaId: string;
+    nome: string;
+    golos: number;
+    assistencias: number;
+    jogosUtilizados: number;
+    minutos: number;
+    metricas: Record<string, number>;
+  }
+  const porAtleta = new Map<string, LinhaAtleta>();
+  const obterLinha = (atletaId: string, nome: string): LinhaAtleta => {
+    let linha = porAtleta.get(atletaId);
+    if (!linha) {
+      linha = {
+        atletaId,
+        nome,
+        golos: 0,
+        assistencias: 0,
+        jogosUtilizados: 0,
+        minutos: 0,
+        metricas: {},
+      };
+      porAtleta.set(atletaId, linha);
+    }
+    return linha;
+  };
+
+  for (const u of a.maisUtilizados) {
+    const linha = obterLinha(u.atletaId, u.nome);
+    linha.minutos = u.tempoJogoAcumulado;
+    linha.jogosUtilizados = u.jogosUtilizados;
+  }
+  for (const m of a.marcadores) obterLinha(m.atletaId, m.nome).golos = m.valor;
+  for (const s of a.assistentes) obterLinha(s.atletaId, s.nome).assistencias = s.valor;
+
+  const rankings = a.rankingsMetricas ?? [];
+  rankings.forEach((ranking, i) => {
+    for (const top of ranking.top) {
+      obterLinha(top.atletaId, top.atletaNome).metricas[`metrica_${i}`] = arredondar2(top.valor);
+    }
+  });
+
+  const colunasAtletas: ColunaCsv[] = [
+    { chave: "nome", titulo: "Nome" },
+    { chave: "golos", titulo: "Golos" },
+    { chave: "assistencias", titulo: "Assistências" },
+    { chave: "jogosUtilizados", titulo: "Jogos utilizados" },
+    { chave: "minutos", titulo: "Minutos acumulados" },
+    ...rankings.map((ranking, i) => ({ chave: `metrica_${i}`, titulo: ranking.metrica })),
+  ];
+
+  const linhasAtletas = [...porAtleta.values()]
+    .sort(
+      (x, y) =>
+        y.minutos - x.minutos ||
+        y.golos - x.golos ||
+        x.nome.localeCompare(y.nome, "pt"),
+    )
+    .map((linha) => ({
+      nome: linha.nome,
+      golos: linha.golos,
+      assistencias: linha.assistencias,
+      jogosUtilizados: linha.jogosUtilizados,
+      minutos: linha.minutos,
+      ...linha.metricas,
+    }));
+
+  const colunasResumo: ColunaCsv[] = [
+    { chave: "indicador", titulo: "Indicador" },
+    { chave: "valor", titulo: "Valor" },
+  ];
+  const linhasResumo: Record<string, unknown>[] = [
+    { indicador: "Escalão", valor: a.escalao.nome },
+    { indicador: "Época", valor: a.epoca.nome },
+    { indicador: "Jogos", valor: a.jogos },
+    { indicador: "Vitórias", valor: a.vitorias },
+    { indicador: "Empates", valor: a.empates },
+    { indicador: "Derrotas", valor: a.derrotas },
+    { indicador: "Golos marcados", valor: a.golosMarcados },
+    { indicador: "Golos sofridos", valor: a.golosSofridos },
+    { indicador: "Golos marcados/jogo", valor: arredondar2(a.golosMarcadosMedia) },
+    { indicador: "Golos sofridos/jogo", valor: arredondar2(a.golosSofridosMedia) },
+    { indicador: "Sessões", valor: a.sessoes },
+    { indicador: "Atletas", valor: a.nAtletas },
+    { indicador: "Taxa de presença média (%)", valor: percentagemStr(a.taxaPresencaMedia) },
+  ];
+
+  const csv = juntarBlocosCsv(
+    paraCsv(linhasAtletas, colunasAtletas),
+    paraCsv(linhasResumo, colunasResumo),
+  );
+  const nomeFicheiro = `analitico-${slugificar(a.escalao.nome)}-${carimboData()}.csv`;
+
+  return ok({ csv, nomeFicheiro });
+}
+
+/**
+ * Export CSV do analítico de um atleta (bíblia §8.15 / §10.1).
+ * Bloco 1 — evolução jogo a jogo (data, adversário, utilizado, golos,
+ * assistências + defesas/golos sofridos se for GR) terminada por uma linha de
+ * totais. Bloco 2 — resumo da época (jogos convocado/utilizados,
+ * titularidades, minutos acumulados, taxa de presença + métricas configuráveis
+ * agregadas). O detalhe por jogo dos minutos/métricas não existe em
+ * `AnaliticoAtleta` (é agregado), por isso surge no resumo, não por jogo.
+ */
+export async function exportarAnaliticoAtletaCsv(
+  input: { atletaId: string; escalaoId: string },
+): Promise<Resultado<ExportacaoCsv>> {
+  const parsed = exportarAtletaCsvSchema.safeParse(input);
+  if (!parsed.success) return erroDeValidacao(parsed.error);
+
+  // Delega no analítico já calculado: valida auth + RELATORIOS_VER, que o atleta
+  // pertence ao clube e participa no escalão, e a leitura do escalão.
+  const analitico = await obterAnaliticoAtleta(parsed.data.atletaId, parsed.data.escalaoId);
+  if (!analitico.sucesso) return erro(analitico.erro, analitico.camposInvalidos);
+  const a = analitico.dados;
+  const eGR = a.atleta.eGR;
+
+  const colunasJogos: ColunaCsv[] = [
+    { chave: "data", titulo: "Data" },
+    { chave: "adversario", titulo: "Adversário" },
+    { chave: "utilizado", titulo: "Utilizado" },
+    { chave: "golos", titulo: "Golos" },
+    { chave: "assistencias", titulo: "Assistências" },
+    ...(eGR
+      ? ([
+          { chave: "defesas", titulo: "Defesas" },
+          { chave: "golosSofridos", titulo: "Golos sofridos" },
+        ] as ColunaCsv[])
+      : []),
+  ];
+
+  const linhasJogos: Record<string, unknown>[] = a.evolucaoJogos.map((j) => ({
+    data: dataPt(j.data),
+    adversario: j.adversario,
+    utilizado: j.utilizado ? "Sim" : "Não",
+    golos: j.golos,
+    assistencias: j.assistencias,
+    ...(eGR ? { defesas: j.defesas ?? 0, golosSofridos: j.golosSofridosGR ?? 0 } : {}),
+  }));
+
+  // Última linha da evolução: totais (Regra Nº 6 — soma vinda de `agregado`).
+  linhasJogos.push({
+    data: "Totais",
+    adversario: "",
+    utilizado: String(a.agregado.jogosUtilizados),
+    golos: a.agregado.totalGolos,
+    assistencias: a.agregado.totalAssistencias,
+    ...(eGR
+      ? {
+          defesas: a.agregado.totalDefesas ?? 0,
+          golosSofridos: a.agregado.totalGolosSofridos ?? 0,
+        }
+      : {}),
+  });
+
+  const colunasResumo: ColunaCsv[] = [
+    { chave: "indicador", titulo: "Indicador" },
+    { chave: "valor", titulo: "Valor" },
+  ];
+  const linhasResumo: Record<string, unknown>[] = [
+    { indicador: "Atleta", valor: a.atleta.nome },
+    { indicador: "Escalão", valor: a.escalaoContexto?.nome ?? "" },
+    { indicador: "Época", valor: a.epoca.nome },
+    { indicador: "Jogos convocado", valor: a.agregado.jogosConvocado },
+    { indicador: "Jogos utilizados", valor: a.agregado.jogosUtilizados },
+    { indicador: "Titularidades", valor: a.agregado.titularidades },
+    { indicador: "Golos", valor: a.agregado.totalGolos },
+    { indicador: "Assistências", valor: a.agregado.totalAssistencias },
+    ...(eGR
+      ? [
+          { indicador: "Defesas", valor: a.agregado.totalDefesas ?? 0 },
+          { indicador: "Golos sofridos", valor: a.agregado.totalGolosSofridos ?? 0 },
+        ]
+      : []),
+    { indicador: "Minutos acumulados", valor: a.agregado.tempoJogoAcumulado },
+    { indicador: "Taxa de presença (%)", valor: percentagemStr(a.agregado.taxaPresenca) },
+    ...a.metricas.flatMap((m) => [
+      { indicador: `${m.nome} (total)`, valor: arredondar2(m.total) },
+      { indicador: `${m.nome} (média)`, valor: arredondar2(m.media) },
+    ]),
+  ];
+
+  const csv = juntarBlocosCsv(
+    paraCsv(linhasJogos, colunasJogos),
+    paraCsv(linhasResumo, colunasResumo),
+  );
+  const nomeFicheiro = `analitico-${slugificar(a.atleta.nome)}-${carimboData()}.csv`;
+
+  return ok({ csv, nomeFicheiro });
 }

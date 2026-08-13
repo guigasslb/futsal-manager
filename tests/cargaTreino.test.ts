@@ -23,8 +23,9 @@ vi.mock("@/lib/db", () => ({
   prisma: {
     sessao: { findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn() },
     atleta: { findFirst: vi.fn() },
+    atletaEscalao: { findMany: vi.fn() },
     escalao: { findFirst: vi.fn() },
-    rpeAtleta: { upsert: vi.fn() },
+    rpeAtleta: { upsert: vi.fn(), findMany: vi.fn() },
   },
 }));
 
@@ -42,6 +43,7 @@ import {
   registarRpeSessao,
   registarRpeAtleta,
   obterCargaSemanal,
+  obterCargaAtletas,
 } from "@/lib/actions/cargaTreino";
 import { auth } from "@/lib/auth";
 import { obterClubeIdAtual, obterEpocaAtiva } from "@/lib/epoca-context";
@@ -56,6 +58,7 @@ const CLUBE = "ckv9v0z1w0000abcd1234efgh";
 const EPOCA = "ckv9v0z1w0001abcd1234efgh";
 const ESCALAO = "ckv9v0z1w0002abcd1234efgh";
 const ATLETA = "ckv9v0z1w0003abcd1234efgh";
+const ATLETA2 = "ckv9v0z1w0005abcd1234efgh";
 const SESSAO = "ckv9v0z1w0004abcd1234efgh";
 
 const p = prisma as unknown as Record<string, Record<string, ReturnType<typeof vi.fn>>>;
@@ -370,5 +373,121 @@ describe("obterCargaSemanal", () => {
     expect(r.sucesso).toBe(true);
     if (!r.sucesso) return;
     expect(r.dados.temDados).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Server Action — ACWR individual por atleta (F2.1, §8.20)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("obterCargaAtletas", () => {
+  // Sessão "k" semanas atrás (mesma âncora do teste de obterCargaSemanal).
+  const semanaOffset = (k: number) => new Date(Date.now() - k * 7 * MS_DIA);
+  const rpe = (
+    atletaId: string,
+    k: number,
+    duracaoMin: number,
+    valor: number,
+  ) => ({ atletaId, rpe: valor, sessao: { data: semanaOffset(k), duracaoMin } });
+
+  it("nega sem capacidade RELATORIOS_VER", async () => {
+    (obterMembroAtual as ReturnType<typeof vi.fn>).mockResolvedValue(
+      membro({ capacidades: [] }),
+    );
+    const r = await obterCargaAtletas({ escalaoId: ESCALAO });
+    expect(r.sucesso).toBe(false);
+    if (!r.sucesso) expect(r.erro).toBe("Sem permissão");
+    expect(p.atletaEscalao.findMany).not.toHaveBeenCalled();
+  });
+
+  it("nega escalão inexistente no clube", async () => {
+    p.escalao.findFirst.mockResolvedValue(null);
+    const r = await obterCargaAtletas({ escalaoId: ESCALAO });
+    expect(r.sucesso).toBe(false);
+    if (!r.sucesso) expect(r.erro).toBe("Escalão não encontrado");
+  });
+
+  it("calcula o ACWR por atleta (rpe × duração) e ordena por risco", async () => {
+    p.escalao.findFirst.mockResolvedValue({ id: ESCALAO });
+    p.atletaEscalao.findMany.mockResolvedValue([
+      // Ordem de entrada propositadamente com o IDEAL primeiro, para provar a ordenação.
+      { atletaId: ATLETA2, atleta: { nome: "Bruno (ideal)" } },
+      { atletaId: ATLETA, atleta: { nome: "Ana (risco)" } },
+    ]);
+    p.rpeAtleta.findMany.mockResolvedValue([
+      // Ana: 4 semanas a 300 (60×5) + semana atual a 480 (60×8) → ACWR 1.6 → RISCO.
+      rpe(ATLETA, 4, 60, 5),
+      rpe(ATLETA, 3, 60, 5),
+      rpe(ATLETA, 2, 60, 5),
+      rpe(ATLETA, 1, 60, 5),
+      rpe(ATLETA, 0, 60, 8),
+      // Bruno: carga estável a 300 → ACWR 1.0 → IDEAL.
+      rpe(ATLETA2, 4, 60, 5),
+      rpe(ATLETA2, 3, 60, 5),
+      rpe(ATLETA2, 2, 60, 5),
+      rpe(ATLETA2, 1, 60, 5),
+      rpe(ATLETA2, 0, 60, 5),
+    ]);
+
+    const r = await obterCargaAtletas({ escalaoId: ESCALAO });
+    expect(r.sucesso).toBe(true);
+    if (!r.sucesso) return;
+
+    // RISCO no topo, apesar de ter entrado em segundo.
+    const [primeiro, segundo] = r.dados.atletas;
+    expect(primeiro.atletaId).toBe(ATLETA);
+    expect(primeiro.zona).toBe("RISCO");
+    expect(primeiro.acwrAtual).toBeCloseTo(1.6);
+    expect(primeiro.cargaSemanaAtual).toBe(480);
+
+    expect(segundo.atletaId).toBe(ATLETA2);
+    expect(segundo.zona).toBe("IDEAL");
+    expect(segundo.acwrAtual).toBeCloseTo(1.0);
+    expect(segundo.cargaSemanaAtual).toBe(300);
+  });
+
+  it("atleta sem RPE reportado surge com acwr/zona null e carga 0 (não é excluído)", async () => {
+    p.escalao.findFirst.mockResolvedValue({ id: ESCALAO });
+    p.atletaEscalao.findMany.mockResolvedValue([
+      { atletaId: ATLETA, atleta: { nome: "Ana (com RPE)" } },
+      { atletaId: ATLETA2, atleta: { nome: "Bruno (sem RPE)" } },
+    ]);
+    p.rpeAtleta.findMany.mockResolvedValue([
+      rpe(ATLETA, 4, 60, 5),
+      rpe(ATLETA, 3, 60, 5),
+      rpe(ATLETA, 2, 60, 5),
+      rpe(ATLETA, 1, 60, 5),
+      rpe(ATLETA, 0, 60, 8),
+    ]);
+
+    const r = await obterCargaAtletas({ escalaoId: ESCALAO });
+    expect(r.sucesso).toBe(true);
+    if (!r.sucesso) return;
+
+    expect(r.dados.atletas).toHaveLength(2);
+    const semRpe = r.dados.atletas.find((a) => a.atletaId === ATLETA2);
+    expect(semRpe).toBeDefined();
+    expect(semRpe!.acwrAtual).toBeNull();
+    expect(semRpe!.zona).toBeNull();
+    expect(semRpe!.cargaSemanaAtual).toBe(0);
+    // Sem dados fica no fim (a seguir a quem tem zona).
+    expect(r.dados.atletas[r.dados.atletas.length - 1].atletaId).toBe(ATLETA2);
+  });
+
+  it("aplica default de 6 semanas quando não é indicado", async () => {
+    p.escalao.findFirst.mockResolvedValue({ id: ESCALAO });
+    p.atletaEscalao.findMany.mockResolvedValue([
+      { atletaId: ATLETA, atleta: { nome: "Ana" } },
+    ]);
+    p.rpeAtleta.findMany.mockResolvedValue([]);
+
+    const r = await obterCargaAtletas({ escalaoId: ESCALAO });
+    expect(r.sucesso).toBe(true);
+    // A janela pedida à BD deve cobrir ~6 semanas (5 semanas antes do início da atual).
+    const arg = p.rpeAtleta.findMany.mock.calls[0][0];
+    const gte: Date = arg.where.sessao.data.gte;
+    const semanasAtras = (Date.now() - gte.getTime()) / (7 * MS_DIA);
+    expect(semanasAtras).toBeGreaterThan(4.9);
+    expect(semanasAtras).toBeLessThan(6.1);
   });
 });

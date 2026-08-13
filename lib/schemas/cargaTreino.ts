@@ -30,3 +30,22 @@ export type RegistarRpeSessaoInput = z.infer<typeof registarRpeSessaoSchema>;
 
 /** Número de semanas por omissão na curva de carga do escalão. */
 export const SEMANAS_CARGA_DEFAULT = 8;
+
+/**
+ * Número de semanas por omissão no ACWR individual por atleta (F2.1, §8.20):
+ * 4 semanas de carga crónica + 2 de contexto imediato.
+ */
+export const SEMANAS_CARGA_ATLETA_DEFAULT = 6;
+
+/** Input da leitura de carga/ACWR individual por atleta de um escalão. */
+export const obterCargaAtletasSchema = z.object({
+  escalaoId: z.string().cuid("Escalão inválido"),
+  semanas: z
+    .number({ invalid_type_error: "Indica o número de semanas" })
+    .int("As semanas têm de ser um número inteiro")
+    .min(1, "Mínimo de 1 semana")
+    .max(52, "Máximo de 52 semanas")
+    .optional(),
+});
+
+export type ObterCargaAtletasInput = z.infer<typeof obterCargaAtletasSchema>;

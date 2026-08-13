@@ -68,6 +68,24 @@ export const gerarRelatorioSchema = z
     }
   });
 
+/**
+ * F1.2 — export CSV do analítico de escalão. Reaproveita os parâmetros de
+ * `analiticoEscalaoSchema` (sem `epocaId` — usa a época em contexto).
+ */
+export const exportarEscalaoCsvSchema = z.object({
+  escalaoId: z.string().cuid(),
+  competicaoId: z.string().cuid().optional(),
+});
+
+/** F1.2 — export CSV do analítico de atleta (num escalão de contexto). */
+export const exportarAtletaCsvSchema = z.object({
+  atletaId: z.string().cuid(),
+  escalaoId: z.string().cuid(),
+});
+
+export type ExportarEscalaoCsvInput = z.infer<typeof exportarEscalaoCsvSchema>;
+export type ExportarAtletaCsvInput = z.infer<typeof exportarAtletaCsvSchema>;
+
 export type AnaliticoAtletaInput = z.infer<typeof analiticoAtletaSchema>;
 export type AnaliticoEscalaoInput = z.infer<typeof analiticoEscalaoSchema>;
 export type CompeticoesEscalaoInput = z.infer<typeof competicoesEscalaoSchema>;

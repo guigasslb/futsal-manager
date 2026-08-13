@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { format } from "date-fns";
+import { pt } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +16,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { criarJogo, atualizarJogo } from "@/lib/actions/jogos";
+import { verificarConflitoAgenda } from "@/lib/actions/agenda";
+import type { ConflitoAgenda } from "@/lib/utils/agenda-conflitos";
 import { LABEL_CASA_FORA, LABEL_TIPO_JOGO } from "@/lib/schemas/jogo";
 import type { CasaFora, Escalao, Jogo, TipoJogo } from "@prisma/client";
 
@@ -67,6 +71,44 @@ export function JogoForm({
     jogo?.competicaoId ?? SEM_COMPETICAO,
   );
   const [dataValor, setDataValor] = useState<string>(paraInputDateTime(jogo?.data));
+
+  // Aviso não-bloqueante de conflito de pavilhão (F3.3 — §8.16).
+  const [conflitos, setConflitos] = useState<ConflitoAgenda[]>([]);
+  const [localValor, setLocalValor] = useState<string>(jogo?.local ?? "");
+
+  // Verificação após-debounce (~800ms). Sem local ou escalão → não verifica.
+  // Jogos não têm duração → o backend assume a duração padrão. Falha de rede →
+  // silêncio total (funcionalidade secundária, não bloqueante).
+  useEffect(() => {
+    const local = localValor.trim();
+    if (!local || !dataValor || !escalaoId) {
+      setConflitos([]);
+      return;
+    }
+    let cancelado = false;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await verificarConflitoAgenda({
+          data: new Date(dataValor),
+          local,
+          tipo: "JOGO",
+          duracaoMin: undefined,
+          excluirId: jogo?.id,
+          escalaoId,
+        });
+        if (cancelado) return;
+        setConflitos(
+          res.sucesso && res.dados.conflitos.length > 0 ? res.dados.conflitos : [],
+        );
+      } catch {
+        if (!cancelado) setConflitos([]);
+      }
+    }, 800);
+    return () => {
+      cancelado = true;
+      clearTimeout(timer);
+    };
+  }, [dataValor, localValor, escalaoId, jogo?.id]);
 
   // O grupo "Resultado" só faz sentido depois do jogo. Mostra-se quando: o jogo
   // já aconteceu (data no passado), já tem resultado registado, ou o treinador
@@ -253,6 +295,7 @@ export function JogoForm({
           maxLength={100}
           defaultValue={jogo?.local ?? ""}
           placeholder="ex: Pavilhão"
+          onChange={(e) => setLocalValor(e.target.value)}
         />
       </div>
 
@@ -337,6 +380,19 @@ export function JogoForm({
           <p className="mt-1.5 text-legenda text-cinza-500">
             O resultado é normalmente registado depois do jogo.
           </p>
+        </div>
+      )}
+
+      {conflitos.length > 0 && (
+        <div role="alert" className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+          <p className="font-medium">Possível conflito de pavilhão</p>
+          <ul className="mt-1 list-disc pl-4">
+            {conflitos.map((c, i) => (
+              <li key={i}>
+                {c.tipo === "TREINO" ? "Treino" : "Jogo"} do {c.escalaoNome} — {format(c.data, "HH:mm", { locale: pt })}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

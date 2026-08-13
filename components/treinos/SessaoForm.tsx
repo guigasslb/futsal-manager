@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { AlertTriangle } from "lucide-react";
+import { format } from "date-fns";
+import { pt } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +19,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { criarSessao, atualizarSessao } from "@/lib/actions/treinos";
+import { verificarConflitoAgenda } from "@/lib/actions/agenda";
+import type { ConflitoAgenda } from "@/lib/utils/agenda-conflitos";
 import { TIPOS_SESSAO, LABEL_TIPO_SESSAO } from "@/lib/schemas/treino";
 import type { Escalao, Sessao, TipoSessao } from "@prisma/client";
 
@@ -75,8 +79,52 @@ export function SessaoForm({
     sessao?.planeamentoId ?? SENTINEL_NONE,
   );
 
+  // Aviso não-bloqueante de conflito de pavilhão (F3.3 — §8.16).
+  const [conflitos, setConflitos] = useState<ConflitoAgenda[]>([]);
+  const [dataValor, setDataValor] = useState<string>(paraInputDateTime(sessao?.data));
+  const [localValor, setLocalValor] = useState<string>(sessao?.local ?? "");
+  const [duracaoValor, setDuracaoValor] = useState<string>(
+    sessao?.duracaoMin != null ? String(sessao.duracaoMin) : "",
+  );
+
   const planeamentosDoEscalao = planeamentos.filter((p) => p.escalaoId === escalaoId);
   const mostrarAviso = tipoSessao === "NORMAL" && planeamentoId === SENTINEL_NONE && planeamentosDoEscalao.length > 0;
+
+  // Verificação após-debounce (~800ms). Sem local ou escalão → não verifica.
+  // Falha de rede → silêncio total (funcionalidade secundária, não bloqueante).
+  useEffect(() => {
+    const local = localValor.trim();
+    if (!local || !dataValor || !escalaoId) {
+      setConflitos([]);
+      return;
+    }
+    let cancelado = false;
+    const timer = setTimeout(async () => {
+      try {
+        const n = Number(duracaoValor);
+        const duracaoMin =
+          duracaoValor.trim() !== "" && Number.isFinite(n) ? n : undefined;
+        const res = await verificarConflitoAgenda({
+          data: new Date(dataValor),
+          local,
+          tipo: "TREINO",
+          duracaoMin,
+          excluirId: sessao?.id,
+          escalaoId,
+        });
+        if (cancelado) return;
+        setConflitos(
+          res.sucesso && res.dados.conflitos.length > 0 ? res.dados.conflitos : [],
+        );
+      } catch {
+        if (!cancelado) setConflitos([]);
+      }
+    }, 800);
+    return () => {
+      cancelado = true;
+      clearTimeout(timer);
+    };
+  }, [dataValor, localValor, duracaoValor, escalaoId, sessao?.id]);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -142,6 +190,7 @@ export function SessaoForm({
             type="datetime-local"
             required
             defaultValue={paraInputDateTime(sessao?.data)}
+            onChange={(e) => setDataValor(e.target.value)}
           />
           {erros.data && <p className="text-legenda text-vermelho-600">{erros.data}</p>}
         </div>
@@ -156,6 +205,7 @@ export function SessaoForm({
             max={300}
             defaultValue={sessao?.duracaoMin ?? ""}
             placeholder="ex: 80"
+            onChange={(e) => setDuracaoValor(e.target.value)}
           />
         </div>
       </div>
@@ -239,6 +289,7 @@ export function SessaoForm({
           defaultValue={sessao?.local ?? ""}
           maxLength={100}
           placeholder="ex: Pavilhão Municipal"
+          onChange={(e) => setLocalValor(e.target.value)}
         />
       </div>
 
@@ -252,6 +303,19 @@ export function SessaoForm({
           rows={3}
         />
       </div>
+
+      {conflitos.length > 0 && (
+        <div role="alert" className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+          <p className="font-medium">Possível conflito de pavilhão</p>
+          <ul className="mt-1 list-disc pl-4">
+            {conflitos.map((c, i) => (
+              <li key={i}>
+                {c.tipo === "TREINO" ? "Treino" : "Jogo"} do {c.escalaoNome} — {format(c.data, "HH:mm", { locale: pt })}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="flex gap-3 pt-2">
         <Button type="submit" disabled={pending || !escalaoId}>
