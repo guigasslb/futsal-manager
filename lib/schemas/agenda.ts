@@ -13,9 +13,7 @@ export const verificarConflitoSchema = z.object({
     .positive("A duração tem de ser positiva")
     .optional(),
   local: z.string(),
-  tipo: z.enum(["TREINO", "JOGO"], { invalid_type_error: "Tipo inválido" }),
   excluirId: z.string().cuid("Identificador inválido").optional(),
-  escalaoId: z.string().cuid("Escalão inválido"),
 });
 
 export type VerificarConflitoInput = z.input<typeof verificarConflitoSchema>;

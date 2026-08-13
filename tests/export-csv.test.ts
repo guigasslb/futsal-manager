@@ -298,3 +298,14 @@ describe("exportarAnaliticoAtletaCsv", () => {
     expect(r.dados.csv).toContain("10/09/2025;Rival A;Sim;0;0;5;2");
   });
 });
+
+describe("exportarAnaliticoAtletaCsv — isolamento multi-tenant", () => {
+  it("nega quando o atleta pertence a outro clube (atleta não encontrado no clube autenticado)", async () => {
+    // `obterAnaliticoAtleta` filtra por `{ id: atletaId, clubeId }`. Se o atleta
+    // pertence a outro clube, `findFirst` devolve null → erro "Atleta não encontrado".
+    p.atleta.findFirst.mockResolvedValue(null);
+    const r = await exportarAnaliticoAtletaCsv({ atletaId: ATLETA, escalaoId: ESCALAO });
+    expect(r.sucesso).toBe(false);
+    if (!r.sucesso) expect(r.erro).toMatch(/atleta/i);
+  });
+});

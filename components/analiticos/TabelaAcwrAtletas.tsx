@@ -4,7 +4,7 @@
 // `obterCargaAtletas` (ordenada por risco descendente) e desenha uma tabela
 // semântica com a carga da semana, o ACWR e a zona de risco por atleta. As cores
 // das zonas são os mesmos tokens do gráfico `CurvaCargaSemanal` (verde-600 /
-// ambar-600 / vermelho-600), para consistência visual em toda a superfície de
+// ambar-500 / vermelho-600), para consistência visual em toda a superfície de
 // carga. Atletas sem RPE individual reportado surgem com "—"/"Sem dados".
 
 import type { CargaAtleta } from "@/lib/actions/cargaTreino";
@@ -24,7 +24,7 @@ function ZonaBadge({ zona }: { zona: ZonaCarga | null }) {
       ? "bg-vermelho-600/10 text-vermelho-600"
       : zona === "IDEAL"
         ? "bg-verde-600/10 text-verde-600"
-        : "bg-ambar-600/10 text-ambar-600";
+        : "bg-ambar-500/10 text-ambar-600";
   return (
     <span
       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-legenda font-medium ${estilo}`}
@@ -44,7 +44,8 @@ export function TabelaAcwrAtletas({ atletas }: { atletas: CargaAtleta[] }) {
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div>
+      <div className="overflow-x-auto">
       <table className="w-full text-corpo">
         <thead>
           <tr className="border-b border-cinza-200 text-left text-legenda uppercase tracking-wide text-cinza-400">
@@ -79,6 +80,10 @@ export function TabelaAcwrAtletas({ atletas }: { atletas: CargaAtleta[] }) {
           ))}
         </tbody>
       </table>
+      </div>
+      <p className="mt-2 text-xs text-cinza-400">
+        ACWR = carga da semana atual ÷ média das 4 anteriores · Ideal: 0,8–1,3 · {"< 0,8"} subcarga · {"> 1,3"} risco
+      </p>
     </div>
   );
 }

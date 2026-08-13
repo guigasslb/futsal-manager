@@ -24,6 +24,7 @@ export function ExportarCsvBotao({ acao, rotulo = "Exportar CSV" }: Props) {
 
   async function exportar() {
     setAExportar(true);
+    let url: string | null = null;
     try {
       const resultado = await acao();
       if (!resultado.sucesso) {
@@ -33,17 +34,18 @@ export function ExportarCsvBotao({ acao, rotulo = "Exportar CSV" }: Props) {
 
       const { csv, nomeFicheiro } = resultado.dados;
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
+      url = URL.createObjectURL(blob);
       const ancora = document.createElement("a");
       ancora.href = url;
       ancora.download = nomeFicheiro;
       document.body.appendChild(ancora);
       ancora.click();
       ancora.remove();
-      URL.revokeObjectURL(url);
+      toast.success(`"${nomeFicheiro}" descarregado`);
     } catch {
       toast.error("Erro ao exportar");
     } finally {
+      if (url) URL.revokeObjectURL(url);
       setAExportar(false);
     }
   }

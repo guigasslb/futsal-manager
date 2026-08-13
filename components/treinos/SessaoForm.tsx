@@ -107,10 +107,8 @@ export function SessaoForm({
         const res = await verificarConflitoAgenda({
           data: new Date(dataValor),
           local,
-          tipo: "TREINO",
           duracaoMin,
           excluirId: sessao?.id,
-          escalaoId,
         });
         if (cancelado) return;
         setConflitos(
@@ -293,6 +291,20 @@ export function SessaoForm({
         />
       </div>
 
+      {conflitos.length > 0 && (
+        <div role="alert" className="rounded-md border border-ambar-500/40 bg-ambar-500/10 p-3 text-corpo-sec text-ambar-600">
+          <p className="font-medium">Possível conflito de pavilhão</p>
+          <ul className="mt-1 list-disc pl-4">
+            {conflitos.map((c) => (
+              <li key={`${c.tipo}-${c.escalaoNome}-${c.data.toString()}`}>
+                {c.tipo === "TREINO" ? "Treino" : "Jogo"} do {c.escalaoNome} — {format(c.data, "EEE dd/MM, HH:mm", { locale: pt })}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-legenda">Podes guardar à mesma.</p>
+        </div>
+      )}
+
       <div className="space-y-1.5">
         <Label htmlFor="notas">Notas</Label>
         <Textarea
@@ -303,19 +315,6 @@ export function SessaoForm({
           rows={3}
         />
       </div>
-
-      {conflitos.length > 0 && (
-        <div role="alert" className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-          <p className="font-medium">Possível conflito de pavilhão</p>
-          <ul className="mt-1 list-disc pl-4">
-            {conflitos.map((c, i) => (
-              <li key={i}>
-                {c.tipo === "TREINO" ? "Treino" : "Jogo"} do {c.escalaoNome} — {format(c.data, "HH:mm", { locale: pt })}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       <div className="flex gap-3 pt-2">
         <Button type="submit" disabled={pending || !escalaoId}>

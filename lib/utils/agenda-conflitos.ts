@@ -12,6 +12,19 @@
  */
 export const DURACAO_PADRAO_MIN = 90;
 
+/**
+ * Locais que são apenas marcadores de posição (texto livre à espera de definição).
+ * Comparados na forma já normalizada por `normalizarLocal`. Um evento cujo local
+ * seja um destes nunca gera conflito — dois "A definir" não são o mesmo pavilhão.
+ */
+export const LOCAIS_PLACEHOLDER = [
+  "a definir",
+  "tbd",
+  "a confirmar",
+  "por confirmar",
+  "por definir",
+];
+
 export interface ConflitoAgenda {
   tipo: "TREINO" | "JOGO";
   escalaoNome: string;
@@ -69,12 +82,17 @@ export function detetarConflitos(
   if (!novoEvento.local) return [];
   const localNovo = normalizarLocal(novoEvento.local);
   if (localNovo === "") return [];
+  // Placeholder (ex.: "A definir") não é um pavilhão concreto → nunca conflita.
+  if (LOCAIS_PLACEHOLDER.includes(localNovo)) return [];
 
   const conflitos: ConflitoAgenda[] = [];
   for (const evento of eventosExistentes) {
     if (excluirId && evento.id === excluirId) continue;
     if (!evento.local) continue;
-    if (normalizarLocal(evento.local) !== localNovo) continue;
+    const localEvento = normalizarLocal(evento.local);
+    // Evento existente com local placeholder também não conflita com ninguém.
+    if (LOCAIS_PLACEHOLDER.includes(localEvento)) continue;
+    if (localEvento !== localNovo) continue;
     if (!temSobreposicao(novoEvento, evento)) continue;
 
     conflitos.push({

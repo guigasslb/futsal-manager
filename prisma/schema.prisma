@@ -749,6 +749,7 @@ model Sessao {
   @@index([epocaId, escalaoId, data])
   @@index([escalaoId])
   @@index([planeamentoId])
+  @@index([data])
 }
 
 // P4.8 (§8.20): RPE individual do atleta para uma sessão (1-10). Permite carga
@@ -865,6 +866,7 @@ model Jogo {
   @@index([epocaId, escalaoId, data])
   @@index([competicaoId])
   @@index([escalaoId])
+  @@index([data])
 }
 
 enum CasaFora {

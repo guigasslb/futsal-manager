@@ -490,4 +490,33 @@ describe("obterCargaAtletas", () => {
     expect(semanasAtras).toBeGreaterThan(4.9);
     expect(semanasAtras).toBeLessThan(6.1);
   });
+
+  it("escalão com 0 atletas ativos devolve lista vazia (sem erro)", async () => {
+    p.escalao.findFirst.mockResolvedValue({ id: ESCALAO });
+    p.atletaEscalao.findMany.mockResolvedValue([]);
+    p.rpeAtleta.findMany.mockResolvedValue([]);
+
+    const r = await obterCargaAtletas({ escalaoId: ESCALAO });
+    expect(r.sucesso).toBe(true);
+    if (!r.sucesso) return;
+    expect(r.dados.atletas).toEqual([]);
+  });
+
+  it("filtra RPE pela época ativa (epocaId) — RPE de outra época é ignorado pela query", async () => {
+    // A action passa `epocaId: epoca.id` ao prisma.rpeAtleta.findMany.
+    // Este teste verifica que o argumento da query inclui o filtro correto.
+    p.escalao.findFirst.mockResolvedValue({ id: ESCALAO });
+    p.atletaEscalao.findMany.mockResolvedValue([
+      { atletaId: ATLETA, atleta: { nome: "Ana" } },
+    ]);
+    p.rpeAtleta.findMany.mockResolvedValue([]);
+
+    await obterCargaAtletas({ escalaoId: ESCALAO });
+
+    const arg = p.rpeAtleta.findMany.mock.calls[0][0];
+    // O filtro da sessão deve restringir pela época ativa.
+    expect(arg.where.sessao).toMatchObject({ epocaId: EPOCA });
+    // E pelo escalão correto — garante que RPE de outros escalões da mesma época também não vaza.
+    expect(arg.where.sessao).toMatchObject({ escalaoId: ESCALAO });
+  });
 });

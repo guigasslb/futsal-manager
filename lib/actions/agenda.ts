@@ -200,7 +200,7 @@ export async function verificarConflitoAgenda(
 ): Promise<Resultado<{ conflitos: ConflitoAgenda[] }>> {
   const parsed = verificarConflitoSchema.safeParse(input);
   if (!parsed.success) return erroDeValidacao(parsed.error);
-  const { data, duracaoMin, local, tipo, excluirId } = parsed.data;
+  const { data, duracaoMin, local, excluirId } = parsed.data;
 
   const membro = await obterMembroAtual();
   if (!membro) return erro("Não autenticado");

@@ -15,6 +15,13 @@ export const BOM_UTF8 = "﻿";
 const SEPARADOR = ";";
 const FIM_LINHA = "\r\n";
 
+/**
+ * Caracteres que, no início de uma célula, o Excel/LibreOffice interpretam como
+ * fórmula (CSV/formula injection). Prefixar com apóstrofo neutraliza-os,
+ * forçando o conteúdo a ser tratado como texto.
+ */
+export const PREFIXOS_FORMULA = ["=", "+", "-", "@", "\t", "\r"];
+
 /** Definição de uma coluna: a chave a ler de cada linha e o título do cabeçalho. */
 export interface ColunaCsv {
   chave: string;
@@ -33,7 +40,15 @@ function serializarCelula(valor: unknown): string {
 
   // `String()` de um número usa sempre ponto decimal — ao contrário de
   // `toLocaleString("pt-PT")`, que usaria vírgula e o Excel leria como texto.
-  const texto = String(valor);
+  let texto = String(valor);
+
+  // Neutraliza CSV/formula injection ANTES do escape RFC 4180: se a célula
+  // começa por um carácter de fórmula, prefixa com apóstrofo (o Excel trata-o
+  // como texto). O apóstrofo fica dentro do campo, incluído nas aspas se estas
+  // forem necessárias a seguir.
+  if (PREFIXOS_FORMULA.some((p) => texto.startsWith(p))) {
+    texto = "'" + texto;
+  }
 
   const precisaAspas =
     texto.includes(SEPARADOR) ||

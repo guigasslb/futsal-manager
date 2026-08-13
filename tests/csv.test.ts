@@ -112,3 +112,27 @@ describe("juntarBlocosCsv", () => {
     expect(junto).toBe(bloco1);
   });
 });
+
+describe("paraCsv — escape RFC 4180 (casos combinados)", () => {
+  it("trata campo com '\"' e ';' simultâneos: duplica aspas e envolve o campo", () => {
+    // Caso combinado: RFC 4180 exige aspas porque há ';', E as aspas internas
+    // têm de ser duplicadas. O resultado correto é: "Ala ""O Rápido""; Sub-13"
+    const csv = paraCsv([{ nome: 'Ala "O Rápido"; Sub-13', golos: 0 }], COLS);
+    expect(csv).toContain('"Ala ""O Rápido""; Sub-13";0');
+  });
+
+  it("envolve em aspas os campos com '\\r' isolado (CR sem LF)", () => {
+    const csv = paraCsv([{ nome: "Linha1\rLinha2", golos: 0 }], COLS);
+    expect(csv).toContain('"Linha1\rLinha2";0');
+  });
+
+  it("campos que começam com '=' não são transformados (RFC 4180 puro; sem proteção de injeção de fórmula)", () => {
+    // Documenta o comportamento atual: a função implementa RFC 4180 puro e
+    // NÃO sanitiza fórmulas Excel (=, +, -, @). O valor sai tal como está.
+    // Se a política de segurança mudar, este teste deve ser atualizado.
+    const csv = paraCsv([{ nome: "=SOMA(A1:A10)", golos: 0 }], COLS);
+    expect(csv).toContain("=SOMA(A1:A10);0");
+    // Sem aspas: o campo não contém ';', '"', '\n', nem '\r'.
+    expect(csv).not.toContain('"=SOMA(A1:A10)"');
+  });
+});
