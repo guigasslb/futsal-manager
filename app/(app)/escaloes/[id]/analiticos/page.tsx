@@ -16,7 +16,7 @@ import { EstadoVazio } from "@/components/layout/EstadosUI";
 import { eEscalaoFormacaoJovem } from "@/lib/schemas/social";
 import { urlCard } from "@/lib/social/token";
 
-export const metadata: Metadata = { title: "Analíticos do escalão" };
+export const metadata: Metadata = { title: "Analytics do escalão" };
 
 export default async function AnaliticosEscalaoPage({
   params,
@@ -46,7 +46,7 @@ export default async function AnaliticosEscalaoPage({
       <div className="flex items-center justify-between print:hidden">
         <Breadcrumbs
           items={[
-            { label: "Analíticos", href: "/analiticos" },
+            { label: "Analytics", href: "/analiticos" },
             { label: res.sucesso ? res.dados.escalao.nome : "Escalão" },
           ]}
         />
@@ -77,7 +77,7 @@ export default async function AnaliticosEscalaoPage({
           <div>
             <h1>{res.dados.escalao.nome}</h1>
             <p className="mt-1 text-corpo-sec text-cinza-500">
-              Analíticos da equipa · {res.dados.epoca.nome}
+              Analytics da equipa · {res.dados.epoca.nome}
             </p>
           </div>
           <PainelEscalao
@@ -110,7 +110,7 @@ export default async function AnaliticosEscalaoPage({
           descricao="Não tens permissão para ver os analíticos deste escalão."
         />
       ) : (
-        <EstadoVazio titulo="Analíticos indisponíveis" descricao={res.erro} />
+        <EstadoVazio titulo="Analytics indisponíveis" descricao={res.erro} />
       )}
     </div>
   );

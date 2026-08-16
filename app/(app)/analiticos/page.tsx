@@ -8,7 +8,7 @@ import { GerarRelatorioBotao } from "@/components/relatorios/GerarRelatorioBotao
 import { GerirRelatorios } from "@/components/relatorios/GerirRelatorios";
 import { EstadoVazio } from "@/components/layout/EstadosUI";
 
-export const metadata: Metadata = { title: "Analíticos" };
+export const metadata: Metadata = { title: "Analytics" };
 
 export default async function AnaliticosClubePage() {
   const [resClube, resRelatorios] = await Promise.all([
@@ -19,14 +19,14 @@ export default async function AnaliticosClubePage() {
   if (!resClube.sucesso) {
     return (
       <div className="space-y-6">
-        <h1>Analíticos</h1>
+        <h1>Analytics</h1>
         {resClube.erro === "Sem permissão" ? (
           <EstadoVazio
             titulo="Só disponível para Admin e Diretor Técnico"
-            descricao="Os analíticos do clube exigem a permissão «Ver relatórios». Pede ao administrador do clube para a atribuir."
+            descricao="Os analytics do clube exigem a permissão «Ver relatórios». Pede ao administrador do clube para a atribuir."
           />
         ) : (
-          <EstadoVazio titulo="Analíticos indisponíveis" descricao={resClube.erro} />
+          <EstadoVazio titulo="Analytics indisponíveis" descricao={resClube.erro} />
         )}
       </div>
     );
@@ -36,7 +36,7 @@ export default async function AnaliticosClubePage() {
     <div className="space-y-8">
       <div className="flex items-center justify-between print:hidden">
         <div>
-          <h1>Analíticos do clube</h1>
+          <h1>Analytics do clube</h1>
           <p className="mt-1 text-corpo-sec text-cinza-500">
             {resClube.dados.clube.nome} · {resClube.dados.epoca.nome}
           </p>

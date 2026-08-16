@@ -154,7 +154,7 @@ export default async function PerfilAtletaPage({
       <Tabs defaultValue="estatisticas">
         <TabsList>
           <TabsTrigger value="estatisticas">Estatísticas</TabsTrigger>
-          <TabsTrigger value="analiticos">Analíticos</TabsTrigger>
+          <TabsTrigger value="analiticos">Analytics</TabsTrigger>
           <TabsTrigger value="caderneta">Caderneta</TabsTrigger>
           <TabsTrigger value="participacoes">Participações</TabsTrigger>
           <TabsTrigger value="carreira">Carreira</TabsTrigger>
@@ -202,11 +202,11 @@ export default async function PerfilAtletaPage({
             </>
           ) : resAnalitico.erro === "Sem permissão" ? (
             <EstadoVazio
-              titulo="Sem acesso aos analíticos"
-              descricao="Os analíticos e relatórios exigem a permissão «Ver relatórios». Pede ao administrador do clube para a atribuir."
+              titulo="Sem acesso aos analytics"
+              descricao="Os analytics e relatórios exigem a permissão «Ver relatórios». Pede ao administrador do clube para a atribuir."
             />
           ) : (
-            <EstadoVazio titulo="Analíticos indisponíveis" descricao={resAnalitico.erro} />
+            <EstadoVazio titulo="Analytics indisponíveis" descricao={resAnalitico.erro} />
           )}
         </TabsContent>
 

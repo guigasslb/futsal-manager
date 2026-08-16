@@ -9,8 +9,10 @@ import {
   FileText,
   ArrowRight,
   Check,
+  Mail,
 } from "lucide-react";
 import { Logo } from "@/components/layout/Logo";
+import { FormularioContacto } from "@/components/landing/FormularioContacto";
 
 const LARANJA = "#F0531E"; // acento/decorativo (ícones, bordas, texto sobre escuro)
 const LARANJA_ACAO = "#C7430F"; // laranja-600: fundos c/ texto branco (AA 4.95:1)
@@ -120,6 +122,12 @@ export default function RootPage() {
         <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
           <Logo size={24} variant="dark" />
           <nav className="flex items-center gap-2 sm:gap-3">
+            <a
+              href="#contacto"
+              className="hidden rounded-lg px-4 py-2 text-corpo font-semibold text-white/90 transition-colors hover:text-white sm:inline-block"
+            >
+              Contacto
+            </a>
             <Link
               href="/login"
               className="rounded-lg px-4 py-2 text-corpo font-semibold text-white/90 transition-colors hover:text-white"
@@ -276,6 +284,31 @@ export default function RootPage() {
                 </Link>
               </article>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Contacto ────────────────────────────────────────────────────── */}
+      <section id="contacto" className="scroll-mt-20 bg-white py-20">
+        <div className="mx-auto max-w-3xl px-6">
+          <div className="mx-auto max-w-2xl text-center">
+            <div
+              className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl"
+              style={{ backgroundColor: "rgba(240,83,30,0.12)", color: LARANJA }}
+            >
+              <Mail size={24} aria-hidden />
+            </div>
+            <h2 className="mt-5 font-display text-3xl font-bold tracking-tight text-cinza-900 sm:text-4xl">
+              Fala connosco
+            </h2>
+            <p className="mt-4 text-lg text-cinza-600">
+              Dúvidas, sugestões ou queres trazer o teu clube? Envia-nos uma
+              mensagem — respondemos o mais rápido possível.
+            </p>
+          </div>
+
+          <div className="mt-12 rounded-2xl border border-cinza-200 bg-cinza-50 p-6 sm:p-8">
+            <FormularioContacto />
           </div>
         </div>
       </section>

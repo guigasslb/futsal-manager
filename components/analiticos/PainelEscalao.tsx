@@ -2,12 +2,26 @@
 // Presentacional: recebe o AnaliticoEscalao já calculado (Server Action).
 
 import type { TipoSessao } from "@prisma/client";
+import {
+  Swords,
+  Trophy,
+  Equal,
+  TrendingDown,
+  Target,
+  ShieldAlert,
+  Shield,
+  Users,
+  CalendarCheck,
+  Percent,
+} from "lucide-react";
 import type { AnaliticoEscalao, CompeticaoOpcao } from "@/lib/actions/analise";
 import { GraficoBarrasH } from "@/components/graficos/GraficoBarrasH";
 import { GraficoBarrasV } from "@/components/graficos/GraficoBarrasV";
 import { FiltroCompeticao } from "./FiltroCompeticao";
 import { RankingsMetricas } from "./RankingsMetricas";
-import { Cartao, pct, n1 } from "./Cartao";
+import { RankingAssiduidade } from "./RankingAssiduidade";
+import { CartaoKpi, corTaxa } from "./CartaoKpi";
+import { pct, n1 } from "./Cartao";
 
 const LABEL_TIPO_SESSAO: Record<TipoSessao, string> = {
   NORMAL: "Normal",
@@ -56,34 +70,46 @@ export function PainelEscalao({
   // Snapshots de relatórios antigos (pré-agregação de métricas) não têm o
   // campo — o default garante zero regressão na vista pública.
   const rankingsMetricas = dados.rankingsMetricas ?? [];
+  const assiduidade = dados.rankingAssiduidade ?? [];
 
   const semJogos = dados.jogos === 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Filtro por competição (P2.5) — só quando há competições com jogos. */}
       {competicoes && competicoes.length > 0 && (
         <FiltroCompeticao competicoes={competicoes} competicaoId={competicaoId} />
       )}
 
-      {/* Resultados */}
-      <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
-        <Cartao valor={dados.jogos} label="jogos" />
-        <Cartao valor={dados.vitorias} label="vitórias" />
-        <Cartao valor={dados.empates} label="empates" />
-        <Cartao valor={dados.derrotas} label="derrotas" />
-        <Cartao valor={dados.golosMarcados} label="golos M" />
-        <Cartao valor={dados.golosSofridos} label="golos S" />
-      </div>
+      {/* Balanço da época — KPIs de resultados */}
+      <section className="space-y-3">
+        <h2 className="text-titulo-seccao text-cinza-900">Balanço da época</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <CartaoKpi valor={dados.jogos} label="jogos" icon={Swords} cor="primary" />
+          <CartaoKpi valor={dados.vitorias} label="vitórias" icon={Trophy} cor="verde" />
+          <CartaoKpi valor={dados.empates} label="empates" icon={Equal} cor="ambar" />
+          <CartaoKpi valor={dados.derrotas} label="derrotas" icon={TrendingDown} cor="vermelho" />
+          <CartaoKpi valor={dados.golosMarcados} label="golos marcados" icon={Target} cor="verde" />
+          <CartaoKpi valor={dados.golosSofridos} label="golos sofridos" icon={ShieldAlert} cor="vermelho" />
+        </div>
+      </section>
 
-      {/* Plantel e assiduidade */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <Cartao valor={dados.nAtletas} label="atletas" />
-        <Cartao valor={dados.sessoes} label="sessões" />
-        <Cartao valor={pct(dados.taxaPresencaMedia)} label="presença méd." />
-        <Cartao valor={n1(dados.golosMarcadosMedia)} label="golos M/jogo" />
-        <Cartao valor={n1(dados.golosSofridosMedia)} label="golos S/jogo" />
-      </div>
+      {/* Plantel e assiduidade — KPIs */}
+      <section className="space-y-3">
+        <h2 className="text-titulo-seccao text-cinza-900">Plantel e médias</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <CartaoKpi valor={dados.nAtletas} label="atletas" icon={Users} cor="primary" />
+          <CartaoKpi valor={dados.sessoes} label="sessões" icon={CalendarCheck} cor="primary" />
+          <CartaoKpi
+            valor={pct(dados.taxaPresencaMedia)}
+            label="presença média"
+            icon={Percent}
+            cor={corTaxa(dados.taxaPresencaMedia)}
+          />
+          <CartaoKpi valor={n1(dados.golosMarcadosMedia)} label="golos M/jogo" icon={Target} cor="verde" />
+          <CartaoKpi valor={n1(dados.golosSofridosMedia)} label="golos S/jogo" icon={Shield} cor="vermelho" />
+        </div>
+      </section>
 
       {/* Distribuição de tipos de treino */}
       {tiposTreino.length > 0 && (
@@ -144,16 +170,19 @@ export function PainelEscalao({
         </div>
       </div>
 
-      {/* Jogadores mais utilizados */}
-      {pontosUtilizados.length > 0 && (
-        <div className="rounded-lg border border-cinza-200 bg-white p-5 shadow-card">
-          <GraficoBarrasH
-            dados={pontosUtilizados}
-            titulo="Jogadores mais utilizados"
-            unidade="min"
-          />
-        </div>
-      )}
+      {/* Jogadores mais utilizados + ranking de assiduidade */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {pontosUtilizados.length > 0 && (
+          <div className="rounded-lg border border-cinza-200 bg-white p-5 shadow-card">
+            <GraficoBarrasH
+              dados={pontosUtilizados}
+              titulo="Jogadores mais utilizados"
+              unidade="min"
+            />
+          </div>
+        )}
+        {assiduidade.length > 0 && <RankingAssiduidade atletas={assiduidade} />}
+      </div>
 
       {/* Ranking por métrica configurável (§10.2) — só com métricas do clube. */}
       {rankingsMetricas.length > 0 && (

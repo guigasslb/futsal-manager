@@ -2,11 +2,22 @@
 // Presentacional: recebe o AnaliticoAtleta já calculado (Server Action) e
 // desenha os tiles, a comparação com a equipa, a caderneta e os gráficos.
 
+import {
+  Hand,
+  ShieldAlert,
+  Target,
+  Handshake,
+  Swords,
+  Star,
+  Percent,
+  Clock,
+} from "lucide-react";
 import type { AnaliticoAtleta } from "@/lib/actions/analise";
 import { LABEL_POSICAO } from "@/lib/schemas/atleta";
 import { GraficoLinhas } from "@/components/graficos/GraficoLinhas";
 import { GraficoBarrasV } from "@/components/graficos/GraficoBarrasV";
-import { Cartao, pct, n1 } from "./Cartao";
+import { CartaoKpi, corTaxa } from "./CartaoKpi";
+import { pct, n1 } from "./Cartao";
 
 export function PainelAtleta({ dados }: { dados: AnaliticoAtleta }) {
   const {
@@ -64,22 +75,37 @@ export function PainelAtleta({ dados }: { dados: AnaliticoAtleta }) {
       {contexto && <p className="text-corpo-sec text-cinza-500">{contexto}</p>}
 
       {/* Tiles de estatística */}
-      <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {eGR ? (
           <>
-            <Cartao valor={agregado.totalDefesas ?? 0} label="defesas" />
-            <Cartao valor={agregado.totalGolosSofridos ?? 0} label="sofridos" />
+            <CartaoKpi valor={agregado.totalDefesas ?? 0} label="defesas" icon={Hand} cor="verde" />
+            <CartaoKpi
+              valor={agregado.totalGolosSofridos ?? 0}
+              label="sofridos"
+              icon={ShieldAlert}
+              cor="vermelho"
+            />
           </>
         ) : (
           <>
-            <Cartao valor={agregado.totalGolos} label="golos" />
-            <Cartao valor={agregado.totalAssistencias} label="assist." />
+            <CartaoKpi valor={agregado.totalGolos} label="golos" icon={Target} cor="verde" />
+            <CartaoKpi
+              valor={agregado.totalAssistencias}
+              label="assist."
+              icon={Handshake}
+              cor="primary"
+            />
           </>
         )}
-        <Cartao valor={agregado.jogosUtilizados} label="jogos" />
-        <Cartao valor={agregado.titularidades} label="titular" />
-        <Cartao valor={pct(agregado.taxaPresenca)} label="presenças" />
-        <Cartao valor={agregado.tempoJogoAcumulado} label="min" />
+        <CartaoKpi valor={agregado.jogosUtilizados} label="jogos" icon={Swords} cor="primary" />
+        <CartaoKpi valor={agregado.titularidades} label="titular" icon={Star} cor="ambar" />
+        <CartaoKpi
+          valor={pct(agregado.taxaPresenca)}
+          label="presenças"
+          icon={Percent}
+          cor={corTaxa(agregado.taxaPresenca)}
+        />
+        <CartaoKpi valor={agregado.tempoJogoAcumulado} label="min" icon={Clock} cor="cinza" />
       </div>
 
       {/* Comparação com a média da equipa */}

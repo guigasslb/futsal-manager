@@ -515,6 +515,14 @@ export interface RankingAtleta {
   valor: number;
 }
 
+/** Assiduidade por atleta (top presenças). `taxa` = presenças / sessões do escalão. */
+export interface RankingAssiduidade {
+  atletaId: string;
+  nome: string;
+  presencas: number;
+  taxa: number; // 0–1
+}
+
 export interface UtilizacaoAtleta {
   atletaId: string;
   nome: string;
@@ -555,6 +563,8 @@ export interface AnaliticoEscalao {
   marcadores: RankingAtleta[];
   assistentes: RankingAtleta[];
   maisUtilizados: UtilizacaoAtleta[];
+  /** Top 5 atletas por taxa de presença (default `[]` em snapshots antigos). */
+  rankingAssiduidade: RankingAssiduidade[];
   eventosPorTipo: Record<TipoEventoJogo, number>;
   presencaMensal: PresencaMensal[];
   distribuicaoTipoTreino: Record<TipoSessao, number>;
@@ -691,7 +701,9 @@ export async function obterAnaliticoEscalao(
         estado: { in: [...ESTADOS_PRESENTE] },
         sessao: { epocaId: epoca.id },
       },
-      select: { sessaoId: true },
+      // atletaId + nome alimentam o ranking de assiduidade (mesma query, sem
+      // round-trip adicional); sessaoId mantém a assiduidade mensal da equipa.
+      select: { sessaoId: true, atletaId: true, atleta: { select: { nome: true } } },
     }),
     // Métricas configuráveis registadas por jogo (bíblia §8.14) — rankings de equipa.
     prisma.valorMetrica.findMany({
@@ -810,6 +822,34 @@ export async function obterAnaliticoEscalao(
 
   const slots = nAtletas * sessoes.length;
 
+  // Ranking de assiduidade por atleta (top 5). Reutiliza a MESMA lista de
+  // presenças já lida acima — sem query adicional. Denominador = total de
+  // sessões do escalão, em simetria com taxaPresencaMedia da equipa
+  // (nAtletas × sessoes.length); a taxa por atleta fica assim comparável.
+  const totalSessoes = sessoes.length;
+  const assiduidadeMap = new Map<string, { nome: string; presencas: number }>();
+  for (const p of presencas) {
+    if (!p.atletaId) continue;
+    const acc = assiduidadeMap.get(p.atletaId) ?? { nome: p.atleta?.nome ?? "—", presencas: 0 };
+    acc.presencas++;
+    assiduidadeMap.set(p.atletaId, acc);
+  }
+  const rankingAssiduidade: RankingAssiduidade[] = [...assiduidadeMap.entries()]
+    .map(([atletaId, v]) => ({
+      atletaId,
+      nome: v.nome,
+      presencas: v.presencas,
+      taxa: totalSessoes > 0 ? Math.min(v.presencas / totalSessoes, 1) : 0,
+    }))
+    .filter((a) => a.presencas > 0)
+    .sort(
+      (a, b) =>
+        b.taxa - a.taxa ||
+        b.presencas - a.presencas ||
+        a.nome.localeCompare(b.nome, "pt"),
+    )
+    .slice(0, 5);
+
   return ok({
     escalao,
     epoca,
@@ -827,6 +867,7 @@ export async function obterAnaliticoEscalao(
     marcadores,
     assistentes,
     maisUtilizados,
+    rankingAssiduidade,
     eventosPorTipo,
     presencaMensal,
     distribuicaoTipoTreino,

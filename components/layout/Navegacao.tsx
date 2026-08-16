@@ -32,7 +32,7 @@ const ITENS_BASE = [
   { href: "/treinos", label: "Treinos", icon: CalendarCheck },
   { href: "/jogos", label: "Jogos", icon: Trophy },
   { href: "/exercicios", label: "Exercícios", icon: Dumbbell },
-  { href: "/analiticos", label: "Analíticos", icon: BarChart3 },
+  { href: "/analiticos", label: "Analytics", icon: BarChart3 },
   { href: "/comunicacoes", label: "Comunicações", icon: MessageSquare },
   { href: "/reunioes", label: "Reuniões", icon: Users2 },
   { href: "/definicoes", label: "Definições", icon: Settings },

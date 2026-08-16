@@ -136,7 +136,10 @@ Interface 100% em **português de Portugal**, terminologia FPF/futsal. Usar semp
 - **Biblioteca pessoal (🎒)** — exercícios/templates do treinador, portáteis.
 - **Biblioteca do clube (🏛️)** — exercícios/templates partilhados no clube.
 - **Parte do treino** — Aquecimento / Parte principal / Jogo reduzido / Retorno à calma.
-- **Microciclo** — semana de treino. **Mesociclo** — bloco de semanas. **Período** — Preparatório / Competitivo / Transição.
+- **Semana (de trabalho)** — unidade de planeamento semanal **exposta ao utilizador** (o termo técnico **Microciclo** é interno e não aparece na UI). O agrupamento de sessões por semana é **automático pela data**; formalizar uma semana (nome, modo) é **opcional**. Ver 8.9.
+- **Modo de semana** — forma de detalhar uma semana formalizada: **Estruturado** (dias marcados por relação com o jogo — MD-X) ou **Texto livre** (campo aberto). Ver 8.9.
+- **Semana-tipo** — estrutura/metodologia de uma semana reutilizável como **template** (🎒 portátil quando criada pelo treinador). Ver 3.5 / 8.9.
+- **Microciclo** — termo técnico **interno** para semana de treino (não exposto na UI; ver «Semana»). **Mesociclo** — bloco de semanas; campo **interno/avançado**, escondido por defeito na UI (só perfil avançado). **Período** — Preparatório / Competitivo / Transição.
 - **Periodização** — planeamento por ciclos (semanal/mensal).
 - **Presença** — estado do atleta numa sessão (Presente, Falta, Falta justificada, Lesionado, Atrasado), com **motivo de falta** (Lesão/Doença/Outro/Sem justificação).
 
@@ -449,7 +452,7 @@ model PartilhaExercicioClube {
   @@unique([exercicioId, clubeId])
 }
 ```
-**Preservação de histórico:** quando um exercício **do treinador** (`proprietario = TREINADOR`) é usado numa sessão do clube, o clube retém um **snapshot só-de-leitura** desse exercício (para os planos de treino passados não partirem quando o treinador sair). O original editável viaja com o treinador; o snapshot fica no clube, desligado do autor.
+**Preservação de histórico:** quando um exercício **do treinador** (`proprietario = TREINADOR`) é usado numa sessão do clube, o clube retém um **snapshot só-de-leitura** desse exercício (para os planos de treino passados não partirem quando o treinador sair). O original editável viaja com o treinador; o snapshot fica no clube, desligado do autor. O **mecanismo** está especificado em **4.2.1** e materializa-se nos campos `snap*` do `SessaoExercicio` (secção 3.5).
 
 **Editor (prioridade — decisão 2026-08-05):** o editor de exercícios interativo com animações é um **diferenciador central**. A sua revisão e validação de qualidade são **prioritárias** (fase 12, secção 16) antes de escalar a biblioteca curada.
 
@@ -497,7 +500,7 @@ model ModeloSessaoExercicio {
 ```
 Ao criar uma sessão a partir de um template, os exercícios e durações são copiados para a `Sessao` (o template não fica ligado — é um ponto de partida editável).
 
-### 3.5 Periodização e treinos (🏛️ clube)
+### 3.5 Periodização e treinos (🏛️ clube; metodologia/semana-tipo portátil 🎒)
 
 ```prisma
 model Planeamento {
@@ -507,8 +510,11 @@ model Planeamento {
   epocaId    String
   tipo       TipoPlaneamento // SEMANAL | MENSAL
   periodo    PeriodoEpoca?   // PREPARATORIO | COMPETITIVO | TRANSICAO
-  mesociclo  Int?
-  microciclo Int?
+  mesociclo  Int?            // ⚠️ campo INTERNO/avançado: "Mesociclo" fica escondido por defeito na UI (só perfil avançado)
+  microciclo Int?            // ⚠️ numeração INTERNA da semana; a UI mostra sempre "Semana" (fallback "Semana N" ← microciclo)
+  nome       String?         // ⚠️ nome livre da semana formalizada ("Semana do torneio", "Pré-jogo Benfica"); opcional
+  modoSemana ModoSemana?     // ⚠️ ESTRUTURADO (dias MD-X) | TEXTO_LIVRE; só quando o treinador formaliza a semana (tipo=SEMANAL)
+  notaSemana String?         // ⚠️ campo aberto do modo TEXTO_LIVRE
   dataInicio DateTime
   dataFim    DateTime
   objetivos  String?
@@ -519,6 +525,8 @@ model Planeamento {
 
 enum TipoPlaneamento { SEMANAL MENSAL }
 enum PeriodoEpoca { PREPARATORIO COMPETITIVO TRANSICAO }
+// Modo de detalhe de uma SEMANA formalizada (secção 8.9). Só se aplica a Planeamento.tipo = SEMANAL.
+enum ModoSemana { ESTRUTURADO TEXTO_LIVRE }
 
 model Sessao {
   id            String     @id @default(cuid())
@@ -533,8 +541,9 @@ model Sessao {
   local         String?
   notas         String?  // notas de treino (input para o tracking)
   material      String?
-  microciclo    Int?
-  mesociclo     Int?
+  microciclo    Int?          // ⚠️ INTERNO; a UI mostra "Semana" (nunca "Microciclo"). A semana é resultado (agrupamento automático por data), nunca pré-condição
+  mesociclo     Int?          // ⚠️ INTERNO/avançado (escondido por defeito na UI)
+  momentoSemana MomentoSemana? // ⚠️ posição do dia na semana no modo ESTRUTURADO (MD-X); opcional, nunca bloqueia a sessão
   periodo       PeriodoEpoca?
   volume        Int?
   googleEventId String?  // sincronização Google Calendar (secção 8.16)
@@ -547,6 +556,9 @@ model Sessao {
 }
 
 enum TipoSessao { NORMAL ABERTO CAPTACAO EVENTO }
+// Posição do dia de treino na SEMANA (modo ESTRUTURADO, secção 8.9), por relação com o dia de jogo (Match Day).
+// MD_MENOS_* = dias antes do jogo · MD_MAIS_1 = dia seguinte (Recuperação) · ATIVACAO/TAPER/LIVRE = dias sem referência direta ao jogo.
+enum MomentoSemana { MD_MENOS_3 MD_MENOS_2 MD_MENOS_1 MD_MAIS_1 ATIVACAO TAPER LIVRE }
 
 model SessaoExercicio {
   id          String @id @default(cuid())
@@ -556,6 +568,14 @@ model SessaoExercicio {
   duracaoMin  Int?
   parteTreino ParteTreino?
   notas       String?
+  // Snapshot só-de-leitura (mecanismo em 4.2.1). ⚠️ Preenchido AUTOMATICAMENTE quando se adiciona à sessão um
+  // exercício com proprietario = TREINADOR: congela os dados relevantes para que o CLUBE reconstrua o plano
+  // histórico mesmo depois de o treinador (e o master editável) saírem. Imutável — não se edita nem apaga.
+  snapNome      String?
+  snapDescricao String?
+  snapObjetivo  String?
+  snapDiagrama  Json?     // cópia congelada do DiagramaCampo (secção 11)
+  snapCriadoEm  DateTime?
 
   @@unique([sessaoId, ordem])
 }
@@ -576,6 +596,12 @@ enum EstadoPresenca { PRESENTE FALTA FALTA_JUSTIFICADA LESIONADO ATRASADO }
 // Motivo de falta (lesões registadas aqui — sem módulo clínico dedicado, que é FUTURO).
 enum MotivoFalta { LESAO DOENCA OUTRO SEM_JUSTIFICACAO }
 ```
+
+**Semana de trabalho (conceito de UI — decisão 2026-08-16):** o utilizador vê sempre **«Semana»**, nunca «Microciclo» (jargão técnico interno). **DEVE:** as sessões agrupam-se por semana **automaticamente pela data** (semana ISO, começa à segunda), de forma silenciosa e sem passo extra — a semana é **resultado**, não pré-condição. **DEVE:** uma sessão **nunca** é bloqueada pela ausência de semana. **DEVERIA:** o treinador poder **formalizar** uma semana (opcional) atribuindo-lhe um `nome` livre (com *fallback* automático «Semana N» ← `microciclo`) e escolhendo um `modoSemana`: **Estruturado** (dias marcados por `Sessao.momentoSemana` = MD-X) ou **Texto livre** (`notaSemana`). O `mesociclo` é **campo interno/avançado**, escondido por defeito na UI (só aparece em perfil avançado, activado explicitamente pelo treinador). Detalhe funcional em 8.9.
+
+**Snapshot (preservação de histórico):** o mecanismo que congela exercícios do treinador usados em sessões do clube está especificado em **4.2.1**; os campos `snap*` do `SessaoExercicio` acima materializam-no.
+
+**Propriedade da periodização (decisão 2026-08-16):** a **instância concreta** de um `Planeamento` (datas, escalão, sessões reais) é **sempre 🏛️ do clube**. O que é **portátil (🎒)** é a **estrutura/metodologia** — a **semana-tipo**, os objetivos por tipo de semana e a sequência de cargas — que viaja com o treinador como **template reutilizável** (à semelhança dos templates de sessão, 3.4), **não** como cópia da época. **DEVE:** planeamentos definidos pelo **clube/DT** (criados no contexto do clube e seguidos por vários treinadores) ficam no clube (🏛️); a metodologia criada por um **treinador individual** é portátil (🎒). Ver 4.4 e 8.9.2.
 
 ### 3.6 Modelo de jogo e quadro tático (🏛️ clube; metodologia portátil 🎒)
 
@@ -1135,9 +1161,44 @@ Há três tipos de dados:
 - Conteúdo `CLUBE`: ligado a `clubeProprietarioId`, permanece na biblioteca do clube.
 - Conteúdo `TREINADOR`: viaja com o autor (biblioteca pessoal); se foi usado em sessões do clube, o clube mantém um **snapshot só-de-leitura** para preservar os planos de treino passados (o master editável vai com o treinador).
 
+#### 4.2.1 Mecanismo de snapshot (especificação — decisão 2026-08-16)
+
+O snapshot é **obrigatório** (não é débito opcional). **Problema que resolve:** quando um treinador (`proprietario = TREINADOR`) usa exercícios pessoais em sessões do clube e depois **sai**, o clube mantém as sessões históricas mas perde a visibilidade dos exercícios (que viajam com o treinador) — o histórico ficaria com «buracos».
+
+**Mecanismo (DEVE):**
+- Ao **adicionar** um exercício portátil (`proprietario = TREINADOR`) a uma **sessão do clube**, o sistema cria **automaticamente** uma cópia congelada (snapshot) dos dados relevantes para a sessão: **nome, descrição, objetivo e diagrama (SVG)** — materializados nos campos `snap*` do `SessaoExercicio` (secção 3.5).
+- O snapshot fica **permanentemente associado ao `SessaoExercicio`** e **pertence ao clube**.
+- O **master editável** permanece com o treinador (`Exercicio.autorId`, biblioteca pessoal 🎒).
+- Os snapshots são **imutáveis**: não se editam nem apagam (fazem parte do histórico do clube).
+- **DEVE:** o clube consegue reconstruir o plano de treino histórico **a partir dos snapshots**, independentemente de o treinador ter saído.
+- Exercícios `proprietario = CLUBE` **não** geram snapshot (já pertencem ao clube).
+
 ### 4.3 Uma adesão ativa de cada vez
 
 Um utilizador tem **no máximo uma adesão de clube ativa** (um clube de cada vez — que pode ser o clube técnico no modo Individual). Ao mudar de clube, a adesão anterior passa a `INATIVO` (histórico) e o conteúdo `TREINADOR` acompanha-o. Dentro do clube ativo, pode gerir **vários escalões**.
+
+### 4.4 Tabela definitiva de propriedade e portabilidade (decisão 2026-08-16)
+
+A política de 4.1 **mantém-se**, com as seguintes clarificações explícitas. A coluna **«Porta com o treinador?»** indica se o treinador **retém uma cópia/registo** ao sair (para portfólio/carreira), **independentemente** de a **propriedade** do dado ficar no clube.
+
+| Dado | Proprietário | Porta com o treinador? |
+|---|---|---|
+| Nome dos atletas | 🏛️ CLUBE | ✅ Sim — nome é informação não-sensível |
+| Foto do atleta | 🏛️ CLUBE | ❌ Não |
+| Contacto/email do encarregado de educação | 🏛️ CLUBE | ❌ Não |
+| Resultados de jogos (marcador, adversário) | 🏛️ CLUBE | ✅ Sim — o treinador dirigiu os jogos |
+| Relatórios de sessões (estrutura, exercícios usados) | 🎒 TREINADOR | ✅ Sim |
+| Estatísticas individuais de atletas (golos, cartões, RPE) | 🏛️ CLUBE | ❌ Não |
+| Caderneta de habilidades dos atletas | 🏛️ CLUBE | ❌ Não |
+| Exercícios criados pelo treinador | 🎒 TREINADOR (toggle) | ✅ Sim (se `proprietario = TREINADOR`) |
+| Modelos táticos criados pelo treinador | 🎒 TREINADOR (toggle) | ✅ Sim (se `proprietario = TREINADOR`) |
+| Planeamentos / semanas criadas pelo treinador | 🎒 TREINADOR | ✅ Sim — como templates (semana-tipo) |
+| Planeamentos definidos pelo clube/DT | 🏛️ CLUBE | ❌ Não |
+| Menores (Sub-10, Sub-12, …) | — | ✅ Mesma regra que acima |
+
+**Notas:**
+- Os **dados operacionais** das sessões (presenças, datas, RPE — 4.1) permanecem 🏛️ do clube; o que porta com o treinador em «Relatórios de sessões» é a **estrutura metodológica** (que exercícios, em que ordem e com que objetivo).
+- **Crítica:** o **snapshot** (4.2.1) é o mecanismo que permite ao clube manter o **histórico completo** das sessões depois de o treinador levar os seus exercícios portáteis. Sem snapshot, os planos de treino passados ficariam com buracos.
 
 ---
 
@@ -1450,7 +1511,7 @@ Cada módulo define **conteúdo**, **ações**, **estado vazio** e **regras**. E
 
 ### 8.4 Definições base
 - **Escalões** (`CLUBE_ESCALOES`): CRUD + reordenar + visibilidade. Apagar bloqueado se tiver participações/atletas.
-- **Épocas** (`CLUBE_EPOCAS`): criar, listar, definir ativa.
+- **Épocas** (`CLUBE_EPOCAS`): criar, listar, definir ativa; **wizard «Nova Época»** para transição de época (ver 8.21).
 - **Métricas** (`CATALOGO_METRICAS`): CRUD + tipo + ativar/desativar + reordenar.
 - **Habilidades** (`CATALOGO_HABILIDADES`): CRUD agrupado por nível + reordenar.
 - **Subcategorias de exercício:** CRUD (seed instala predefinidas).
@@ -1481,13 +1542,28 @@ Cada módulo define **conteúdo**, **ações**, **estado vazio** e **regras**. E
 - **Estado vazio:** templates curados garantem arranque com conteúdo.
 
 ### 8.8 Treinos (`TREINOS_GERIR`, `PRESENCAS_MARCAR`)
-- **Lista/Calendário:** tabs por escalão; alternância lista ⇄ calendário mensal; data, objetivo, nº exercícios, taxa de presença.
+- **Lista/Calendário:** tabs por escalão; alternância lista ⇄ calendário mensal; data, objetivo, nº exercícios, taxa de presença. Agrupamento automático por **semana** pela data (silencioso — ver 8.9).
 - **Detalhe:** cabeçalho + **Exercícios** (adicionar da biblioteca, reordenar, total de tempo, parte do treino) e **Presenças** (seletor por atleta, **motivo de falta** quando aplicável — lesão/doença/outro, guardar em lote). Notas de treino.
-- **Novo/Editar:** data/hora, escalão, duração, objetivo, local, notas, ligação a planeamento/microciclo, **criar a partir de template**.
+- **Novo/Editar:** data/hora, escalão, duração, objetivo, local, notas, **ligação a semana** (planeamento semanal — **opcional**; a sessão **nunca** é bloqueada pela ausência de semana, ver 8.9), **criar a partir de template**.
 - **Estado vazio:** "Sem sessões nesta época."
 
-### 8.9 Periodização (`PERIODIZACAO_GERIR`)
-- Planos semanais/mensais por escalão/época (micro/mesociclos, período, objetivos). **Grelha anual** (visão macro). Ligação das sessões ao microciclo.
+### 8.9 Periodização e semana de trabalho (`PERIODIZACAO_GERIR`)
+- **Grelha anual e planos.** Planos semanais/mensais por escalão/época (período, objetivos) + **grelha anual** (visão macro). Os termos técnicos **microciclo/mesociclo** são **internos**; a UI usa **«Semana»** (8.9.1).
+
+#### 8.9.1 Semana de trabalho (conceito de UI — decisão 2026-08-16)
+- **DEVE:** o conceito exposto ao utilizador é **«Semana»** — **nunca «Microciclo»** (jargão técnico fica interno).
+- **DEVE:** as sessões **agrupam-se por semana automaticamente pela data** (semana ISO, começa à segunda-feira), de forma **silenciosa e sem passo extra**. A semana é **resultado, não pré-condição**.
+- **DEVE:** uma sessão **nunca** fica bloqueada pela ausência de semana.
+- **DEVERIA:** formalizar uma semana é **opcional** — o treinador pode ignorá-lo por completo.
+- **Quando formaliza** (DEVERIA): dá um **nome livre** («Semana do torneio», «Pré-jogo Benfica») com **fallback numérico automático** («Semana 3»); e escolhe um dos **dois modos**:
+  - **Estruturado:** os dias de treino são marcados numa lista **MD-X** por relação com o dia de jogo — **MD-1, MD-2, MD-3, MD+1/Recuperação, Ativação, Taper/Carga, Livre** (`Sessao.momentoSemana`, 3.5).
+  - **Texto livre:** campo aberto opcional (`Planeamento.notaSemana`).
+- **Mesociclo:** campo **interno/avançado**, **escondido por defeito** na UI. Só aparece se o treinador activar explicitamente o **perfil avançado**.
+
+#### 8.9.2 Propriedade da periodização (decisão 2026-08-16)
+- **DEVE:** a **instância concreta** (datas, escalão, sessões reais) é **sempre 🏛️ do clube**.
+- **DEVE:** planeamentos definidos pelo **clube/DT** (seguidos por vários treinadores) **ficam no clube** (🏛️).
+- **DEVE:** a **metodologia** criada por um **treinador individual** é **portátil (🎒)** e viaja como **template** reutilizável — o que viaja é a **estrutura/metodologia** (semana-tipo, objetivos por tipo de semana, sequência de cargas), **não** uma cópia da época. Ver 3.5 e 4.4.
 
 ### 8.10 Modelo de jogo e quadro tático (`MODELO_JOGO_GERIR`)
 - **Modelo de jogo (documento vivo):** por clube/escalão/época, organizado por **momento** (org. ofensiva/defensiva, transições, **bolas paradas**), com **princípios e subprincípios** + diagrama (editor). Metodologia genérica portátil = sem escalão/época (`TREINADOR`).
@@ -1601,6 +1677,37 @@ Cada módulo define **conteúdo**, **ações**, **estado vazio** e **regras**. E
 - **Visualização (analíticos do escalão):** secção «Carga de treino» com gráfico próprio (`CurvaCargaSemanal`) — barras de carga semanal com **código de cores por zona** (verde ideal, âmbar subcarga, vermelho risco) e **linha de ACWR** sobreposta com a banda da zona ideal. Só aparece quando existe pelo menos uma sessão com RPE registado na janela (default 8 semanas).
 - **ACWR individual por atleta (F2):** Server Action `obterCargaAtletas({ escalaoId, semanas? })` (`lib/actions/cargaTreino.ts`) devolve, para cada atleta ativo do escalão, o ACWR e a zona da semana corrente a partir do **RPE individual** (`RpeAtleta`), **ordenados por risco descendente** (RISCO no topo); atletas sem RPE reportado na janela surgem com `acwrAtual`/`zona` a `null` (não são excluídos). Tabela `components/analiticos/TabelaAcwrAtletas.tsx` (Server Component, `<table>` semântica) na secção «Carga individual (ACWR)» dos analíticos do escalão, por baixo da `CurvaCargaSemanal`: colunas Atleta · Carga semana · ACWR (2 casas, `—` sem dados) · Zona (badge com os **mesmos tokens** do gráfico — `verde-600`/`ambar-600`/`vermelho-600`; «Sem dados» a cinza). Só é mostrada quando ≥1 atleta reportou RPE individual na janela.
 - **Estado vazio:** sem RPE de sessão a secção do gráfico não é mostrada; sem RPE individual a tabela de ACWR por atleta não é mostrada (e, se renderizada sem dados, indica «Sem dados de RPE para este escalão»).
+
+### 8.21 Wizard «Nova Época» (`CLUBE_EPOCAS`)
+> **Decisão 2026-08-16:** transição de época guiada, que **herda** o que faz sentido e **zera** o que é específico da época anterior. **FUTURO** apenas a automação avançada indicada no fim.
+
+**Entry point (DEVE):** botão **«Nova Época»** acessível ao **Administrador** e ao **Treinador Individual** (licença individual). **Não** aparece ao **Treinador de Clube adicionado pelo DT** (esse não cria época — ver Cenário D). O wizard **deteta o perfil** e **omite passos irrelevantes**.
+
+**Cenário A — Mesmo clube, mesmo escalão (caso mais comum) (DEVE):**
+1. Confirmar **nome e datas** da nova época.
+2. Selecionar o(s) **escalão(ões)** que continuam.
+3. **Plantel:** lista dos atletas da época anterior com *checkboxes* **«transita?»** — **todos marcados por defeito**; o treinador **desmarca** quem saiu e **adiciona** manualmente quem entrou.
+4. **Herdar automaticamente (sem pergunta):** exercícios portáteis, modelos táticos, métricas configuradas, habilidades da caderneta e **modo preferido de semana** (8.9.1).
+5. **Zerar automaticamente:** estatísticas, presenças, jogos, convocatórias e planeamentos de sessões.
+6. A **numeração de semanas recomeça em 1**.
+
+**Cenário B — Mesmo clube, escalão diferente (DEVE):**
+1. Selecionar o **novo escalão**.
+2. **Sugestão automática de promoções** («estes X atletas completam a idade — transitam para este escalão?») com **confirmação individual obrigatória** — **nunca automática**.
+3. No perfil de cada atleta promovido, **link para a época anterior**.
+
+**Cenário C — Novo clube, licença individual (DEVE):**
+1. **Dados do novo clube** (nome, cor, escalão).
+2. **Selecionar o que transportar:** exercícios portáteis (**sim** por defeito), modelos táticos (**sim**), métricas (**sim**), atletas do clube anterior (**não** por defeito).
+3. **Semana-tipo base** (opcional).
+4. Confirmação.
+- O wizard **deteta o perfil individual** e **omite** os passos irrelevantes (coordenação com DT, etc.).
+
+**Cenário D — Treinador adicionado pelo DT (DEVE):**
+- **Não existe wizard** deste lado. O treinador **recebe um convite e aceita** (5.3).
+- Após aceitar, **pode opcionalmente importar** o seu conteúdo metodológico **portátil** (🎒) para o novo contexto.
+
+**FUTURO:** pré-preenchimento inteligente adicional e automações de migração para além do descrito.
 
 ---
 
@@ -2001,6 +2108,10 @@ A propriedade do conteúdo metodológico é **decidida pelo treinador na criaç�
 ## 19. Changelog da documentação
 
 Do mais recente para o mais antigo.
+
+- **2026-08-16** — **Decisões de produto: semana de trabalho, propriedade/portabilidade definitiva, mecanismo de snapshot, propriedade da periodização e wizard «Nova Época» (§2, §3.3, §3.5, §4.2.1, §4.4, §8.4, §8.8, §8.9, §8.21).** Atualização **só de documentação** (nenhuma alteração de código; não toca em auth). **(A) Semana de trabalho:** o conceito exposto ao utilizador passa a ser **«Semana»** (nunca «Microciclo» — jargão técnico interno); agrupamento de sessões por semana **automático pela data**, silencioso; formalizar a semana é **opcional**, com **nome livre** (fallback «Semana N») e **dois modos** (**Estruturado** com dias MD-X / **Texto livre**); **Mesociclo** fica **interno/avançado** (escondido por defeito); a sessão **nunca** é bloqueada pela ausência de semana. Reflectido no glossário (§2), no modelo de dados (§3.5: campos `nome`/`modoSemana`/`notaSemana` no `Planeamento`, `momentoSemana` na `Sessao`, novos enums `ModoSemana` e `MomentoSemana`, todos ⚠️ a validar tecnicamente e opcionais) e nos módulos §8.8/§8.9. **(B) Tabela definitiva de propriedade e portabilidade (§4.4):** clarificação, por dado, de proprietário (🏛️ clube / 🎒 treinador) e de se **porta com o treinador** (cópia/registo ao sair); nome dos atletas e resultados de jogos portam (não-sensível / dirigiu os jogos), foto/contacto/estatísticas/caderneta **não**; mesma regra para menores. **(C) Wizard «Nova Época» (§8.21):** especificação funcional completa dos 4 cenários (mesmo clube/mesmo escalão; mesmo clube/escalão diferente com promoções confirmadas individualmente; novo clube individual; adicionado pelo DT sem wizard), com herança automática (conteúdo portátil, métricas, caderneta, modo de semana) e *reset* (estatísticas, presenças, jogos, convocatórias, planeamentos); recomeço da numeração de semanas. **(D) Mecanismo de snapshot (§4.2.1):** especificado como **obrigatório** — cópia congelada e imutável (nome, descrição, objetivo, diagrama) criada automaticamente no `SessaoExercicio` quando um exercício `proprietario = TREINADOR` é usado numa sessão do clube, permitindo ao clube reconstruir o histórico após a saída do treinador; campos `snap*` adicionados ao modelo `SessaoExercicio` (§3.5) e referência em §3.3. **(E) Propriedade da periodização (§3.5, §8.9.2):** a instância concreta (datas, escalão, sessões) é **sempre do clube**; a **estrutura/metodologia** (semana-tipo, objetivos por tipo de semana, sequência de cargas) do treinador individual é **portátil como template**; planeamentos do clube/DT ficam no clube. Cabeçalho de §3.5 actualizado para «(🏛️ clube; metodologia/semana-tipo portátil 🎒)». **Sem alterações a código, schema aplicado, base de dados, permissões ou auth** — os campos de modelo novos são **alvo de spec** (⚠️) para implementação futura.
+
+- **2026-08-16** — **Rótulo «Analytics» + redesign visual dos painéis + secção de Contacto na landing (§8.15, §10.2, landing).** Três frentes de **UI** (sem tocar em auth/middleware). (1) **Terminologia:** o rótulo visível «Analíticos» passa a **«Analytics»** em toda a UI — item de navegação (`components/layout/Navegacao.tsx`), títulos/metadata/breadcrumbs/estados-vazios de `app/(app)/analiticos/page.tsx`, `app/(app)/escaloes/[id]/analiticos/page.tsx` e a aba do perfil do atleta em `app/(app)/plantel/[id]/page.tsx`. **As rotas (`/analiticos`, `/escaloes/[id]/analiticos`), nomes de ações, tipos e ficheiros mantêm-se `analiticos`/`Analitico`** (só muda o texto de interface). (2) **Redesign dos painéis:** novo componente presentacional **`components/analiticos/CartaoKpi.tsx`** (KPI com ícone `lucide-react` + cor de destaque semântica — `primary`/`verde`/`ambar`/`vermelho`/`laranja`/`cinza` — via tokens da marca, mais o helper `corTaxa(taxa)`), que substitui os quadrados uniformes (`Cartao`, mantido para `pct`/`n1` e retrocompatibilidade) em `PainelEscalao.tsx` e `PainelAtleta.tsx`. Hierarquia clara com secções tituladas («Balanço da época», «Plantel e médias»); a taxa de presença colore-se por valor (≥85% verde, ≥60% âmbar, senão vermelho). (3) **Ranking de assiduidade (TOP 5):** novo bloco `components/analiticos/RankingAssiduidade.tsx` (posição, nome, taxa % e barra de progresso com cor semântica) no painel do escalão. Dados calculados em **`obterAnaliticoEscalao`** (`lib/actions/analise.ts`): novo tipo `RankingAssiduidade` e campo `rankingAssiduidade` no `AnaliticoEscalao`, **reutilizando a mesma query de presenças já existente** (adicionadas apenas as colunas `atletaId` + `atleta.nome` ao `select`, sem query/round-trip adicional); denominador = total de sessões do escalão (**simetria** com `taxaPresencaMedia` da equipa, que usa `nAtletas × sessões`). Campo **opcional com default `?? []`** nos consumidores → **zero regressão** em snapshots públicos antigos (`/r/[token]`) e no export CSV (inalterado). (4) **Contacto na landing:** nova secção `#contacto` (última antes do footer) e link «Contacto» no cabeçalho de `app/page.tsx`, com o Client Component **`components/landing/FormularioContacto.tsx`** (Nome/Email/Assunto/Mensagem) que valida com o `contactoSchema` (Zod, fonte única) e submete via a Server Action `enviarMensagemContacto` (criada noutra fatia); estados **loading** (spinner `Loader2`, campos desativados), **sucesso** (banner verde `role="status"`) e **erro** (banner vermelho `role="alert"` + erros por campo). Acessibilidade: `label`+`htmlFor`, `aria-invalid`/`aria-describedby`, alvo de toque ≥44px. **Sem alteração ao schema Prisma, base de dados, permissões ou auth.** Verificação: `npm run typecheck`, `npm run lint`, `npm run test`.
 
 - **2026-08-13** — **F1.3 + F1.4 + F2.2 — Botão de download CSV, melhorias de impressão/PDF e tabela de ACWR individual (§8.15, §8.20; `components/analiticos/ExportarCsvBotao.tsx` (novo), `components/analiticos/TabelaAcwrAtletas.tsx` (novo), `app/globals.css`, `app/r/[token]/page.tsx`, `app/(app)/escaloes/[id]/analiticos/page.tsx`, `app/(app)/plantel/[id]/page.tsx`).** Fatia de **UI** das features F1 e F2 do `docs/ROADMAP_EXECUCAO.md`, sobre o backend já existente (F1.2 `exportarAnaliticoEscalaoCsv`/`exportarAnaliticoAtletaCsv` e F2.1 `obterCargaAtletas`, **não tocados**). **F1.3 — `ExportarCsvBotao`** (cliente): recebe a Server Action já parametrizada por `.bind(null, …)` (padrão Next.js 15 — Server Action passada como prop de um Server Component para um Client Component; um closure simples **não** é serializável através da fronteira, por isso usa-se `.bind`), chama-a, e em caso de sucesso cria um `Blob('text/csv;charset=utf-8;')` (o BOM UTF-8 já vem no CSV), gera uma URL temporária, clica numa âncora invisível para descarregar com o `nomeFicheiro` e revoga a URL; em erro, `toast.error` (Sonner). Estado de loading (spinner `Loader2`, botão desativado), ação secundária discreta (`variant="outline"`, `size="sm"` = 44px, `print:hidden`). Integrado no cabeçalho dos analíticos do escalão (ao lado de «Gerar relatório partilhável») e na aba Analíticos do atleta (rótulo «Exportar histórico», só quando há escalão de contexto). **F1.4 — impressão/PDF:** reforço do bloco `@media print` em `app/globals.css` — oculta `nav`/`aside` e blocos `[data-print-hidden]`, expande `main` a toda a largura, `page-break-inside: avoid` em `table`/`tr`, e `[data-print-logo]` sempre visível. **Decisão deliberada:** o `<header>` **não** é ocultado por seletor genérico (o relatório partilhável `/r/[token]` usa `<header>` para a identidade do clube — cor + logótipo — que **tem** de sair na impressão, requisito de F1.4); o chrome pontual do `/r/[token]` (barra de ações e nota de rodapé, já com `print:hidden`) recebeu também `data-print-hidden`. A via «Guardar como PDF» continua a ser o `window.print()` já existente (`BotaoImprimir`). **F2.2 — `TabelaAcwrAtletas`** (Server Component, `<table>` semântica): lista os atletas do escalão por `obterCargaAtletas({ escalaoId })` (já ordenados por risco descendente), com colunas Atleta · Carga semana · ACWR (2 casas, `—` sem dados) · Zona (badge). Renderizada numa secção «Carga individual (ACWR)» dos analíticos do escalão, por baixo da `CurvaCargaSemanal`, **só** quando ≥1 atleta reportou RPE individual na janela (`atletas.some(a => a.zona !== null)`); estado vazio interno «Sem dados de RPE para este escalão». **Cores de zona idênticas ao gráfico existente** (consistência): `verde-600`/`ambar-600`/`vermelho-600` (não a paleta default `red/green/amber`, que não existe no `tailwind.config.ts` e quebraria a consistência) via os tokens da marca e `LABEL_ZONA_CARGA`; «Sem dados» a cinza. **Nota de integração:** o roadmap descreve os pontos de montagem em `PainelEscalao.tsx`/`PainelAtleta.tsx`, mas estes são componentes **presentacionais partilhados com a vista pública `/r/[token]`** (via `PainelRelatorio`) e **não** são Server Components async com `Promise.all`; a montagem foi feita nos verdadeiros Server Components (as **páginas**), onde vivem o `GerarRelatorioBotao` e a `CurvaCargaSemanal` referidos no roadmap, mantendo `PainelEscalao`/`PainelAtleta` intocados e o relatório público sem regressões. **Sem alteração ao backend, schema Prisma, base de dados, permissões ou auth.** Verificação: `npm run typecheck` **0 erros**; `npm run lint` **0 erros/avisos**; `npm run test` **961/961 a passar**.
 
