@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
-import { Plus, CheckCircle2 } from "lucide-react";
+import { Plus, CheckCircle2, Wand2 } from "lucide-react";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
@@ -82,7 +83,13 @@ function CriarEpocaDialog() {
   );
 }
 
-export function EpocasLista({ epocas }: { epocas: Epoca[] }) {
+export function EpocasLista({
+  epocas,
+  podeUsarWizard = false,
+}: {
+  epocas: Epoca[];
+  podeUsarWizard?: boolean;
+}) {
   const [pending, startTransition] = useTransition();
 
   function definirAtiva(id: string) {
@@ -95,9 +102,19 @@ export function EpocasLista({ epocas }: { epocas: Epoca[] }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1>Épocas</h1>
-        <CriarEpocaDialog />
+        <div className="flex items-center gap-2">
+          {podeUsarWizard && (
+            <Button asChild variant="outline">
+              <Link href="/definicoes/nova-epoca">
+                <Wand2 className="h-4 w-4" />
+                Assistente nova época
+              </Link>
+            </Button>
+          )}
+          <CriarEpocaDialog />
+        </div>
       </div>
 
       {epocas.length === 0 ? (

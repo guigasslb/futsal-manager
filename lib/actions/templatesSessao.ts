@@ -22,6 +22,7 @@ import {
   type OrigemBiblioteca,
 } from "@/lib/biblioteca";
 import { TEMPLATES_ARRANQUE } from "@/lib/templates-arranque";
+import { construirSnapshotExercicio } from "@/lib/snapshot-exercicio";
 import { Prisma, type ModeloSessao, type Sessao } from "@prisma/client";
 
 // A listagem de templates vive em /treinos/templates (code review F3 — M5).
@@ -39,11 +40,13 @@ const INCLUDE_MODELO = {
         select: {
           id: true,
           nome: true,
+          descricao: true,
           objetivo: true,
           duracaoMin: true,
           categoriaPrincipal: true,
           parteTreino: true,
           diagrama: true,
+          proprietario: true,
         },
       },
     },
@@ -397,6 +400,9 @@ export async function criarSessaoDeTemplate(dados: unknown): Promise<Resultado<S
     });
 
     if (exerciciosOrdenados.length > 0) {
+      // §4.2.1: instante único do snapshot para todos os exercícios portáteis copiados
+      // nesta operação (o snapshot congela o estado no momento da adição à sessão).
+      const agora = new Date();
       await tx.sessaoExercicio.createMany({
         // Ordem reindexada (0..n-1) para respeitar o unique [sessaoId, ordem].
         data: exerciciosOrdenados.map((e, i) => ({
@@ -405,6 +411,8 @@ export async function criarSessaoDeTemplate(dados: unknown): Promise<Resultado<S
           ordem: i,
           duracaoMin: e.duracaoMin ?? e.exercicio.duracaoMin ?? null,
           notas: e.notas ?? null,
+          // Exercícios do treinador geram snapshot; do clube não (helper devolve null).
+          ...(construirSnapshotExercicio(e.exercicio, agora) ?? {}),
         })),
       });
     }

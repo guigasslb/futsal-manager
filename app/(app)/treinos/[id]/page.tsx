@@ -9,6 +9,7 @@ import { listarExercicios } from "@/lib/actions/exercicios";
 import { listarAtletas } from "@/lib/actions/atletas";
 import { obterEpocaAtiva } from "@/lib/epoca-context";
 import { GestorExercicios } from "@/components/treinos/GestorExercicios";
+import { resolverExercicioSessao } from "@/lib/snapshot-exercicio";
 import {
   MarcadorPresencas,
   type PresencaInicial,
@@ -109,16 +110,21 @@ export default async function DetalheSessaoPage({
         <div className="order-2 lg:order-1">
           <GestorExercicios
             sessaoId={s.id}
-            exercicios={s.exercicios.map((se) => ({
-              id: se.id,
-              ordem: se.ordem,
-              duracaoMin: se.duracaoMin,
-              exercicio: {
-                id: se.exercicio.id,
-                nome: se.exercicio.nome,
-                categoriaPrincipal: se.exercicio.categoriaPrincipal,
-              },
-            }))}
+            exercicios={s.exercicios.map((se) => {
+              // §4.2.1: fallback ao snapshot quando o exercício original já não é
+              // visível (o treinador saiu com o master editável) — sem "buracos".
+              const r = resolverExercicioSessao(se);
+              return {
+                id: se.id,
+                ordem: se.ordem,
+                duracaoMin: se.duracaoMin,
+                exercicio: {
+                  id: r.id ?? "",
+                  nome: r.nome,
+                  categoriaPrincipal: r.categoriaPrincipal,
+                },
+              };
+            })}
             biblioteca={biblioteca.map((b) => ({
               id: b.id,
               nome: b.nome,

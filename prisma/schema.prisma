@@ -778,6 +778,19 @@ model SessaoExercicio {
   duracaoMin  Int?
   notas       String?   @db.Text
 
+  // Snapshot só-de-leitura (mecanismo em §4.2.1). Preenchido AUTOMATICAMENTE quando se
+  // adiciona à sessão do clube um exercício com proprietario = TREINADOR: congela os dados
+  // relevantes (nome, descrição, objetivo, diagrama) para que o CLUBE reconstrua o plano
+  // histórico mesmo depois de o treinador (e o master editável) saírem. Imutável — não se
+  // edita nem apaga. Exercícios proprietario = CLUBE não geram snapshot (já são do clube).
+  // NOTA: snapDiagrama é Json? (cópia fiel do Exercicio.diagrama, um DiagramaCampo — §11),
+  // conforme a bíblia §3.5.
+  snapNome      String?
+  snapDescricao String?   @db.Text
+  snapObjetivo  String?   @db.Text
+  snapDiagrama  Json?
+  snapCriadoEm  DateTime?
+
   @@unique([sessaoId, ordem])
   @@index([sessaoId])
   @@index([exercicioId])

@@ -7,6 +7,7 @@ import { obterEpocaAtiva, obterClubeIdAtual } from "@/lib/epoca-context";
 import { exigirCapacidade, podeLerEscalao, escaloesLegiveis } from "@/lib/permissoes";
 import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
 import { sessaoSchema, marcarPresencasSchema } from "@/lib/schemas/treino";
+import { construirSnapshotExercicio } from "@/lib/snapshot-exercicio";
 import { Prisma, type Epoca, type Sessao } from "@prisma/client";
 
 const PATH = "/treinos";
@@ -24,7 +25,15 @@ const INCLUDE_DETALHE = {
     orderBy: { ordem: "asc" },
     include: {
       exercicio: {
-        select: { id: true, nome: true, duracaoMin: true, categoriaPrincipal: true, diagrama: true },
+        select: {
+          id: true,
+          nome: true,
+          descricao: true,
+          objetivo: true,
+          duracaoMin: true,
+          categoriaPrincipal: true,
+          diagrama: true,
+        },
       },
     },
   },
@@ -258,8 +267,13 @@ export async function adicionarExercicioSessao(
   });
   const ordem = ultimo ? ultimo.ordem + 1 : 0;
 
+  // §4.2.1: exercícios do treinador (portáteis) geram snapshot só-de-leitura no
+  // momento da adição; exercícios do clube não geram (construirSnapshotExercicio
+  // devolve null).
+  const snapshot = construirSnapshotExercicio(exercicio);
+
   await prisma.sessaoExercicio.create({
-    data: { sessaoId, exercicioId, ordem, duracaoMin: exercicio.duracaoMin },
+    data: { sessaoId, exercicioId, ordem, duracaoMin: exercicio.duracaoMin, ...(snapshot ?? {}) },
   });
   revalidatePath(`${PATH}/${sessaoId}`);
   return ok(undefined);
