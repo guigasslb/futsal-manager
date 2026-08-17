@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { obterSessao } from "@/lib/actions/treinos";
 import { listarEscaloes } from "@/lib/actions/escaloes";
-import { listarPlaneamentos } from "@/lib/actions/periodizacao";
 import { SessaoForm } from "@/components/treinos/SessaoForm";
 import { ApagarSessaoButton } from "@/components/treinos/ApagarSessaoButton";
 import { EstadoErro } from "@/components/layout/EstadosUI";
@@ -18,17 +17,15 @@ export default async function EditarSessaoPage({
 }) {
   const { id } = await params;
 
-  const [resSessao, resEscaloes, resPlan] = await Promise.all([
+  const [resSessao, resEscaloes] = await Promise.all([
     obterSessao(id),
     listarEscaloes(),
-    listarPlaneamentos(),
   ]);
 
   if (!resSessao.sucesso) notFound();
   if (!resEscaloes.sucesso) return <EstadoErro mensagem={resEscaloes.erro} />;
 
   const s = resSessao.dados;
-  const planeamentos = resPlan.sucesso ? resPlan.dados : [];
 
   return (
     <div className="space-y-6">
@@ -44,7 +41,7 @@ export default async function EditarSessaoPage({
 
       <h1>Editar sessão</h1>
 
-      <SessaoForm escaloes={resEscaloes.dados} sessao={s} planeamentos={planeamentos} />
+      <SessaoForm escaloes={resEscaloes.dados} sessao={s} />
 
       <div className="border-t border-cinza-200 pt-6">
         <ApagarSessaoButton sessaoId={s.id} />

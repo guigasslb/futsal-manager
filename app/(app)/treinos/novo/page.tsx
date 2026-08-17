@@ -2,20 +2,26 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { listarEscaloes } from "@/lib/actions/escaloes";
-import { listarPlaneamentos } from "@/lib/actions/periodizacao";
 import { SessaoForm } from "@/components/treinos/SessaoForm";
 import { EstadoErro } from "@/components/layout/EstadosUI";
 
 export const metadata: Metadata = { title: "Novo treino" };
 
-export default async function NovaSessaoPage() {
-  const [resEscaloes, resPlan] = await Promise.all([
-    listarEscaloes(),
-    listarPlaneamentos(),
-  ]);
-  if (!resEscaloes.sucesso) return <EstadoErro mensagem={resEscaloes.erro} />;
+/** Data pré-preenchida (default 20h00) quando se cria a partir de uma semana. */
+function dataInicialDe(data?: string): Date | undefined {
+  if (!data || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return undefined;
+  const d = new Date(`${data}T20:00`);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
 
-  const planeamentos = resPlan.sucesso ? resPlan.dados : [];
+export default async function NovaSessaoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ data?: string; escalaoId?: string }>;
+}) {
+  const { data, escalaoId } = await searchParams;
+  const resEscaloes = await listarEscaloes();
+  if (!resEscaloes.sucesso) return <EstadoErro mensagem={resEscaloes.erro} />;
 
   return (
     <div className="space-y-6">
@@ -31,7 +37,11 @@ export default async function NovaSessaoPage() {
 
       <h1>Nova sessão</h1>
 
-      <SessaoForm escaloes={resEscaloes.dados} planeamentos={planeamentos} />
+      <SessaoForm
+        escaloes={resEscaloes.dados}
+        escalaoIdInicial={escalaoId}
+        dataInicial={dataInicialDe(data)}
+      />
     </div>
   );
 }

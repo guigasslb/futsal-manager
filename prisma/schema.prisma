@@ -687,6 +687,10 @@ model Planeamento {
   periodo    PeriodoEpoca?
   mesociclo  Int?
   microciclo Int?
+  // §8.9.1 (decisão 2026-08-16) — Semana de trabalho (formalização opcional).
+  nome       String?         // nome livre da semana formalizada ("Semana do torneio", "Pré-jogo Benfica"); fallback "Semana N" ← microciclo
+  modoSemana ModoSemana?     // ESTRUTURADO (dias MD-X) | TEXTO_LIVRE; só quando o treinador formaliza a semana (tipo=SEMANAL). Null = não formalizada
+  notaSemana String?         @db.Text // campo aberto do modo TEXTO_LIVRE
   dataInicio DateTime
   dataFim    DateTime
   objetivos  String?         @db.Text
@@ -702,6 +706,12 @@ model Planeamento {
 enum TipoPlaneamento {
   SEMANAL
   MENSAL
+}
+
+// §8.9.1 — Modo de detalhe de uma SEMANA formalizada. Só se aplica a Planeamento.tipo = SEMANAL.
+enum ModoSemana {
+  ESTRUTURADO // usa lista MD-X (Sessao.momentoSemana)
+  TEXTO_LIVRE // campo aberto (Planeamento.notaSemana)
 }
 
 enum PeriodoEpoca {
@@ -726,6 +736,9 @@ model Sessao {
   notas         String?      @db.Text
   microciclo    Int?
   mesociclo     Int?
+  // §8.9.1 (decisão 2026-08-16) — posição do dia na semana no modo ESTRUTURADO (MD-X);
+  // opcional, nunca bloqueia a sessão.
+  momentoSemana MomentoSemana?
   escalaoId     String
   escalao       Escalao      @relation(fields: [escalaoId], references: [id])
   epocaId       String
@@ -835,6 +848,19 @@ enum TipoSessao {
   ABERTO
   CAPTACAO
   EVENTO
+}
+
+// §8.9.1 — Posição do dia de treino na SEMANA (modo ESTRUTURADO), por relação com o dia de jogo
+// (Match Day). MD_MENOS_* = dias antes do jogo · MD_MAIS_1 = dia seguinte (Recuperação) ·
+// ATIVACAO/TAPER/LIVRE = dias sem referência direta ao jogo.
+enum MomentoSemana {
+  MD_MENOS_3
+  MD_MENOS_2
+  MD_MENOS_1
+  MD_MAIS_1
+  ATIVACAO
+  TAPER
+  LIVRE
 }
 
 // ─────────────────────────────────────────────

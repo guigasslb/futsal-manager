@@ -69,6 +69,34 @@ async function resolverNumeros(
   return numeroPorAtleta;
 }
 
+/**
+ * §8.9.1 — Auto-associação silenciosa ao planeamento. Quando uma sessão NORMAL
+ * é criada/atualizada sem `planeamentoId` explícito, associa-se automaticamente
+ * ao planeamento (do mesmo escalão/época) cujo intervalo de datas contém a data
+ * da sessão. Se não houver nenhum, fica `null` — uma sessão nunca é bloqueada
+ * pela ausência de semana. Só se aplica a sessões NORMAL (as restantes não podem
+ * ligar a periodização).
+ */
+async function resolverPlaneamentoAuto(
+  clubeId: string,
+  epocaId: string,
+  escalaoId: string,
+  data: Date,
+): Promise<string | null> {
+  const plan = await prisma.planeamento.findFirst({
+    where: {
+      escalaoId,
+      epocaId,
+      escalao: { clubeId },
+      dataInicio: { lte: data },
+      dataFim: { gte: data },
+    },
+    orderBy: { dataInicio: "desc" },
+    select: { id: true },
+  });
+  return plan?.id ?? null;
+}
+
 type Contexto =
   | { estado: "erro"; erro: string }
   | { estado: "ok"; clubeId: string; epoca: Epoca };
@@ -159,12 +187,25 @@ export async function criarSessao(dados: unknown): Promise<Resultado<Sessao>> {
       return erro("O planeamento pertence a um escalão diferente");
   }
 
+  // §8.9.1: se não foi fornecido planeamento e a sessão é NORMAL, tenta associar
+  // automaticamente ao planeamento cuja semana contém a data da sessão.
+  let planeamentoId = parsed.data.planeamentoId ?? null;
+  if (!planeamentoId && parsed.data.tipoSessao === "NORMAL") {
+    planeamentoId = await resolverPlaneamentoAuto(
+      ctx.clubeId,
+      ctx.epoca.id,
+      parsed.data.escalaoId,
+      parsed.data.data,
+    );
+  }
+
   const sessao = await prisma.sessao.create({
     data: {
       data: parsed.data.data,
       escalaoId: parsed.data.escalaoId,
       tipoSessao: parsed.data.tipoSessao,
-      planeamentoId: parsed.data.planeamentoId ?? null,
+      planeamentoId,
+      momentoSemana: parsed.data.momentoSemana ?? null,
       duracaoMin: parsed.data.duracaoMin ?? null,
       objetivo: parsed.data.objetivo ?? null,
       local: parsed.data.local ?? null,
@@ -210,13 +251,26 @@ export async function atualizarSessao(id: string, dados: unknown): Promise<Resul
       return erro("O planeamento pertence a um escalão diferente");
   }
 
+  // §8.9.1: auto-associação silenciosa quando não há planeamento explícito e a
+  // sessão é NORMAL (usa a época da própria sessão).
+  let planeamentoId = parsed.data.planeamentoId ?? null;
+  if (!planeamentoId && parsed.data.tipoSessao === "NORMAL") {
+    planeamentoId = await resolverPlaneamentoAuto(
+      clubeId,
+      existe.epocaId,
+      parsed.data.escalaoId,
+      parsed.data.data,
+    );
+  }
+
   const sessao = await prisma.sessao.update({
     where: { id },
     data: {
       data: parsed.data.data,
       escalaoId: parsed.data.escalaoId,
       tipoSessao: parsed.data.tipoSessao,
-      planeamentoId: parsed.data.planeamentoId ?? null,
+      planeamentoId,
+      momentoSemana: parsed.data.momentoSemana ?? null,
       duracaoMin: parsed.data.duracaoMin ?? null,
       objetivo: parsed.data.objetivo ?? null,
       local: parsed.data.local ?? null,

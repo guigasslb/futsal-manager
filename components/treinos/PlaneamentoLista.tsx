@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect } from "react";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, CalendarRange, Sparkles } from "lucide-react";
+import { Plus, Pencil, Trash2, CalendarRange, Sparkles, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,7 +39,13 @@ import {
   sugerirPlaneamento,
   type PlaneamentoComRelacoes,
 } from "@/lib/actions/periodizacao";
-import { LABEL_TIPO_PLANEAMENTO, LABEL_PERIODO } from "@/lib/schemas/planeamento";
+import {
+  LABEL_TIPO_PLANEAMENTO,
+  LABEL_PERIODO,
+  MODOS_SEMANA,
+  LABEL_MODO_SEMANA,
+  type ModoSemana,
+} from "@/lib/schemas/planeamento";
 
 type EscalaoBasico = { id: string; nome: string };
 
@@ -67,6 +73,13 @@ function PlaneamentoForm({
   const [dataFim, setDataFim] = useState(planeamento ? dataInput(planeamento.dataFim) : "");
   const [microciclo, setMicrociclo] = useState(planeamento?.microciclo?.toString() ?? "");
   const [mesociclo, setMesociclo] = useState(planeamento?.mesociclo?.toString() ?? "");
+  // §8.9.1 — formalização opcional da semana.
+  const [nome, setNome] = useState(planeamento?.nome ?? "");
+  const [modoSemana, setModoSemana] = useState<ModoSemana>(
+    (planeamento?.modoSemana as ModoSemana | null) ?? "ESTRUTURADO",
+  );
+  const [notaSemana, setNotaSemana] = useState(planeamento?.notaSemana ?? "");
+  const [avancado, setAvancado] = useState(false);
   const isCreate = !planeamento;
 
   // Pré-preenchimento inteligente ao criar: actualiza ao mudar escalão ou tipo
@@ -90,6 +103,13 @@ function PlaneamentoForm({
     const dados = {
       escalaoId,
       tipo,
+      nome: nome.trim() || undefined,
+      // §8.9.1: o modo só é relevante para semanas (SEMANAL).
+      modoSemana: tipo === "SEMANAL" ? modoSemana : "TEXTO_LIVRE",
+      notaSemana:
+        tipo === "SEMANAL" && modoSemana === "TEXTO_LIVRE"
+          ? notaSemana.trim() || undefined
+          : undefined,
       periodo: periodo || undefined,
       mesociclo: mesociclo ? Number(mesociclo) : undefined,
       microciclo: microciclo ? Number(microciclo) : undefined,
@@ -118,6 +138,17 @@ function PlaneamentoForm({
           Datas e ciclos preenchidos automaticamente com base no último planeamento.
         </p>
       )}
+
+      <div className="space-y-1.5">
+        <Label htmlFor="nomeSemana">Nome da semana (opcional)</Label>
+        <Input
+          id="nomeSemana"
+          value={nome}
+          onChange={(e) => setNome(e.target.value)}
+          maxLength={100}
+          placeholder="ex: Pré-jogo Benfica, Semana de carga"
+        />
+      </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
@@ -166,7 +197,43 @@ function PlaneamentoForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      {/* §8.9.1 — modo de detalhe da semana (só SEMANAL) */}
+      {tipo === "SEMANAL" && (
+        <div className="space-y-1.5">
+          <Label>Modo da semana</Label>
+          <div className="grid grid-cols-2 gap-1 rounded-md border border-cinza-200 p-1">
+            {MODOS_SEMANA.map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setModoSemana(m)}
+                className={`rounded px-3 py-1.5 text-corpo-sec font-medium transition-colors ${
+                  modoSemana === m
+                    ? "bg-primary text-white"
+                    : "text-cinza-600 hover:bg-cinza-50"
+                }`}
+              >
+                {LABEL_MODO_SEMANA[m]}
+              </button>
+            ))}
+          </div>
+          {modoSemana === "ESTRUTURADO" ? (
+            <p className="text-legenda text-cinza-500">
+              Marca cada treino com o seu momento (MD-1, MD-2, …) ao criar ou editar a sessão.
+            </p>
+          ) : (
+            <Textarea
+              value={notaSemana}
+              onChange={(e) => setNotaSemana(e.target.value)}
+              rows={2}
+              maxLength={500}
+              placeholder="Nota livre da semana (ex: foco em transições, gestão de carga)"
+            />
+          )}
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <Label>Período</Label>
           <Select value={periodo} onValueChange={setPeriodo}>
@@ -179,18 +246,7 @@ function PlaneamentoForm({
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="mesociclo">Mesociclo</Label>
-          <Input
-            id="mesociclo"
-            type="number"
-            min={1}
-            max={99}
-            value={mesociclo}
-            onChange={(e) => setMesociclo(e.target.value)}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="microciclo">Microciclo</Label>
+          <Label htmlFor="microciclo">Semana (nº)</Label>
           <Input
             id="microciclo"
             type="number"
@@ -200,6 +256,33 @@ function PlaneamentoForm({
             onChange={(e) => setMicrociclo(e.target.value)}
           />
         </div>
+      </div>
+
+      {/* Mesociclo — campo interno/avançado, escondido por defeito (§8.9.1) */}
+      <div className="space-y-1.5">
+        <button
+          type="button"
+          onClick={() => setAvancado((v) => !v)}
+          className="flex items-center gap-1 text-legenda font-medium text-cinza-500 hover:text-cinza-700"
+        >
+          <ChevronDown
+            className={`h-3.5 w-3.5 transition-transform ${avancado ? "rotate-180" : ""}`}
+          />
+          Avançado
+        </button>
+        {avancado && (
+          <div className="space-y-1.5">
+            <Label htmlFor="mesociclo">Mesociclo</Label>
+            <Input
+              id="mesociclo"
+              type="number"
+              min={1}
+              max={99}
+              value={mesociclo}
+              onChange={(e) => setMesociclo(e.target.value)}
+            />
+          </div>
+        )}
       </div>
 
       <div className="space-y-1.5">
@@ -282,7 +365,7 @@ export function PlaneamentoLista({
         <div>
           <h1>Periodização</h1>
           <p className="mt-1 text-corpo-sec text-cinza-600">
-            Planos semanais e mensais por escalão, organizados em ciclos.
+            Planos por escalão, organizados por semana.
           </p>
         </div>
         <CriarDialog escaloes={escaloes} />
@@ -290,7 +373,7 @@ export function PlaneamentoLista({
 
       {planeamentos.length === 0 ? (
         <p className="rounded-md border border-dashed border-cinza-300 p-6 text-center text-corpo-sec text-cinza-500">
-          Ainda não planeaste esta época. Cria o primeiro microciclo.
+          Ainda não planeaste esta época. Formaliza a primeira semana.
         </p>
       ) : (
         <ul className="space-y-2">
@@ -301,13 +384,13 @@ export function PlaneamentoLista({
               </div>
               <div className="flex-1">
                 <p className="text-corpo font-semibold text-cinza-900">
-                  {LABEL_TIPO_PLANEAMENTO[p.tipo]} · {formatarIntervalo(p.dataInicio, p.dataFim)}
+                  {p.nome ?? (p.microciclo != null ? `Semana ${p.microciclo}` : LABEL_TIPO_PLANEAMENTO[p.tipo])}
+                  {" · "}
+                  {formatarIntervalo(p.dataInicio, p.dataFim)}
                 </p>
                 <p className="text-legenda text-cinza-500">
                   {p.escalao.nome}
                   {p.periodo ? ` · ${LABEL_PERIODO[p.periodo]}` : ""}
-                  {p.mesociclo != null ? ` · Meso ${p.mesociclo}` : ""}
-                  {p.microciclo != null ? ` · Micro ${p.microciclo}` : ""}
                   {` · ${p._count.sessoes} sessão(ões)`}
                 </p>
               </div>

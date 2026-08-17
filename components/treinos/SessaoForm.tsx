@@ -2,9 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { toast } from "sonner";
-import { AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
@@ -21,7 +19,13 @@ import {
 import { criarSessao, atualizarSessao } from "@/lib/actions/treinos";
 import { verificarConflitoAgenda } from "@/lib/actions/agenda";
 import type { ConflitoAgenda } from "@/lib/utils/agenda-conflitos";
-import { TIPOS_SESSAO, LABEL_TIPO_SESSAO } from "@/lib/schemas/treino";
+import {
+  TIPOS_SESSAO,
+  LABEL_TIPO_SESSAO,
+  MOMENTOS_SEMANA,
+  LABEL_MOMENTO_SEMANA,
+  type MomentoSemana,
+} from "@/lib/schemas/treino";
 import type { Escalao, Sessao, TipoSessao } from "@prisma/client";
 
 const SENTINEL_NONE = "__none__";
@@ -37,35 +41,29 @@ function paraInputDateTime(date: Date | null | undefined): string {
 type EscalaoBasico = Pick<Escalao, "id" | "nome">;
 type SessaoParaEdicao = Pick<
   Sessao,
-  "id" | "data" | "escalaoId" | "tipoSessao" | "planeamentoId" | "duracaoMin" | "objetivo" | "local" | "notas"
+  | "id"
+  | "data"
+  | "escalaoId"
+  | "tipoSessao"
+  | "planeamentoId"
+  | "momentoSemana"
+  | "duracaoMin"
+  | "objetivo"
+  | "local"
+  | "notas"
 >;
-type PlaneamentoBasico = {
-  id: string;
-  escalaoId: string;
-  tipo: "SEMANAL" | "MENSAL";
-  dataInicio: Date;
-  dataFim: Date;
-  microciclo: number | null;
-};
-
-function labelPlaneamento(p: PlaneamentoBasico): string {
-  const opt: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short" };
-  const intervalo = `${new Date(p.dataInicio).toLocaleDateString("pt-PT", opt)} – ${new Date(p.dataFim).toLocaleDateString("pt-PT", opt)}`;
-  const tipo = p.tipo === "SEMANAL" ? "Semanal" : "Mensal";
-  const micro = p.microciclo != null ? ` · Micro ${p.microciclo}` : "";
-  return `${tipo} · ${intervalo}${micro}`;
-}
 
 export function SessaoForm({
   escaloes,
   sessao,
   escalaoIdInicial,
-  planeamentos = [],
+  dataInicial,
 }: {
   escaloes: EscalaoBasico[];
   sessao?: SessaoParaEdicao;
   escalaoIdInicial?: string;
-  planeamentos?: PlaneamentoBasico[];
+  /** Data pré-preenchida ao criar a partir do cabeçalho de uma semana (§8.9.1). */
+  dataInicial?: Date;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -75,20 +73,19 @@ export function SessaoForm({
     sessao?.escalaoId ?? escalaoIdInicial ?? "",
   );
   const [tipoSessao, setTipoSessao] = useState<TipoSessao>(sessao?.tipoSessao ?? "NORMAL");
-  const [planeamentoId, setPlaneamentoId] = useState<string>(
-    sessao?.planeamentoId ?? SENTINEL_NONE,
+  const [momentoSemana, setMomentoSemana] = useState<string>(
+    sessao?.momentoSemana ?? SENTINEL_NONE,
   );
+
+  const dataDefault = paraInputDateTime(sessao?.data ?? dataInicial);
 
   // Aviso não-bloqueante de conflito de pavilhão (F3.3 — §8.16).
   const [conflitos, setConflitos] = useState<ConflitoAgenda[]>([]);
-  const [dataValor, setDataValor] = useState<string>(paraInputDateTime(sessao?.data));
+  const [dataValor, setDataValor] = useState<string>(dataDefault);
   const [localValor, setLocalValor] = useState<string>(sessao?.local ?? "");
   const [duracaoValor, setDuracaoValor] = useState<string>(
     sessao?.duracaoMin != null ? String(sessao.duracaoMin) : "",
   );
-
-  const planeamentosDoEscalao = planeamentos.filter((p) => p.escalaoId === escalaoId);
-  const mostrarAviso = tipoSessao === "NORMAL" && planeamentoId === SENTINEL_NONE && planeamentosDoEscalao.length > 0;
 
   // Verificação após-debounce (~800ms). Sem local ou escalão → não verifica.
   // Falha de rede → silêncio total (funcionalidade secundária, não bloqueante).
@@ -136,7 +133,12 @@ export function SessaoForm({
       data: String(fd.get("data")),
       escalaoId: escalaoId || undefined,
       tipoSessao,
-      planeamentoId: planeamentoId !== SENTINEL_NONE ? planeamentoId : null,
+      // §8.9.1: a ligação à semana (planeamento) é automática pela data no backend.
+      // Só o momento na semana (MD-X) é escolhido aqui, e apenas para treinos NORMAL.
+      momentoSemana:
+        tipoSessao === "NORMAL" && momentoSemana !== SENTINEL_NONE
+          ? (momentoSemana as MomentoSemana)
+          : undefined,
       duracaoMin: duracaoRaw !== "" ? Number(duracaoRaw) : undefined,
       objetivo: String(fd.get("objetivo") ?? "").trim() || undefined,
       local: String(fd.get("local") ?? "").trim() || undefined,
@@ -164,21 +166,7 @@ export function SessaoForm({
         <p className="text-corpo-sec text-vermelho-600">{erroGeral}</p>
       )}
 
-      {/* Tipo de sessão */}
-      <div className="space-y-1.5">
-        <Label>Tipo de sessão *</Label>
-        <Select value={tipoSessao} onValueChange={(v) => setTipoSessao(v as TipoSessao)}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {TIPOS_SESSAO.map((t) => (
-              <SelectItem key={t} value={t}>{LABEL_TIPO_SESSAO[t]}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
+      {/* Data e duração */}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <Label htmlFor="data">Data e hora *</Label>
@@ -187,7 +175,7 @@ export function SessaoForm({
             name="data"
             type="datetime-local"
             required
-            defaultValue={paraInputDateTime(sessao?.data)}
+            defaultValue={dataDefault}
             onChange={(e) => setDataValor(e.target.value)}
           />
           {erros.data && <p className="text-legenda text-vermelho-600">{erros.data}</p>}
@@ -208,15 +196,10 @@ export function SessaoForm({
         </div>
       </div>
 
+      {/* Escalão */}
       <div className="space-y-1.5">
         <Label>Escalão *</Label>
-        <Select
-          value={escalaoId}
-          onValueChange={(v) => {
-            setEscalaoId(v);
-            setPlaneamentoId(SENTINEL_NONE); // reset planeamento ao mudar escalão
-          }}
-        >
+        <Select value={escalaoId} onValueChange={setEscalaoId}>
           <SelectTrigger>
             <SelectValue placeholder="Seleciona um escalão" />
           </SelectTrigger>
@@ -231,54 +214,7 @@ export function SessaoForm({
         {erros.escalaoId && <p className="text-legenda text-vermelho-600">{erros.escalaoId}</p>}
       </div>
 
-      {/* Planeamento — só para treino normal */}
-      {tipoSessao === "NORMAL" && (
-        <div className="space-y-1.5">
-          <Label>Planeamento</Label>
-          {planeamentosDoEscalao.length === 0 ? (
-            <p className="text-legenda text-cinza-500">
-              Nenhum planeamento para este escalão.{" "}
-              <Link href="/treinos/periodizacao" className="underline hover:text-cinza-700">
-                Criar planeamento
-              </Link>
-            </p>
-          ) : (
-            <>
-              <Select value={planeamentoId} onValueChange={setPlaneamentoId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="— Nenhum —" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={SENTINEL_NONE}>— Nenhum —</SelectItem>
-                  {planeamentosDoEscalao.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {labelPlaneamento(p)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {mostrarAviso && (
-                <p className="flex items-center gap-1 text-legenda text-ambar-600">
-                  <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-                  Recomendado associar a um planeamento.
-                </p>
-              )}
-            </>
-          )}
-        </div>
-      )}
-
-      <div className="space-y-1.5">
-        <Label htmlFor="objetivo">Objetivo</Label>
-        <Input
-          id="objetivo"
-          name="objetivo"
-          defaultValue={sessao?.objetivo ?? ""}
-          maxLength={500}
-          placeholder="ex: 1x1 ofensivo e finalização"
-        />
-      </div>
-
+      {/* Local */}
       <div className="space-y-1.5">
         <Label htmlFor="local">Local</Label>
         <Input
@@ -305,6 +241,42 @@ export function SessaoForm({
         </div>
       )}
 
+      {/* Momento na semana (MD-X) — só treino normal (§8.9.1) */}
+      {tipoSessao === "NORMAL" && (
+        <div className="space-y-1.5">
+          <Label>Momento na semana</Label>
+          <Select value={momentoSemana} onValueChange={setMomentoSemana}>
+            <SelectTrigger>
+              <SelectValue placeholder="Opcional (MD-1, MD-2, …)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={SENTINEL_NONE}>— Sem momento —</SelectItem>
+              {MOMENTOS_SEMANA.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {LABEL_MOMENTO_SEMANA[m]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-legenda text-cinza-500">
+            Marca o dia por relação com o jogo. A semana forma-se automaticamente pela data.
+          </p>
+        </div>
+      )}
+
+      {/* Objetivo */}
+      <div className="space-y-1.5">
+        <Label htmlFor="objetivo">Objetivo</Label>
+        <Input
+          id="objetivo"
+          name="objetivo"
+          defaultValue={sessao?.objetivo ?? ""}
+          maxLength={500}
+          placeholder="ex: 1x1 ofensivo e finalização"
+        />
+      </div>
+
+      {/* Notas */}
       <div className="space-y-1.5">
         <Label htmlFor="notas">Notas</Label>
         <Textarea
@@ -314,6 +286,24 @@ export function SessaoForm({
           maxLength={2000}
           rows={3}
         />
+      </div>
+
+      {/* Tipo de sessão — campo secundário (NORMAL por defeito) */}
+      <div className="space-y-1.5 rounded-md border border-cinza-200 bg-cinza-50/60 p-3">
+        <Label className="text-cinza-600">Tipo de sessão</Label>
+        <Select value={tipoSessao} onValueChange={(v) => setTipoSessao(v as TipoSessao)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TIPOS_SESSAO.map((t) => (
+              <SelectItem key={t} value={t}>{LABEL_TIPO_SESSAO[t]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-legenda text-cinza-500">
+          Mantém «Treino normal» para a esmagadora maioria das sessões.
+        </p>
       </div>
 
       <div className="flex gap-3 pt-2">

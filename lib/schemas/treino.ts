@@ -10,6 +10,32 @@ export const LABEL_TIPO_SESSAO: Record<(typeof TIPOS_SESSAO)[number], string> = 
 };
 
 /**
+ * §8.9.1 — Momento da semana (modo ESTRUTURADO): dia de treino marcado por
+ * relação com o dia de jogo (MD-X). Definido localmente para não acoplar o
+ * schema à geração do cliente Prisma.
+ */
+export const MOMENTOS_SEMANA = [
+  "MD_MENOS_3",
+  "MD_MENOS_2",
+  "MD_MENOS_1",
+  "MD_MAIS_1",
+  "ATIVACAO",
+  "TAPER",
+  "LIVRE",
+] as const;
+export type MomentoSemana = (typeof MOMENTOS_SEMANA)[number];
+
+export const LABEL_MOMENTO_SEMANA: Record<MomentoSemana, string> = {
+  MD_MENOS_3: "MD-3",
+  MD_MENOS_2: "MD-2",
+  MD_MENOS_1: "MD-1",
+  MD_MAIS_1: "MD+1 / Recuperação",
+  ATIVACAO: "Ativação",
+  TAPER: "Taper / Carga",
+  LIVRE: "Livre",
+};
+
+/**
  * Só sessões do tipo NORMAL podem ligar a periodização (secção 16, Grupo B):
  * um jogo/evento/captação/treino aberto com `planeamentoId` corromperia os
  * dados de periodização. Regra imposta via superRefine (schema) e reforçada
@@ -21,6 +47,8 @@ export const sessaoSchema = z
     escalaoId: z.string().cuid("Escalão inválido"),
     tipoSessao: z.enum(TIPOS_SESSAO).default("NORMAL"),
     planeamentoId: z.string().cuid().nullable().optional(),
+    // §8.9.1: momento da semana (MD-X) no modo ESTRUTURADO.
+    momentoSemana: z.enum(MOMENTOS_SEMANA).optional(),
     duracaoMin: z.number().int().min(1).max(300).optional(),
     objetivo: z.string().max(500).optional(),
     local: z.string().max(100).optional(),

@@ -6,6 +6,7 @@ import { obterEpocaAtiva, obterClubeIdAtual } from "@/lib/epoca-context";
 import { exigirCapacidade, podeLerEscalao, escaloesLegiveis } from "@/lib/permissoes";
 import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
 import { planeamentoSchema } from "@/lib/schemas/planeamento";
+import { numeroSemana } from "@/lib/semana";
 import { Prisma, type Planeamento } from "@prisma/client";
 
 const PATH = "/treinos/periodizacao";
@@ -63,6 +64,9 @@ export async function criarPlaneamento(dados: unknown): Promise<Resultado<Planea
       escalaoId: parsed.data.escalaoId,
       epocaId: epoca.id,
       tipo: parsed.data.tipo,
+      nome: parsed.data.nome ?? null,
+      modoSemana: parsed.data.modoSemana,
+      notaSemana: parsed.data.notaSemana ?? null,
       periodo: parsed.data.periodo ?? null,
       mesociclo: parsed.data.mesociclo ?? null,
       microciclo: parsed.data.microciclo ?? null,
@@ -102,6 +106,9 @@ export async function atualizarPlaneamento(
     data: {
       escalaoId: parsed.data.escalaoId,
       tipo: parsed.data.tipo,
+      nome: parsed.data.nome ?? null,
+      modoSemana: parsed.data.modoSemana,
+      notaSemana: parsed.data.notaSemana ?? null,
       periodo: parsed.data.periodo ?? null,
       mesociclo: parsed.data.mesociclo ?? null,
       microciclo: parsed.data.microciclo ?? null,
@@ -119,6 +126,7 @@ export async function atualizarPlaneamento(
 export type SugestaoPlaneamento = {
   dataInicio: string; // "YYYY-MM-DD"
   dataFim: string;
+  nome: string; // §8.9.1: fallback numérico "Semana N" (desde o início da época)
   microciclo: number | undefined;
   mesociclo: number | undefined;
   periodo: "PREPARATORIO" | "COMPETITIVO" | "TRANSICAO" | undefined;
@@ -170,6 +178,7 @@ export async function sugerirPlaneamento(
     return ok({
       dataInicio: fmt(dataInicio),
       dataFim: fmt(dataFim),
+      nome: `Semana ${numeroSemana(new Date(epoca.dataInicio), dataInicio)}`,
       microciclo: 1,
       mesociclo: 1,
       periodo: inferirPeriodo(dataInicio),
@@ -186,6 +195,7 @@ export async function sugerirPlaneamento(
   return ok({
     dataInicio: fmt(dataInicio),
     dataFim: fmt(dataFim),
+    nome: `Semana ${numeroSemana(new Date(epoca.dataInicio), dataInicio)}`,
     microciclo: ultimo.microciclo != null ? ultimo.microciclo + 1 : undefined,
     mesociclo: ultimo.mesociclo ?? undefined,
     periodo: (ultimo.periodo as SugestaoPlaneamento["periodo"]) ?? inferirPeriodo(dataInicio),
