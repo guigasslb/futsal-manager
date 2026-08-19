@@ -596,7 +596,13 @@ describe("associarAEscalao", () => {
     expect(arg.data.numero).toBe(7);
   });
 
-  it("cria a participação adicional ATIVA com o tipo pedido", async () => {
+  it("cria a participação adicional ATIVA com o tipo pedido quando já há principal na modalidade", async () => {
+    // Já existe um PRINCIPAL ativo na modalidade do escalão destino (sem secção,
+    // modalidade null): a associação mantém o tipo pedido — não força PRINCIPAL
+    // (B3, §9).
+    mocked(prisma.atletaEscalao.findMany).mockResolvedValue([
+      { escalao: { seccao: null } },
+    ]);
     mocked(prisma.atletaEscalao.create).mockResolvedValue({ id: "ae1" });
 
     const r = await associarAEscalao({
@@ -618,6 +624,86 @@ describe("associarAEscalao", () => {
       estado: "ATIVO",
       numero: 9,
     });
+  });
+
+  // ─── B3 (Apêndice C, §9): primeiro principal de uma modalidade nova ─────────
+
+  it("força PRINCIPAL quando o atleta ainda não tem principal na modalidade destino (B3)", async () => {
+    // Sem principais ativos na modalidade destino → a participação nasce PRINCIPAL,
+    // apesar de o pedido ser SIMULTANEA (única exceção à regra «associar nunca
+    // força principal»).
+    mocked(prisma.atletaEscalao.findMany).mockResolvedValue([]);
+    mocked(prisma.atletaEscalao.create).mockResolvedValue({ id: "ae1" });
+
+    const r = await associarAEscalao({
+      atletaId: ATLETA,
+      escalaoId: ESC_A,
+      tipo: "SIMULTANEA",
+    });
+    expect(r.sucesso).toBe(true);
+
+    const arg = chamadas(prisma.atletaEscalao.create)[0][0] as {
+      data: { tipo: string };
+    };
+    expect(arg.data.tipo).toBe("PRINCIPAL");
+  });
+
+  it("aplica o invariante POR MODALIDADE: um principal noutra modalidade não conta (B3)", async () => {
+    // Escalão destino é de FUTEBOL; o atleta só tem principal em FUTSAL → não há
+    // principal na modalidade destino → força PRINCIPAL.
+    mocked(prisma.escalao.findFirst).mockResolvedValue({
+      id: ESC_A,
+      seccao: { modalidade: "FUTEBOL" },
+    });
+    mocked(prisma.atletaEscalao.findMany).mockResolvedValue([
+      { escalao: { seccao: { modalidade: "FUTSAL" } } },
+    ]);
+    mocked(prisma.atletaEscalao.create).mockResolvedValue({ id: "ae1" });
+
+    const r = await associarAEscalao({
+      atletaId: ATLETA,
+      escalaoId: ESC_A,
+      tipo: "SIMULTANEA",
+    });
+    expect(r.sucesso).toBe(true);
+
+    const arg = chamadas(prisma.atletaEscalao.create)[0][0] as {
+      data: { tipo: string };
+    };
+    expect(arg.data.tipo).toBe("PRINCIPAL");
+  });
+
+  it("mantém o tipo pedido quando já há principal na MESMA modalidade destino", async () => {
+    mocked(prisma.escalao.findFirst).mockResolvedValue({
+      id: ESC_A,
+      seccao: { modalidade: "FUTEBOL" },
+    });
+    mocked(prisma.atletaEscalao.findMany).mockResolvedValue([
+      { escalao: { seccao: { modalidade: "FUTEBOL" } } },
+    ]);
+    mocked(prisma.atletaEscalao.create).mockResolvedValue({ id: "ae1" });
+
+    const r = await associarAEscalao({
+      atletaId: ATLETA,
+      escalaoId: ESC_A,
+      tipo: "SIMULTANEA",
+    });
+    expect(r.sucesso).toBe(true);
+
+    const arg = chamadas(prisma.atletaEscalao.create)[0][0] as {
+      data: { tipo: string };
+    };
+    expect(arg.data.tipo).toBe("SIMULTANEA");
+  });
+
+  it("corre numa transação com isolamento Serializable (invariante na escrita)", async () => {
+    mocked(prisma.atletaEscalao.create).mockResolvedValue({ id: "ae1" });
+    await associarAEscalao({ atletaId: ATLETA, escalaoId: ESC_A });
+
+    const opcoes = chamadas(prisma.$transaction)[0][1] as { isolationLevel: string };
+    expect(opcoes.isolationLevel).toBe(
+      Prisma.TransactionIsolationLevel.Serializable,
+    );
   });
 
   it("grava numero null quando o número vem em branco", async () => {
@@ -715,6 +801,45 @@ describe("transferirEscalao", () => {
     };
     expect(upsert.create.tipo).toBe("PRINCIPAL");
     expect(upsert.update.tipo).toBe("PRINCIPAL");
+  });
+
+  it("não despromove o principal de OUTRA modalidade (invariante por modalidade, §9)", async () => {
+    // Escalões de origem/destino são de FUTSAL; o atleta tem também um principal
+    // de FUTEBOL noutro escalão. Transferir dentro do futsal NÃO pode tocar no
+    // principal do futebol.
+    mocked(prisma.escalao.findMany).mockResolvedValue([
+      { id: ESC_A, seccao: { modalidade: "FUTSAL" } },
+      { id: ESC_B, seccao: { modalidade: "FUTSAL" } },
+    ]);
+    mocked(prisma.atletaEscalao.findMany).mockResolvedValue([
+      {
+        id: "ae1",
+        escalaoId: ESC_A,
+        tipo: "PRINCIPAL",
+        numero: 7,
+        escalao: { seccao: { modalidade: "FUTSAL" } },
+      },
+      {
+        id: "ae2",
+        escalaoId: ESC_C,
+        tipo: "PRINCIPAL",
+        numero: 9,
+        escalao: { seccao: { modalidade: "FUTEBOL" } },
+      },
+    ]);
+    mocked(prisma.atletaEscalao.update).mockResolvedValue({ id: "ae1" });
+    mocked(prisma.atletaEscalao.upsert).mockResolvedValue({ id: "ae9" });
+
+    const r = await transferirEscalao({ ...pedido, tipo: "PRINCIPAL" });
+    expect(r.sucesso).toBe(true);
+
+    // Só o escalão de origem (futsal) é atualizado (encerrado). O principal de
+    // futebol (ae2) NÃO é despromovido.
+    const updates = chamadas(prisma.atletaEscalao.update) as [
+      { where: { id: string } },
+    ][];
+    expect(updates).toHaveLength(1);
+    expect(updates[0][0].where.id).toBe("ae1");
   });
 
   it("recusa transferir o principal para simultânea se ficasse sem principal", async () => {

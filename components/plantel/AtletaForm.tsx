@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -15,11 +15,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { criarAtleta, atualizarAtleta } from "@/lib/actions/atletas";
-import { LABEL_POSICAO } from "@/lib/schemas/atleta";
+import { LABEL_POSICAO, posicoesPorModalidade } from "@/lib/schemas/atleta";
 import { LABEL_TIPO_PARTICIPACAO, TIPOS_PARTICIPACAO } from "@/lib/schemas/participacao";
-import type { Escalao, Posicao, TipoParticipacao } from "@prisma/client";
-
-const POSICOES: Posicao[] = ["GUARDA_REDES", "FIXO", "ALA", "PIVO", "UNIVERSAL"];
+import type { Escalao, Modalidade, Posicao, TipoParticipacao } from "@prisma/client";
 
 function formatDateForInput(date: Date | null | undefined): string {
   if (!date) return "";
@@ -27,7 +25,12 @@ function formatDateForInput(date: Date | null | undefined): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-type EscalaoBasico = Pick<Escalao, "id" | "nome">;
+// 🔁 v7 (§3.2): o escalão traz a modalidade da sua secção, para o seletor de
+// posições filtrar as opções relevantes. `modalidade` pode ser null (escalão sem
+// secção associada — backfill pendente); nesse caso mostram-se todas as posições.
+type EscalaoBasico = Pick<Escalao, "id" | "nome"> & {
+  modalidade: Modalidade | null;
+};
 
 /**
  * Dados pessoais do atleta em edição. Escalão e número pertencem à participação
@@ -63,6 +66,21 @@ export function AtletaForm({
   );
   const [escalaoId, setEscalaoId] = useState<string>("");
   const [tipoParticipacao, setTipoParticipacao] = useState<TipoParticipacao>("PRINCIPAL");
+
+  // Modalidade em contexto para o seletor de posições (§3.2): na criação deriva do
+  // escalão selecionado; na edição não há escalão em contexto → mostra todas.
+  const modalidadeContexto: Modalidade | null = emEdicao
+    ? null
+    : (escaloes.find((e) => e.id === escalaoId)?.modalidade ?? null);
+
+  // Posições a mostrar: as da modalidade em contexto + quaisquer já selecionadas
+  // fora dessa modalidade (um atleta multi-desporto guarda todas — §3.2; assim
+  // nunca escondemos uma seleção ativa ao trocar de escalão).
+  const posicoesMostradas = useMemo(() => {
+    const base = posicoesPorModalidade(modalidadeContexto);
+    const extra = [...posicoes].filter((p) => !base.includes(p));
+    return [...base, ...extra];
+  }, [modalidadeContexto, posicoes]);
 
   function alternarPosicao(p: Posicao) {
     setPosicoes((prev) => {
@@ -155,7 +173,7 @@ export function AtletaForm({
         <div className="space-y-1.5">
           <Label>Posições</Label>
           <div className="flex flex-wrap gap-2">
-            {POSICOES.map((p) => {
+            {posicoesMostradas.map((p) => {
               const ativo = posicoes.has(p);
               return (
                 <button
@@ -173,7 +191,12 @@ export function AtletaForm({
               );
             })}
           </div>
-          <p className="text-legenda text-cinza-400">Podes escolher mais do que uma.</p>
+          <p className="text-legenda text-cinza-400">
+            Podes escolher mais do que uma.
+            {!emEdicao && modalidadeContexto === null
+              ? " Escolhe o escalão para filtrar as posições por modalidade."
+              : ""}
+          </p>
         </div>
 
         <div className="space-y-1.5">

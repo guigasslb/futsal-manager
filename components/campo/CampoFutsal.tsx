@@ -1,24 +1,20 @@
-import { CAMPO_W, CAMPO_H, LinhasCampo, ElementoSVG } from "./desenho";
+import { FormatoJogo } from "@prisma/client";
+import { CampoDesenho } from "./CampoDesenho";
 import type { DiagramaCampo } from "@/lib/schemas/exercicio";
 
+/**
+ * Alias retrocompatível de {@link CampoDesenho}. Mantém a assinatura histórica
+ * (só `diagrama`/`className`) e passa a suportar o `formato` do diagrama (§11.5).
+ * Diagramas legados sem `campo` continuam a render como futsal.
+ */
 export function CampoFutsal({
   diagrama,
+  formato,
   className,
 }: {
   diagrama: DiagramaCampo;
+  formato?: FormatoJogo;
   className?: string;
 }) {
-  return (
-    <svg
-      viewBox={`0 0 ${CAMPO_W} ${CAMPO_H}`}
-      className={className ?? "w-full h-auto rounded-md"}
-      role="img"
-      aria-label="Diagrama de campo de futsal"
-    >
-      <LinhasCampo />
-      {diagrama.elementos.map((el) => (
-        <ElementoSVG key={el.id} elemento={el} />
-      ))}
-    </svg>
-  );
+  return <CampoDesenho diagrama={diagrama} formato={formato} className={className} />;
 }

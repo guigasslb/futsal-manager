@@ -13,9 +13,16 @@ import {
 } from "@/components/ui/select";
 import { atualizarProgresso, type HabilidadeComProgresso } from "@/lib/actions/caderneta";
 import { LABEL_NIVEL } from "@/lib/schemas/habilidade";
-import type { EstadoHabilidade, NivelHabilidade } from "@prisma/client";
+import type { EstadoHabilidade, Modalidade, NivelHabilidade } from "@prisma/client";
 
 const NIVEIS: NivelHabilidade[] = ["BASICO", "INTERMEDIO", "AVANCADO"];
+
+const ROTULO_MODALIDADE: Record<Modalidade, string> = {
+  FUTSAL: "Futsal",
+  FUTEBOL: "Futebol",
+};
+
+type FiltroModalidade = Modalidade | "TODAS";
 
 const LABEL_ESTADO: Record<EstadoHabilidade, string> = {
   NAO_INICIADO: "Não iniciado",
@@ -34,16 +41,32 @@ function IconeEstado({ estado }: { estado: EstadoHabilidade }) {
 export function CadernetaAtleta({
   atletaId,
   habilidades,
+  modalidades = [],
 }: {
   atletaId: string;
   habilidades: HabilidadeComProgresso[];
+  /** Modalidades em que o atleta participa (§3.2). Com 2+, mostra o filtro de
+   * modalidade; as habilidades universais (`modalidade` null) aparecem em todas. */
+  modalidades?: Modalidade[];
 }) {
   const [estados, setEstados] = useState<Record<string, EstadoHabilidade>>(() =>
     Object.fromEntries(habilidades.map((h) => [h.id, h.estado])),
   );
+  const [filtro, setFiltro] = useState<FiltroModalidade>("TODAS");
   const [pending, startTransition] = useTransition();
 
-  const desbloqueadas = Object.values(estados).filter((e) => e === "DESBLOQUEADO").length;
+  // Segmentação por modalidade só faz sentido para atletas multi-desporto (§9).
+  const mostrarFiltro = modalidades.length >= 2;
+
+  // Habilidades visíveis segundo o filtro: as universais (null) aparecem sempre.
+  const habilidadesVisiveis =
+    mostrarFiltro && filtro !== "TODAS"
+      ? habilidades.filter((h) => h.modalidade === filtro || h.modalidade == null)
+      : habilidades;
+
+  const desbloqueadas = habilidadesVisiveis.filter(
+    (h) => estados[h.id] === "DESBLOQUEADO",
+  ).length;
 
   function mudar(habilidadeId: string, estado: EstadoHabilidade) {
     const anterior = estados[habilidadeId];
@@ -67,14 +90,45 @@ export function CadernetaAtleta({
     );
   }
 
-  const pct = habilidades.length ? Math.round((desbloqueadas / habilidades.length) * 100) : 0;
+  const total = habilidadesVisiveis.length;
+  const pct = total ? Math.round((desbloqueadas / total) * 100) : 0;
+
+  const opcoesFiltro: FiltroModalidade[] = ["TODAS", ...modalidades];
 
   return (
     <div className="space-y-6">
+      {mostrarFiltro && (
+        <div
+          role="tablist"
+          aria-label="Filtrar caderneta por modalidade"
+          className="inline-flex rounded-lg border border-cinza-200 bg-cinza-50 p-1"
+        >
+          {opcoesFiltro.map((op) => {
+            const ativo = filtro === op;
+            return (
+              <button
+                key={op}
+                type="button"
+                role="tab"
+                aria-selected={ativo}
+                onClick={() => setFiltro(op)}
+                className={`min-h-[40px] rounded-md px-4 py-1.5 text-corpo-sec font-medium transition-colors ${
+                  ativo
+                    ? "bg-white text-primary shadow-card"
+                    : "text-cinza-600 hover:text-cinza-900"
+                }`}
+              >
+                {op === "TODAS" ? "Todas" : ROTULO_MODALIDADE[op]}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div className="rounded-lg border border-cinza-200 bg-white p-4 shadow-card">
         <div className="flex items-center justify-between">
           <p className="text-corpo font-semibold text-cinza-900">
-            {desbloqueadas} de {habilidades.length} habilidades desbloqueadas
+            {desbloqueadas} de {total} habilidades desbloqueadas
           </p>
           <span className="text-titulo-seccao font-bold text-verde-600">{pct}%</span>
         </div>
@@ -86,8 +140,14 @@ export function CadernetaAtleta({
         </div>
       </div>
 
+      {total === 0 && (
+        <p className="rounded-md border border-dashed border-cinza-300 p-6 text-center text-corpo-sec text-cinza-500">
+          Nenhuma habilidade nesta modalidade.
+        </p>
+      )}
+
       {NIVEIS.map((nivel, i) => {
-        const doNivel = habilidades.filter((h) => h.nivel === nivel);
+        const doNivel = habilidadesVisiveis.filter((h) => h.nivel === nivel);
         if (doNivel.length === 0) return null;
         return (
           <div key={nivel} className="space-y-3">

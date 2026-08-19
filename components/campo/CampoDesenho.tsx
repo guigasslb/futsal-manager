@@ -2,14 +2,17 @@ import { FormatoJogo } from "@prisma/client";
 import { CAMPO_W, CAMPO_H, LinhasCampo, ElementoSVG, rotuloCampo } from "./desenho";
 import type { DiagramaCampo } from "@/lib/schemas/exercicio";
 
-export function MiniaturaCampo({
+/**
+ * Render estático (read-only) de um diagrama de campo para qualquer formato
+ * (§11.5). O `formato` é resolvido por: prop `formato` → `diagrama.campo` →
+ * `FUTSAL_5` (retrocompatível). O espaço de coordenadas interno é sempre 400×200.
+ */
+export function CampoDesenho({
   diagrama,
-  largura = 240,
   formato,
   className,
 }: {
   diagrama: DiagramaCampo;
-  largura?: number;
   formato?: FormatoJogo;
   className?: string;
 }) {
@@ -17,11 +20,9 @@ export function MiniaturaCampo({
   return (
     <svg
       viewBox={`0 0 ${CAMPO_W} ${CAMPO_H}`}
-      width={largura}
-      height={(largura * CAMPO_H) / CAMPO_W}
-      className={className ?? "rounded"}
+      className={className ?? "w-full h-auto rounded-md"}
       role="img"
-      aria-label={`Miniatura de diagrama de ${rotuloCampo(fmt)}`}
+      aria-label={`Diagrama de ${rotuloCampo(fmt)}`}
     >
       <LinhasCampo formato={fmt} />
       {diagrama.elementos.map((el) => (

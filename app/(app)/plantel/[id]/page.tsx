@@ -15,7 +15,10 @@ import {
 } from "@/lib/actions/analise";
 import { listarParticipacoes } from "@/lib/actions/participacoes";
 import { listarEscaloes } from "@/lib/actions/escaloes";
+import { obterSeccoes } from "@/lib/actions/seccoes";
 import { obterMembroAtual } from "@/lib/permissoes";
+import { mapaModalidadePorEscalao } from "@/lib/modalidade-escalao";
+import type { Modalidade } from "@prisma/client";
 import { AvatarAtleta } from "@/components/plantel/AvatarAtleta";
 import { EstatisticasAtleta } from "@/components/plantel/EstatisticasAtleta";
 import { CadernetaAtleta } from "@/components/plantel/CadernetaAtleta";
@@ -66,6 +69,7 @@ export default async function PerfilAtletaPage({
     resPresencas,
     resParticipacoes,
     resEscaloes,
+    resSeccoes,
     membro,
     resAnalitico,
   ] = await Promise.all([
@@ -75,9 +79,25 @@ export default async function PerfilAtletaPage({
     obterPresencasMensal(id),
     listarParticipacoes(id),
     listarEscaloes(),
+    obterSeccoes(),
     obterMembroAtual(),
     obterAnaliticoAtleta(id, a.participacaoContexto?.escalaoId),
   ]);
+
+  // Modalidades em que o atleta participa (§3.2/§9): derivadas das secções dos
+  // escalões das suas participações. Usadas para segmentar a caderneta por
+  // modalidade quando o atleta é multi-desporto.
+  const modalidadePorEscalao = mapaModalidadePorEscalao(
+    resEscaloes.sucesso ? resEscaloes.dados : [],
+    resSeccoes.sucesso ? resSeccoes.dados : [],
+  );
+  const modalidadesAtleta = [
+    ...new Set(
+      a.participacoes
+        .map((p) => modalidadePorEscalao.get(p.escalaoId))
+        .filter((m): m is Modalidade => m != null),
+    ),
+  ];
 
   // Gating de UI das ações de participação (secção 6.7). O servidor continua a
   // ser a autoridade — isto apenas evita oferecer ações que iriam falhar.
@@ -212,7 +232,11 @@ export default async function PerfilAtletaPage({
 
         <TabsContent value="caderneta">
           {resCaderneta.sucesso ? (
-            <CadernetaAtleta atletaId={a.id} habilidades={resCaderneta.dados} />
+            <CadernetaAtleta
+              atletaId={a.id}
+              habilidades={resCaderneta.dados}
+              modalidades={modalidadesAtleta}
+            />
           ) : (
             <p className="text-corpo-sec text-vermelho-600">{resCaderneta.erro}</p>
           )}

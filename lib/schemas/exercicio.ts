@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { FormatoJogo } from "@prisma/client";
 
 // ─── Diagrama de campo (secção 13.3) ────────────────────────────────────────
 
@@ -88,6 +89,9 @@ export const diagramaSchema = z.object({
   versao: z.union([z.literal(1), z.literal(2)]),
   elementos: z.array(elementoCampoSchema),
   passos: z.array(passoAnimacaoSchema).optional(),
+  // 🔁 v7 (§11.5): fundo de campo (futsal ou formato de futebol). Ausente/legado
+  // → FUTSAL_5 (retrocompatível — Apêndice C). `TipoCampo` alinha com FormatoJogo.
+  campo: z.nativeEnum(FormatoJogo).optional(),
 });
 
 export type PassoAnimacao = z.infer<typeof passoAnimacaoSchema>;

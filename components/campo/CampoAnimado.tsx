@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CAMPO_W, CAMPO_H, LinhasCampo, ElementoSVG } from "./desenho";
+import { FormatoJogo } from "@prisma/client";
+import { CAMPO_W, CAMPO_H, LinhasCampo, ElementoSVG, rotuloCampo } from "./desenho";
 import { ControlosPlayback } from "./ControlosPlayback";
 import {
   construirKeyframes,
@@ -21,11 +22,14 @@ function usaMovimentoReduzido(): boolean {
 
 export function CampoAnimado({
   diagrama,
+  formato,
   className,
 }: {
   diagrama: DiagramaCampo;
+  formato?: FormatoJogo;
   className?: string;
 }) {
+  const fmt = formato ?? diagrama.campo ?? FormatoJogo.FUTSAL_5;
   const keyframes = useMemo(() => construirKeyframes(diagrama), [diagrama]);
   const passos = useMemo(
     () => [...(diagrama.passos ?? [])].sort((a, b) => a.ordem - b.ordem),
@@ -183,9 +187,9 @@ export function CampoAnimado({
         viewBox={`0 0 ${CAMPO_W} ${CAMPO_H}`}
         className={className ?? "w-full h-auto rounded-md"}
         role="img"
-        aria-label="Diagrama animado de campo de futsal"
+        aria-label={`Diagrama animado de ${rotuloCampo(fmt)}`}
       >
-        <LinhasCampo />
+        <LinhasCampo formato={fmt} />
         {elementos.map((el) => (
           <ElementoSVG key={el.id} elemento={el} />
         ))}

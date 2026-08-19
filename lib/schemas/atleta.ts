@@ -1,8 +1,13 @@
 import { z } from "zod";
-import type { Posicao } from "@prisma/client";
+import { Posicao, type Modalidade } from "@prisma/client";
 import { TIPOS_PARTICIPACAO } from "@/lib/schemas/participacao";
 
-const posicaoEnum = z.enum(["GUARDA_REDES", "FIXO", "ALA", "PIVO", "UNIVERSAL"]);
+// 🔁 v7 (§3.2): o enum de posições cobre FUTSAL + FUTEBOL. Deriva do enum do
+// Prisma (`Posicao`) para ficar sempre em sincronia; o seletor da UI filtra as
+// opções por modalidade (ver `posicoesPorModalidade`), mas o modelo do atleta
+// guarda todas as posições (um atleta multi-desporto pode ter posições de ambas
+// as modalidades — §3.2).
+const posicaoEnum = z.nativeEnum(Posicao);
 
 /**
  * Dados PESSOAIS do atleta (F1 — o atleta pertence ao clube, não ao escalão).
@@ -69,6 +74,47 @@ export const LABEL_POSICAO: Record<Posicao, string> = {
   EXTREMO_ESQUERDO: "Extremo esquerdo",
   AVANCADO: "Avançado",
 };
+
+// 🔁 v7 (§3.2): posições por modalidade. GUARDA_REDES e UNIVERSAL são partilhados
+// pelas duas modalidades; aparecem em ambas as listas.
+export const POSICOES_FUTSAL: Posicao[] = [
+  "GUARDA_REDES",
+  "FIXO",
+  "ALA",
+  "PIVO",
+  "UNIVERSAL",
+];
+
+export const POSICOES_FUTEBOL: Posicao[] = [
+  "GUARDA_REDES",
+  "DEFESA_CENTRAL",
+  "LATERAL_DIREITO",
+  "LATERAL_ESQUERDO",
+  "MEDIO_DEFENSIVO",
+  "MEDIO_CENTRO",
+  "MEDIO_OFENSIVO",
+  "EXTREMO_DIREITO",
+  "EXTREMO_ESQUERDO",
+  "AVANCADO",
+  "UNIVERSAL",
+];
+
+/**
+ * Posições disponíveis para uma modalidade (§3.2). Usado pelo seletor de posições
+ * do formulário do atleta para mostrar apenas as posições relevantes à modalidade
+ * do escalão em contexto. Sem modalidade definida (ex.: edição sem escalão em
+ * contexto), devolve todas as posições, sem duplicar as partilhadas.
+ */
+export function posicoesPorModalidade(
+  modalidade: Modalidade | null | undefined,
+): Posicao[] {
+  if (modalidade === "FUTSAL") return POSICOES_FUTSAL;
+  if (modalidade === "FUTEBOL") return POSICOES_FUTEBOL;
+  return [
+    ...POSICOES_FUTSAL,
+    ...POSICOES_FUTEBOL.filter((p) => !POSICOES_FUTSAL.includes(p)),
+  ];
+}
 
 export const ABREV_POSICAO: Record<Posicao, string> = {
   // Partilhados / futsal

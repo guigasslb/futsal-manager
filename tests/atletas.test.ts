@@ -17,7 +17,8 @@ vi.mock("@/lib/permissoes", () => ({
 }));
 vi.mock("@/lib/db", () => ({
   prisma: {
-    atleta: { findFirst: vi.fn(), delete: vi.fn(), update: vi.fn() },
+    atleta: { findFirst: vi.fn(), findMany: vi.fn(), delete: vi.fn(), update: vi.fn() },
+    atletaEscalao: { findMany: vi.fn() },
     convocatoria: { count: vi.fn() },
     estatisticaAtleta: { findMany: vi.fn() },
     sessao: { count: vi.fn() },
@@ -29,6 +30,7 @@ vi.mock("@/lib/db", () => ({
 import {
   apagarAtletaDefinitivamente,
   obterEstatisticasAtleta,
+  listarAtletas,
 } from "@/lib/actions/atletas";
 import { obterClubeIdAtual, obterEpocaAtiva } from "@/lib/epoca-context";
 import {
@@ -210,5 +212,71 @@ describe("obterEstatisticasAtleta", () => {
     const arg = calls(prisma.atleta.findFirst)[0][0] as { where: Record<string, unknown> };
     expect(arg.where.clubeId).toBe("clube1");
     expect(arg.where.id).toBe(CUID);
+  });
+});
+
+// ─── listarAtletas (Fix 2 — filtro por secção + modalidade) ──────────────────
+
+describe("listarAtletas (agrupamento por secção/modalidade — §8.5)", () => {
+  const ATLETA_ROW = {
+    id: CUID,
+    nome: "João Silva",
+    dataNascimento: null,
+    posicoes: [],
+    observacoes: null,
+    fotoUrl: null,
+    ativo: true,
+    dataIngresso: null,
+    encarregadoNome: null,
+    encarregadoContacto: null,
+    encarregadoEmail: null,
+    clubeId: "clube1",
+    criadoEm: new Date(),
+    atualizadoEm: new Date(),
+    participacoes: [
+      {
+        id: "ae1",
+        escalaoId: ESC_ID,
+        tipo: "PRINCIPAL",
+        estado: "ATIVO",
+        numero: 7,
+        dataInicio: new Date(),
+        dataFim: null,
+        escalao: { nome: "Sub-15", seccao: { modalidade: "FUTSAL" } },
+      },
+    ],
+  };
+
+  it("aplica o filtro de secção quando seccaoId é indicado", async () => {
+    mocked(prisma.atleta.findMany).mockResolvedValue([ATLETA_ROW]);
+    const r = await listarAtletas(undefined, undefined, "sec1");
+    expect(r.sucesso).toBe(true);
+
+    const arg = calls(prisma.atleta.findMany)[0][0] as {
+      where: { participacoes: { some: Record<string, unknown> } };
+    };
+    expect(arg.where.participacoes.some).toMatchObject({
+      escalao: { seccaoId: "sec1" },
+    });
+  });
+
+  it("não aplica filtro de secção quando seccaoId é omitido", async () => {
+    mocked(prisma.atleta.findMany).mockResolvedValue([ATLETA_ROW]);
+    await listarAtletas();
+
+    const arg = calls(prisma.atleta.findMany)[0][0] as {
+      where: { participacoes: { some: Record<string, unknown> } };
+    };
+    expect(arg.where.participacoes.some).not.toHaveProperty("escalao");
+  });
+
+  it("inclui a modalidade da secção em cada participação (para agrupar na UI)", async () => {
+    mocked(prisma.atleta.findMany).mockResolvedValue([ATLETA_ROW]);
+    const r = await listarAtletas();
+    expect(r.sucesso).toBe(true);
+    if (r.sucesso) {
+      expect(r.dados[0].participacoes[0].modalidade).toBe("FUTSAL");
+      expect(r.dados[0].participacaoContexto?.modalidade).toBe("FUTSAL");
+    }
   });
 });

@@ -4,9 +4,11 @@ import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { obterAtleta } from "@/lib/actions/atletas";
 import { listarEscaloes } from "@/lib/actions/escaloes";
+import { obterSeccoes } from "@/lib/actions/seccoes";
 import { AtletaForm } from "@/components/plantel/AtletaForm";
 import { ApagarAtletaButton } from "@/components/plantel/ApagarAtletaButton";
 import { EstadoErro } from "@/components/layout/EstadosUI";
+import { escaloesComModalidade } from "@/lib/modalidade-escalao";
 
 export const metadata: Metadata = { title: "Editar atleta" };
 
@@ -17,15 +19,18 @@ export default async function EditarAtletaPage({
 }) {
   const { id } = await params;
 
-  const [resAtleta, resEscaloes] = await Promise.all([
+  const [resAtleta, resEscaloes, resSeccoes] = await Promise.all([
     obterAtleta(id),
     listarEscaloes(),
+    obterSeccoes(),
   ]);
 
   if (!resAtleta.sucesso) notFound();
   if (!resEscaloes.sucesso) return <EstadoErro mensagem={resEscaloes.erro} />;
 
   const atleta = resAtleta.dados;
+  const seccoes = resSeccoes.sucesso ? resSeccoes.dados : [];
+  const escaloes = escaloesComModalidade(resEscaloes.dados, seccoes);
 
   return (
     <div className="space-y-6">
@@ -41,7 +46,7 @@ export default async function EditarAtletaPage({
 
       <h1>Editar atleta</h1>
 
-      <AtletaForm escaloes={resEscaloes.dados} atleta={atleta} />
+      <AtletaForm escaloes={escaloes} atleta={atleta} />
 
       <div className="border-t border-cinza-200 pt-6">
         <ApagarAtletaButton atletaId={atleta.id} nomeAtleta={atleta.nome} />

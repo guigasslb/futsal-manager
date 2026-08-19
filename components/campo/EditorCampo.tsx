@@ -29,7 +29,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { CAMPO_W, CAMPO_H, LinhasCampo, ElementoSVG } from "./desenho";
+import { FormatoJogo } from "@prisma/client";
+import { CAMPO_W, CAMPO_H, LinhasCampo, ElementoSVG, rotuloCampo } from "./desenho";
 import { useEscalaCampo } from "./useEscalaCampo";
 import { usePointerDrag } from "./usePointerDrag";
 import { TimelinePassos } from "./TimelinePassos";
@@ -92,10 +93,18 @@ function fixar(v: number, max: number): number {
 export function EditorCampo({
   valor,
   onChange,
+  formato,
 }: {
   valor: DiagramaCampo;
   onChange: (d: DiagramaCampo) => void;
+  // 🔁 v7 (§11.5): fundo de campo. Se ausente, herda de `valor.campo` (retrocompat
+  // FUTSAL_5). Fornecido pelo contexto (exercício/modelo de jogo) ao criar novos
+  // diagramas de futebol; preservado em todas as gravações.
+  formato?: FormatoJogo;
 }) {
+  // Formato efectivo do diagrama: o já gravado tem prioridade; senão o do contexto.
+  const campoActual = valor.campo ?? formato;
+  const fmt = campoActual ?? FormatoJogo.FUTSAL_5;
   const svgRef = useRef<SVGSVGElement>(null);
   const escala = useEscalaCampo(svgRef);
   const drag = usePointerDrag(svgRef, escala);
@@ -161,7 +170,7 @@ export function EditorCampo({
   }
 
   function snapshotAtual(): DiagramaCampo {
-    return { versao: 2, elementos, passos };
+    return { versao: 2, elementos, passos, campo: campoActual };
   }
 
   function registarHistorico() {
@@ -169,12 +178,12 @@ export function EditorCampo({
     setHistorico((h) => [...h.slice(-30), snap]);
   }
 
-  // B4: o editor grava SEMPRE versao 2.
+  // B4: o editor grava SEMPRE versao 2 e preserva o `campo` (§11.5).
   function aplicarElementos(novos: ElementoCampo[]) {
-    onChange({ versao: 2, elementos: novos, passos });
+    onChange({ versao: 2, elementos: novos, passos, campo: campoActual });
   }
   function aplicarPassos(novos: PassoAnimacao[]) {
-    onChange({ versao: 2, elementos, passos: novos });
+    onChange({ versao: 2, elementos, passos: novos, campo: campoActual });
   }
 
   // Move um elemento no keyframe activo (base ou delta do passo).
@@ -406,7 +415,7 @@ export function EditorCampo({
 
   function limparTudo() {
     registarHistorico();
-    onChange({ versao: 2, elementos: [], passos: [] });
+    onChange({ versao: 2, elementos: [], passos: [], campo: campoActual });
     setSelecionadoId(null);
     setCaminhoAtual([]);
     setKeyframeActivo(-1);
@@ -556,7 +565,7 @@ export function EditorCampo({
             className="w-full h-auto touch-none rounded-md border border-cinza-300"
             tabIndex={0}
             role="application"
-            aria-label="Editor de campo de futsal"
+            aria-label={`Editor de ${rotuloCampo(fmt)}`}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
@@ -576,7 +585,7 @@ export function EditorCampo({
               </marker>
             </defs>
 
-            <LinhasCampo />
+            <LinhasCampo formato={fmt} />
             {elementosRender.map((el) => (
               <ElementoSVG
                 key={el.id}

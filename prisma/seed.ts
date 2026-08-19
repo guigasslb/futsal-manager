@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { PERFIS_ARRANQUE } from "../lib/permissoes-catalogo";
 import { BIBLIOTECA_ARRANQUE } from "../lib/biblioteca-arranque";
 import { SUBCATEGORIAS_ARRANQUE } from "../lib/subcategorias-arranque";
+import { instalarConteudoArranqueFutebol } from "../lib/biblioteca-arranque-futebol";
 
 const prisma = new PrismaClient();
 
@@ -158,7 +159,29 @@ async function main() {
     })),
   });
 
+  // 10. Secção de FUTEBOL de demonstração (Fase 29) — conteúdo curado instalado.
+  // Cria uma secção FUTEBOL com um escalão e instala a biblioteca curada de
+  // futebol (subcategorias, exercícios, templates e habilidades), para que a
+  // secção de futebol nunca comece vazia (§16 Fase 29, Apêndice B).
+  const seccaoFutebol = await prisma.seccao.create({
+    data: { clubeId: clube.id, modalidade: "FUTEBOL", nome: "Futebol" },
+  });
+  await prisma.escalao.create({
+    data: {
+      nome: "Sub-15 (Futebol)",
+      idadeMin: 13,
+      idadeMax: 15,
+      ordem: 2,
+      clubeId: clube.id,
+      seccaoId: seccaoFutebol.id,
+    },
+  });
+  const resumoFutebol = await instalarConteudoArranqueFutebol(clube.id, prisma);
+
   console.log("Seed concluído.");
+  console.log(
+    `Futebol instalado: ${resumoFutebol.subcategorias} subcategorias, ${resumoFutebol.exercicios} exercícios, ${resumoFutebol.templates} templates, ${resumoFutebol.habilidades} habilidades.`,
+  );
   console.log("Login inicial:");
   console.log(`  goncalo@jsc.pt / ${PASS_GONCALO}  (Administrador)`);
   console.log(`  adjunto@jsc.pt / ${PASS_ADJUNTO}  (Adjunto — Benjamins)`);

@@ -142,3 +142,117 @@ export const TEMPLATES_ARRANQUE: TemplateSessaoArranque[] = [
     ],
   },
 ];
+
+// ─────────────────────────────────────────────
+// Fase 29 — Templates de sessão curados de FUTEBOL.
+// Os `nomeExercicio` referenciam por NOME exato os exercícios de
+// EXERCICIOS_ARRANQUE_FUTEBOL (lib/biblioteca-arranque-futebol.ts) e são
+// resolvidos no clube por instalarTemplatesArranqueFutebol(). A modalidade
+// (FUTEBOL) é carimbada no ModeloSessao pela função de instalação.
+// ─────────────────────────────────────────────
+export const TEMPLATES_ARRANQUE_FUTEBOL: TemplateSessaoArranque[] = [
+  {
+    nome: "Treino de posse e pressão — 67 min, sub-15",
+    objetivoTatico:
+      "Manter a posse com superioridades posicionais e reagir com pressão alta à perda.",
+    faseEpoca: "COMPETITIVO",
+    escalaoAlvo: "sub-15",
+    duracaoMin: 67,
+    descricao:
+      "Sessão de futebol centrada na posse e na pressão: aquecimento com rondos, jogo de posição, treino táctico de pressing em bloco e jogo com transições.",
+    exercicios: [
+      {
+        nomeExercicio: "Rondos 4v2",
+        parteTreino: "AQUECIMENTO",
+        duracaoMin: 12,
+        notas: "Um toque no exterior, dois no interior; trocar os do meio a cada minuto.",
+      },
+      {
+        nomeExercicio: "Jogo de Posição 5v5",
+        parteTreino: "PRINCIPAL",
+        duracaoMin: 20,
+        notas: "Manter as distâncias entre linhas; procurar o homem livre entre sectores.",
+      },
+      {
+        nomeExercicio: "Pressing alto em bloco",
+        parteTreino: "PRINCIPAL",
+        duracaoMin: 20,
+        notas: "Accionar a pressão ao passe para trás; fechar linhas interiores.",
+      },
+      {
+        nomeExercicio: "Transição rápida ofensiva",
+        parteTreino: "JOGO_REDUZIDO",
+        duracaoMin: 15,
+        notas: "Finalizar a transição em menos de 8 segundos após a recuperação.",
+      },
+    ],
+  },
+  {
+    nome: "Treino de finalização — 65 min, sub-13",
+    objetivoTatico: "Melhorar a técnica individual e a eficácia na finalização.",
+    faseEpoca: "COMPETITIVO",
+    escalaoAlvo: "sub-13",
+    duracaoMin: 65,
+    descricao:
+      "Sessão orientada para a finalização: aquecimento com rondos, controlo orientado e condução, situações de finalização com cruzamento e jogo reduzido.",
+    exercicios: [
+      {
+        nomeExercicio: "Rondos 4v2",
+        parteTreino: "AQUECIMENTO",
+        duracaoMin: 12,
+      },
+      {
+        nomeExercicio: "Controlo orientado com condução",
+        parteTreino: "PRINCIPAL",
+        duracaoMin: 15,
+        notas: "Primeiro toque orientado para o espaço livre; cabeça levantada na condução.",
+      },
+      {
+        nomeExercicio: "Finalização com cruzamento",
+        parteTreino: "PRINCIPAL",
+        duracaoMin: 20,
+        notas: "Ataque ao primeiro e segundo poste; alternar o pé de finalização.",
+      },
+      {
+        nomeExercicio: "Jogo de Posição 5v5",
+        parteTreino: "JOGO_REDUZIDO",
+        duracaoMin: 18,
+        notas: "Golo só conta após combinação em zona de finalização.",
+      },
+    ],
+  },
+  {
+    nome: "Treino de bolas paradas — 55 min, sub-17",
+    objetivoTatico: "Ensaiar rotinas ofensivas de bolas paradas e a reação à perda.",
+    faseEpoca: "COMPETITIVO",
+    escalaoAlvo: "sub-17",
+    duracaoMin: 55,
+    descricao:
+      "Sessão de bolas paradas: aquecimento com rondos, cantos e livres laterais ofensivos e jogo com transições após a bola parada.",
+    exercicios: [
+      {
+        nomeExercicio: "Rondos 4v2",
+        parteTreino: "AQUECIMENTO",
+        duracaoMin: 10,
+      },
+      {
+        nomeExercicio: "Canto directo ao primeiro poste",
+        parteTreino: "PRINCIPAL",
+        duracaoMin: 15,
+        notas: "Ensaiar bloqueios e timing do movimento ao primeiro poste.",
+      },
+      {
+        nomeExercicio: "Livre lateral em zona 3",
+        parteTreino: "PRINCIPAL",
+        duracaoMin: 15,
+        notas: "Definir batedor, zona de queda e reação em caso de recarga.",
+      },
+      {
+        nomeExercicio: "Transição rápida ofensiva",
+        parteTreino: "JOGO_REDUZIDO",
+        duracaoMin: 15,
+        notas: "Reagir à perda imediatamente após a bola parada.",
+      },
+    ],
+  },
+];

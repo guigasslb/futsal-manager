@@ -15,11 +15,14 @@ import {
   criarAtletaSchema,
   atualizarAtletaSchema,
   apagarAtletaDefinitivamenteSchema,
+  posicoesPorModalidade,
+  LABEL_POSICAO,
 } from "@/lib/schemas/atleta";
 import { agregarEstatisticas, type EstatisticasAgregadas } from "@/lib/estatisticas";
 import type {
   Atleta,
   EstadoParticipacao,
+  Modalidade,
   Posicao,
   TipoParticipacao,
 } from "@prisma/client";
@@ -38,6 +41,12 @@ export interface ParticipacaoResumo {
   id: string;
   escalaoId: string;
   escalaoNome: string;
+  /**
+   * Modalidade da participação (deriva de escalao.seccao.modalidade — §1.7.1).
+   * `null` em escalões ainda sem secção (fase expand, antes do backfill). A UI do
+   * plantel usa-a para agrupar/segmentar por modalidade (§8.5).
+   */
+  modalidade: Modalidade | null;
   tipo: TipoParticipacao;
   estado: EstadoParticipacao;
   numero: number | null;
@@ -95,7 +104,10 @@ const SELECT_PESSOAL = {
   atualizadoEm: true,
 } as const;
 
-const INCLUDE_ESCALAO_NOME = { escalao: { select: { nome: true } } } as const;
+// Inclui a modalidade da secção (§1.7.1) para a UI poder agrupar por modalidade.
+const INCLUDE_ESCALAO_NOME = {
+  escalao: { select: { nome: true, seccao: { select: { modalidade: true } } } },
+} as const;
 
 type ParticipacaoBruta = {
   id: string;
@@ -105,7 +117,7 @@ type ParticipacaoBruta = {
   numero: number | null;
   dataInicio: Date;
   dataFim: Date | null;
-  escalao: { nome: string };
+  escalao: { nome: string; seccao: { modalidade: Modalidade } | null };
 };
 
 function paraResumo(p: ParticipacaoBruta): ParticipacaoResumo {
@@ -113,6 +125,7 @@ function paraResumo(p: ParticipacaoBruta): ParticipacaoResumo {
     id: p.id,
     escalaoId: p.escalaoId,
     escalaoNome: p.escalao.nome,
+    modalidade: p.escalao.seccao?.modalidade ?? null,
     tipo: p.tipo,
     estado: p.estado,
     numero: p.numero,
@@ -162,6 +175,7 @@ async function resolverEpoca(
 export async function listarAtletas(
   escalaoId?: string,
   epocaId?: string,
+  seccaoId?: string,
 ): Promise<Resultado<AtletaComParticipacao[]>> {
   const clubeId = await obterClubeIdAtual();
   if (!clubeId) return erro("Não autenticado");
@@ -207,18 +221,26 @@ export async function listarAtletas(
     );
   }
 
-  // Sem filtro: todos os atletas do clube com participação ativa na época,
-  // restringido aos escalões legíveis (secção 6.4).
+  // Sem filtro de escalão: todos os atletas do clube com participação ativa na
+  // época, restringido aos escalões legíveis (secção 6.4) e, opcionalmente, à
+  // secção (modalidade) indicada — usado pelo plantel quando o clube tem mais do
+  // que uma secção (§8.5).
   const legiveis = await escaloesLegiveis();
   const filtroLegiveis =
     legiveis === "TODOS" ? {} : { escalaoId: { in: legiveis } };
+  const filtroSeccao = seccaoId ? { escalao: { seccaoId } } : {};
 
   const atletas = await prisma.atleta.findMany({
     where: {
       clubeId,
       ativo: true,
       participacoes: {
-        some: { epocaId: epoca.id, estado: "ATIVO", ...filtroLegiveis },
+        some: {
+          epocaId: epoca.id,
+          estado: "ATIVO",
+          ...filtroLegiveis,
+          ...filtroSeccao,
+        },
       },
     },
     select: {
@@ -278,6 +300,24 @@ export async function obterAtleta(
   });
 }
 
+// ─── Validação posição↔modalidade (§9) ───────────────────────────────────────
+
+/** Primeira posição fora do conjunto permitido, ou null se todas são válidas. */
+function primeiraPosicaoInvalida(
+  posicoes: Posicao[],
+  permitidas: Iterable<Posicao>,
+): Posicao | null {
+  const set = new Set(permitidas);
+  return posicoes.find((p) => !set.has(p)) ?? null;
+}
+
+/** Erro de validação para uma posição que não pertence à(s) modalidade(s). */
+function erroPosicaoInvalida(posicao: Posicao): Resultado<never> {
+  return erro("Posição inválida para esta modalidade", {
+    posicoes: `A posição «${LABEL_POSICAO[posicao]}» não pertence a esta modalidade.`,
+  });
+}
+
 // ─── Escrita ─────────────────────────────────────────────────────────────────
 
 export async function criarAtleta(dados: unknown): Promise<Resultado<Atleta>> {
@@ -296,9 +336,21 @@ export async function criarAtleta(dados: unknown): Promise<Resultado<Atleta>> {
 
   const escalao = await prisma.escalao.findFirst({
     where: { id: participacaoInicial.escalaoId, clubeId },
-    select: { id: true },
+    select: { id: true, seccao: { select: { modalidade: true } } },
   });
   if (!escalao) return erro("O escalão selecionado não existe");
+
+  // Validação posição↔modalidade (§9): as posições declaradas têm de pertencer à
+  // modalidade do escalão inicial. Sem secção definida (fase expand), não há
+  // modalidade para validar e a verificação é saltada.
+  const modalidadeInicial = escalao.seccao?.modalidade ?? null;
+  if (modalidadeInicial) {
+    const invalida = primeiraPosicaoInvalida(
+      pessoal.posicoes,
+      posicoesPorModalidade(modalidadeInicial),
+    );
+    if (invalida) return erroPosicaoInvalida(invalida);
+  }
 
   // Número duplicado é permitido (secção 9 — «dois atletas com o mesmo número:
   // permitido; aviso não-bloqueante por escalão»). O aviso vive na lista do
@@ -360,7 +412,13 @@ export async function atualizarAtleta(
     where: { id, clubeId },
     select: {
       id: true,
-      participacoes: { where: { estado: "ATIVO" }, select: { escalaoId: true } },
+      participacoes: {
+        where: { estado: "ATIVO" },
+        select: {
+          escalaoId: true,
+          escalao: { select: { seccao: { select: { modalidade: true } } } },
+        },
+      },
     },
   });
   if (!existe) return erro("Atleta não encontrado");
@@ -370,6 +428,22 @@ export async function atualizarAtleta(
     existe.participacoes.map((p) => p.escalaoId),
   );
   if (!perm.ok) return erro(perm.erro);
+
+  // Validação posição↔modalidade (§9): um atleta multi-desporto pode ter posições
+  // de várias modalidades, mas só das modalidades em que efetivamente participa.
+  // O conjunto permitido é a UNIÃO das posições das modalidades das participações
+  // ativas. Sem participações com secção determinável, não há contexto e a
+  // validação é saltada.
+  const modalidades = new Set(
+    existe.participacoes
+      .map((p) => p.escalao?.seccao?.modalidade)
+      .filter((m): m is Modalidade => m != null),
+  );
+  if (modalidades.size > 0) {
+    const permitidas = [...modalidades].flatMap((m) => posicoesPorModalidade(m));
+    const invalida = primeiraPosicaoInvalida(parsed.data.posicoes, permitidas);
+    if (invalida) return erroPosicaoInvalida(invalida);
+  }
 
   // Campos opcionais: undefined não limpa o valor existente no Prisma — usar null explicitamente.
   const atleta = await prisma.atleta.update({

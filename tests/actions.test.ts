@@ -126,6 +126,46 @@ describe("criarAtleta (F1 — atleta do clube + participação inicial)", () => 
     expect(prisma.atleta.create).toHaveBeenCalled();
   });
 
+  it("recusa posição de outra modalidade (§9 — posição↔modalidade)", async () => {
+    mocked(obterEpocaAtiva).mockResolvedValue({ id: "ep1" });
+    // Escalão de FUTSAL: uma posição de futebol (AVANCADO) é inválida.
+    mocked(prisma.escalao.findFirst).mockResolvedValue({
+      id: CUID,
+      seccao: { modalidade: "FUTSAL" },
+    });
+
+    const r = await criarAtleta({
+      nome: "João Silva",
+      posicoes: ["AVANCADO"],
+      participacaoInicial: PARTICIPACAO_INICIAL,
+    });
+    expect(r.sucesso).toBe(false);
+    if (!r.sucesso) {
+      expect(r.erro).toMatch(/modalidade/i);
+      expect(r.camposInvalidos?.posicoes).toBeTruthy();
+    }
+    expect(prisma.atleta.create).not.toHaveBeenCalled();
+  });
+
+  it("aceita posição partilhada (GUARDA_REDES) em qualquer modalidade", async () => {
+    mocked(obterEpocaAtiva).mockResolvedValue({ id: "ep1" });
+    mocked(prisma.escalao.findFirst).mockResolvedValue({
+      id: CUID,
+      seccao: { modalidade: "FUTEBOL" },
+    });
+    mocked(prisma.atletaEscalao.findFirst).mockResolvedValue(null);
+    mocked(prisma.atleta.create).mockResolvedValue({ id: "atleta1", nome: "João Silva" });
+    mocked(prisma.atletaEscalao.create).mockResolvedValue({ id: "ae1" });
+
+    const r = await criarAtleta({
+      nome: "João Silva",
+      posicoes: ["GUARDA_REDES", "AVANCADO"],
+      participacaoInicial: PARTICIPACAO_INICIAL,
+    });
+    expect(r.sucesso).toBe(true);
+    expect(prisma.atleta.create).toHaveBeenCalled();
+  });
+
   it("cria atleta + participação quando tudo é válido", async () => {
     mocked(obterEpocaAtiva).mockResolvedValue({ id: "ep1" });
     mocked(prisma.escalao.findFirst).mockResolvedValue({ id: CUID, clubeId: "clube1" });

@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { atletaPessoalSchema, criarAtletaSchema } from "@/lib/schemas/atleta";
+import {
+  atletaPessoalSchema,
+  criarAtletaSchema,
+  posicoesPorModalidade,
+} from "@/lib/schemas/atleta";
 import { exercicioSchema, diagramaSchema } from "@/lib/schemas/exercicio";
 import { jogoSchema, estatisticaSchema } from "@/lib/schemas/jogo";
 import { sessaoSchema, presencaSchema } from "@/lib/schemas/treino";
@@ -44,20 +48,80 @@ describe("atletaPessoalSchema (F1 — só dados pessoais)", () => {
   });
 
   it("rejeita posição inválida no array de posições", () => {
-    const r = atletaPessoalSchema.safeParse({ nome: "João", posicoes: ["AVANCADO"] });
+    // 🔁 v7 (§3.2): AVANCADO passou a ser válido (posição de futebol); uma posição
+    // inexistente no enum (ex.: "LIBERO") continua a ser rejeitada.
+    const r = atletaPessoalSchema.safeParse({ nome: "João", posicoes: ["LIBERO"] });
     expect(r.success).toBe(false);
   });
 
-  it("aceita múltiplas posições válidas", () => {
+  it("aceita múltiplas posições válidas de futsal", () => {
     const r = atletaPessoalSchema.safeParse({ nome: "João", posicoes: ["ALA", "PIVO"] });
     expect(r.success).toBe(true);
     if (r.success) expect(r.data.posicoes).toEqual(["ALA", "PIVO"]);
+  });
+
+  it("aceita posições de futebol (§3.2 — enum multi-desporto)", () => {
+    const r = atletaPessoalSchema.safeParse({
+      nome: "João",
+      posicoes: ["DEFESA_CENTRAL", "AVANCADO"],
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.posicoes).toEqual(["DEFESA_CENTRAL", "AVANCADO"]);
   });
 
   it("ignora escalão/número (passaram para a participação)", () => {
     const r = atletaPessoalSchema.safeParse({ nome: "João", escalaoId: CUID, numero: 7 });
     expect(r.success).toBe(true);
     if (r.success) expect("numero" in r.data).toBe(false);
+  });
+});
+
+describe("posicoesPorModalidade (§2.3/§3.2 — seletor por modalidade)", () => {
+  it("futsal mostra {GR, Fixo, Ala, Pivô, Universal}", () => {
+    expect(posicoesPorModalidade("FUTSAL")).toEqual([
+      "GUARDA_REDES",
+      "FIXO",
+      "ALA",
+      "PIVO",
+      "UNIVERSAL",
+    ]);
+  });
+
+  it("futebol mostra as posições de futebol + partilhadas (GR, Universal)", () => {
+    expect(posicoesPorModalidade("FUTEBOL")).toEqual([
+      "GUARDA_REDES",
+      "DEFESA_CENTRAL",
+      "LATERAL_DIREITO",
+      "LATERAL_ESQUERDO",
+      "MEDIO_DEFENSIVO",
+      "MEDIO_CENTRO",
+      "MEDIO_OFENSIVO",
+      "EXTREMO_DIREITO",
+      "EXTREMO_ESQUERDO",
+      "AVANCADO",
+      "UNIVERSAL",
+    ]);
+  });
+
+  it("GUARDA_REDES e UNIVERSAL são partilhados pelas duas modalidades", () => {
+    for (const partilhada of ["GUARDA_REDES", "UNIVERSAL"] as const) {
+      expect(posicoesPorModalidade("FUTSAL")).toContain(partilhada);
+      expect(posicoesPorModalidade("FUTEBOL")).toContain(partilhada);
+    }
+  });
+
+  it("posições específicas não atravessam modalidades", () => {
+    expect(posicoesPorModalidade("FUTSAL")).not.toContain("AVANCADO");
+    expect(posicoesPorModalidade("FUTEBOL")).not.toContain("FIXO");
+  });
+
+  it("sem modalidade devolve todas as posições sem duplicar as partilhadas", () => {
+    const todas = posicoesPorModalidade(null);
+    // Cada posição aparece exatamente uma vez.
+    expect(new Set(todas).size).toBe(todas.length);
+    expect(todas).toContain("FIXO");
+    expect(todas).toContain("AVANCADO");
+    expect(todas).toContain("GUARDA_REDES");
   });
 });
 

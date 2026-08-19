@@ -1,7 +1,12 @@
+import { FormatoJogo } from "@prisma/client";
 import type { ElementoCampo } from "@/lib/schemas/exercicio";
 import { ancoraElemento, rotuloElemento } from "./animacao";
 
 // Dimensões internas do campo (secção 13.1): 1 unidade = 10 cm, campo 400×200.
+// 🔁 v7 (§11.5): o espaço de coordenadas interno mantém-se 400×200 para TODOS os
+// formatos (futsal e futebol) — o que muda por formato são apenas as marcações do
+// fundo. Assim os elementos (schema 0–400 / 0–200), a escala de hit-area e o
+// teclado são coerentes e retrocompatíveis entre modalidades.
 export const CAMPO_W = 400;
 export const CAMPO_H = 200;
 
@@ -16,93 +21,301 @@ function corParaHex(cor: string): string {
   return COR_HEX[cor] ?? cor;
 }
 
-// ─── Linhas de referência do campo (secção 13.1) ────────────────────────────
+// ─── Fundos de campo por formato (secção 11.5 + Apêndice B) ──────────────────
+//
+// Todos os fundos partilham o mesmo espaço de coordenadas 400×200 (1u=10cm no
+// futsal); as marcações de futebol são desenhadas em proporção reconhecível
+// dentro dessa caixa (dimensões "de referência" — Apêndice B). O motor de
+// elementos, animação e interação é agnóstico ao fundo.
 
-export function LinhasCampo() {
+const BRANCO = "#FFFFFF";
+const RELVA = "#0E7A3C";
+const TRACO = 1.5;
+const MEIO_Y = CAMPO_H / 2;
+
+/** Relvado + contorno + linha de meio-campo + marca central (comum a todos). */
+function Relvado() {
   return (
-    <g>
-      {/* Relvado */}
-      <rect x={0} y={0} width={CAMPO_W} height={CAMPO_H} fill="#0E7A3C" />
-      {/* Contorno */}
+    <>
+      <rect x={0} y={0} width={CAMPO_W} height={CAMPO_H} fill={RELVA} />
       <rect
         x={4}
         y={4}
         width={CAMPO_W - 8}
         height={CAMPO_H - 8}
         fill="none"
-        stroke="#FFFFFF"
-        strokeWidth={1.5}
+        stroke={BRANCO}
+        strokeWidth={TRACO}
       />
-      {/* Linha de meio-campo */}
       <line
         x1={CAMPO_W / 2}
         y1={4}
         x2={CAMPO_W / 2}
         y2={CAMPO_H - 4}
-        stroke="#FFFFFF"
-        strokeWidth={1.5}
+        stroke={BRANCO}
+        strokeWidth={TRACO}
       />
+      <circle cx={CAMPO_W / 2} cy={MEIO_Y} r={2} fill={BRANCO} />
+    </>
+  );
+}
+
+/** Baliza desenhada por fora da linha de baliza (esquerda ou direita). */
+function Baliza({ lado, altura }: { lado: "esq" | "dir"; altura: number }) {
+  const prof = 5;
+  const x = lado === "esq" ? 4 : CAMPO_W - 4;
+  const d = lado === "esq" ? -prof : prof;
+  const y1 = MEIO_Y - altura / 2;
+  const y2 = MEIO_Y + altura / 2;
+  return (
+    <g stroke={BRANCO} strokeWidth={TRACO} fill="none">
+      <line x1={x} y1={y1} x2={x + d} y2={y1} />
+      <line x1={x + d} y1={y1} x2={x + d} y2={y2} />
+      <line x1={x} y1={y2} x2={x + d} y2={y2} />
+    </g>
+  );
+}
+
+/** Área rectangular (grande ou pequena) num dos lados. */
+function AreaRect({
+  lado,
+  prof,
+  altura,
+}: {
+  lado: "esq" | "dir";
+  prof: number;
+  altura: number;
+}) {
+  const x = lado === "esq" ? 4 : CAMPO_W - 4 - prof;
+  const y = MEIO_Y - altura / 2;
+  return (
+    <rect
+      x={x}
+      y={y}
+      width={prof}
+      height={altura}
+      fill="none"
+      stroke={BRANCO}
+      strokeWidth={TRACO}
+    />
+  );
+}
+
+/** Marca de grande penalidade. */
+function MarcaPenalti({ lado, dist }: { lado: "esq" | "dir"; dist: number }) {
+  const cx = lado === "esq" ? 4 + dist : CAMPO_W - 4 - dist;
+  return <circle cx={cx} cy={MEIO_Y} r={1.6} fill={BRANCO} />;
+}
+
+/** Arco de grande área (parte visível fora da grande área). */
+function ArcoPenalti({
+  lado,
+  dist,
+  arcR,
+  profArea,
+}: {
+  lado: "esq" | "dir";
+  dist: number;
+  arcR: number;
+  profArea: number;
+}) {
+  const cx = lado === "esq" ? 4 + dist : CAMPO_W - 4 - dist;
+  const bordoX = lado === "esq" ? 4 + profArea : CAMPO_W - 4 - profArea;
+  const dx = Math.abs(bordoX - cx);
+  if (dx >= arcR) return null; // arco totalmente dentro da área → invisível
+  const dy = Math.sqrt(arcR * arcR - dx * dx);
+  // Bojo para o meio-campo: esquerda → sweep 1; direita → sweep 0.
+  const sweep = lado === "esq" ? 1 : 0;
+  const d = `M ${bordoX} ${MEIO_Y - dy} A ${arcR} ${arcR} 0 0 ${sweep} ${bordoX} ${MEIO_Y + dy}`;
+  return <path d={d} fill="none" stroke={BRANCO} strokeWidth={TRACO} />;
+}
+
+/** Fundo de futsal (secção 13.1) — quartos de círculo de 6 m e 2.ª penalidade. */
+function FundoFutsal5() {
+  return (
+    <g>
+      <Relvado />
       {/* Círculo central (raio 3m = 30 unidades) */}
       <circle
         cx={CAMPO_W / 2}
-        cy={CAMPO_H / 2}
+        cy={MEIO_Y}
         r={30}
         fill="none"
-        stroke="#FFFFFF"
-        strokeWidth={1.5}
+        stroke={BRANCO}
+        strokeWidth={TRACO}
       />
-      <circle cx={CAMPO_W / 2} cy={CAMPO_H / 2} r={2} fill="#FFFFFF" />
-
       {/* Área esquerda: quarto de círculo 6m (60 unidades) em cada poste */}
       <path
-        d={`M 4 ${CAMPO_H / 2 - 30 - 60} A 60 60 0 0 1 64 ${CAMPO_H / 2 - 30}`}
+        d={`M 4 ${MEIO_Y - 30 - 60} A 60 60 0 0 1 64 ${MEIO_Y - 30}`}
         fill="none"
-        stroke="#FFFFFF"
-        strokeWidth={1.5}
+        stroke={BRANCO}
+        strokeWidth={TRACO}
       />
       <path
-        d={`M 64 ${CAMPO_H / 2 + 30} A 60 60 0 0 1 4 ${CAMPO_H / 2 + 30 + 60}`}
+        d={`M 64 ${MEIO_Y + 30} A 60 60 0 0 1 4 ${MEIO_Y + 30 + 60}`}
         fill="none"
-        stroke="#FFFFFF"
-        strokeWidth={1.5}
+        stroke={BRANCO}
+        strokeWidth={TRACO}
       />
-      <line
-        x1={64}
-        y1={CAMPO_H / 2 - 30}
-        x2={64}
-        y2={CAMPO_H / 2 + 30}
-        stroke="#FFFFFF"
-        strokeWidth={1.5}
-      />
-      {/* Grande penalidade esquerda (6m) e segunda penalidade (10m) */}
-      <circle cx={64} cy={CAMPO_H / 2} r={1.6} fill="#FFFFFF" />
-      <circle cx={100} cy={CAMPO_H / 2} r={1.6} fill="#FFFFFF" />
-
-      {/* Área direita */}
+      <line x1={64} y1={MEIO_Y - 30} x2={64} y2={MEIO_Y + 30} stroke={BRANCO} strokeWidth={TRACO} />
+      <circle cx={64} cy={MEIO_Y} r={1.6} fill={BRANCO} />
+      <circle cx={100} cy={MEIO_Y} r={1.6} fill={BRANCO} />
+      {/* Área direita (espelhada) */}
       <path
-        d={`M ${CAMPO_W - 4} ${CAMPO_H / 2 - 30 - 60} A 60 60 0 0 0 ${CAMPO_W - 64} ${CAMPO_H / 2 - 30}`}
+        d={`M ${CAMPO_W - 4} ${MEIO_Y - 30 - 60} A 60 60 0 0 0 ${CAMPO_W - 64} ${MEIO_Y - 30}`}
         fill="none"
-        stroke="#FFFFFF"
-        strokeWidth={1.5}
+        stroke={BRANCO}
+        strokeWidth={TRACO}
       />
       <path
-        d={`M ${CAMPO_W - 64} ${CAMPO_H / 2 + 30} A 60 60 0 0 0 ${CAMPO_W - 4} ${CAMPO_H / 2 + 30 + 60}`}
+        d={`M ${CAMPO_W - 64} ${MEIO_Y + 30} A 60 60 0 0 0 ${CAMPO_W - 4} ${MEIO_Y + 30 + 60}`}
         fill="none"
-        stroke="#FFFFFF"
-        strokeWidth={1.5}
+        stroke={BRANCO}
+        strokeWidth={TRACO}
       />
       <line
         x1={CAMPO_W - 64}
-        y1={CAMPO_H / 2 - 30}
+        y1={MEIO_Y - 30}
         x2={CAMPO_W - 64}
-        y2={CAMPO_H / 2 + 30}
-        stroke="#FFFFFF"
-        strokeWidth={1.5}
+        y2={MEIO_Y + 30}
+        stroke={BRANCO}
+        strokeWidth={TRACO}
       />
-      <circle cx={CAMPO_W - 64} cy={CAMPO_H / 2} r={1.6} fill="#FFFFFF" />
-      <circle cx={CAMPO_W - 100} cy={CAMPO_H / 2} r={1.6} fill="#FFFFFF" />
+      <circle cx={CAMPO_W - 64} cy={MEIO_Y} r={1.6} fill={BRANCO} />
+      <circle cx={CAMPO_W - 100} cy={MEIO_Y} r={1.6} fill={BRANCO} />
     </g>
   );
+}
+
+/** Configuração de marcações de um fundo de futebol (proporções de referência). */
+interface CfgFutebol {
+  /** Raio do círculo central (0 = sem círculo, ex.: 3×3). */
+  centerR: number;
+  /** Grande área (rectângulo). */
+  bigArea?: { prof: number; altura: number };
+  /** Pequena área (rectângulo). */
+  smallArea?: { prof: number; altura: number };
+  /** Marca de grande penalidade (distância à linha de baliza). */
+  penalti?: { dist: number };
+  /** Arco da grande área (raio). Requer `bigArea` + `penalti`. */
+  arco?: { arcR: number };
+  /** Altura da baliza. */
+  goalAltura: number;
+}
+
+/** Fundo genérico de futebol — desenha ambos os lados (espelhados). */
+function FundoFutebol({ cfg }: { cfg: CfgFutebol }) {
+  const lados: ("esq" | "dir")[] = ["esq", "dir"];
+  return (
+    <g>
+      <Relvado />
+      {cfg.centerR > 0 && (
+        <circle
+          cx={CAMPO_W / 2}
+          cy={MEIO_Y}
+          r={cfg.centerR}
+          fill="none"
+          stroke={BRANCO}
+          strokeWidth={TRACO}
+        />
+      )}
+      {lados.map((lado) => (
+        <g key={lado}>
+          <Baliza lado={lado} altura={cfg.goalAltura} />
+          {cfg.bigArea && (
+            <AreaRect lado={lado} prof={cfg.bigArea.prof} altura={cfg.bigArea.altura} />
+          )}
+          {cfg.smallArea && (
+            <AreaRect lado={lado} prof={cfg.smallArea.prof} altura={cfg.smallArea.altura} />
+          )}
+          {cfg.penalti && <MarcaPenalti lado={lado} dist={cfg.penalti.dist} />}
+          {cfg.arco && cfg.bigArea && cfg.penalti && (
+            <ArcoPenalti
+              lado={lado}
+              dist={cfg.penalti.dist}
+              arcR={cfg.arco.arcR}
+              profArea={cfg.bigArea.prof}
+            />
+          )}
+        </g>
+      ))}
+    </g>
+  );
+}
+
+// Configurações por formato (Apêndice B — dimensões de referência, ⚠️ aproximadas).
+const CFG_FUTEBOL_3_3: CfgFutebol = { centerR: 0, goalAltura: 34 };
+const CFG_FUTEBOL_5_5: CfgFutebol = {
+  centerR: 24,
+  smallArea: { prof: 30, altura: 80 },
+  goalAltura: 30,
+};
+const CFG_FUTEBOL_7: CfgFutebol = {
+  centerR: 26,
+  bigArea: { prof: 48, altura: 100 },
+  penalti: { dist: 34 },
+  goalAltura: 28,
+};
+const CFG_FUTEBOL_9: CfgFutebol = {
+  centerR: 28,
+  bigArea: { prof: 55, altura: 110 },
+  penalti: { dist: 38 },
+  goalAltura: 26,
+};
+const CFG_FUTEBOL_11: CfgFutebol = {
+  centerR: 30,
+  bigArea: { prof: 66, altura: 126 },
+  smallArea: { prof: 22, altura: 57 },
+  penalti: { dist: 44 },
+  arco: { arcR: 37 },
+  goalAltura: 23,
+};
+
+// ─── Linhas de referência do campo (secção 11.5) ─────────────────────────────
+
+/**
+ * Fundo do campo para o `formato` indicado (§11.5 / Apêndice B).
+ * Ausente/legado → FUTSAL_5 (retrocompatível — Apêndice C).
+ */
+export function LinhasCampo({
+  formato = FormatoJogo.FUTSAL_5,
+}: {
+  formato?: FormatoJogo;
+}) {
+  switch (formato) {
+    case FormatoJogo.FUTEBOL_3_3:
+      return <FundoFutebol cfg={CFG_FUTEBOL_3_3} />;
+    case FormatoJogo.FUTEBOL_5_5:
+      return <FundoFutebol cfg={CFG_FUTEBOL_5_5} />;
+    case FormatoJogo.FUTEBOL_7:
+      return <FundoFutebol cfg={CFG_FUTEBOL_7} />;
+    case FormatoJogo.FUTEBOL_9:
+      return <FundoFutebol cfg={CFG_FUTEBOL_9} />;
+    case FormatoJogo.FUTEBOL_11:
+      return <FundoFutebol cfg={CFG_FUTEBOL_11} />;
+    case FormatoJogo.FUTSAL_5:
+    default:
+      return <FundoFutsal5 />;
+  }
+}
+
+/** Rótulo acessível (PT-PT) do fundo de campo por formato. */
+export function rotuloCampo(formato: FormatoJogo = FormatoJogo.FUTSAL_5): string {
+  switch (formato) {
+    case FormatoJogo.FUTEBOL_3_3:
+      return "campo de futebol de 3";
+    case FormatoJogo.FUTEBOL_5_5:
+      return "campo de futebol de 5";
+    case FormatoJogo.FUTEBOL_7:
+      return "campo de futebol de 7";
+    case FormatoJogo.FUTEBOL_9:
+      return "campo de futebol de 9";
+    case FormatoJogo.FUTEBOL_11:
+      return "campo de futebol de 11";
+    case FormatoJogo.FUTSAL_5:
+    default:
+      return "campo de futsal";
+  }
 }
 
 // ─── Caminho suave a partir de pontos ────────────────────────────────────────

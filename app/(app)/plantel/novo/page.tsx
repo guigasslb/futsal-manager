@@ -2,14 +2,21 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { listarEscaloes } from "@/lib/actions/escaloes";
+import { obterSeccoes } from "@/lib/actions/seccoes";
 import { AtletaForm } from "@/components/plantel/AtletaForm";
 import { EstadoErro } from "@/components/layout/EstadosUI";
+import { escaloesComModalidade } from "@/lib/modalidade-escalao";
 
 export const metadata: Metadata = { title: "Novo atleta" };
 
 export default async function NovoAtletaPage() {
-  const resEscaloes = await listarEscaloes();
+  const [resEscaloes, resSeccoes] = await Promise.all([
+    listarEscaloes(),
+    obterSeccoes(),
+  ]);
   if (!resEscaloes.sucesso) return <EstadoErro mensagem={resEscaloes.erro} />;
+  const seccoes = resSeccoes.sucesso ? resSeccoes.dados : [];
+  const escaloes = escaloesComModalidade(resEscaloes.dados, seccoes);
 
   return (
     <div className="space-y-6">
@@ -25,7 +32,7 @@ export default async function NovoAtletaPage() {
 
       <h1>Novo atleta</h1>
 
-      <AtletaForm escaloes={resEscaloes.dados} />
+      <AtletaForm escaloes={escaloes} />
     </div>
   );
 }

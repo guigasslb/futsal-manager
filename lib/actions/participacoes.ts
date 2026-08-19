@@ -71,9 +71,11 @@ export async function associarAEscalao(
   });
   if (!atleta) return erro("Atleta não encontrado");
 
+  // A modalidade da participação deriva de escalao.seccao.modalidade (§1.7.1):
+  // é ela que ancora o invariante do «principal por modalidade» (B3, §9).
   const escalao = await prisma.escalao.findFirst({
     where: { id: parsed.data.escalaoId, clubeId },
-    select: { id: true },
+    select: { id: true, seccao: { select: { modalidade: true } } },
   });
   if (!escalao) return erro("O escalão selecionado não existe");
 
@@ -82,19 +84,53 @@ export async function associarAEscalao(
 
   // Número duplicado é permitido (secção 9): sem validação de unicidade.
   const numero = parsed.data.numero ?? null;
+  const epocaId = epoca.epocaId;
+  // Escalões sem secção (fase expand, antes do backfill) formam o seu próprio
+  // "balde" de modalidade (null): assim o invariante continua a valer sem secção.
+  const modalidadeDestino = escalao.seccao?.modalidade ?? null;
 
   try {
-    const participacao = await prisma.atletaEscalao.create({
-      data: {
-        atletaId: atleta.id,
-        escalaoId: parsed.data.escalaoId,
-        epocaId: epoca.epocaId,
-        tipo: parsed.data.tipo,
-        estado: "ATIVO",
-        numero,
-        dataInicio: new Date(),
+    // Leitura + escrita numa única transação Serializable: o invariante do
+    // principal por modalidade (B3, §9) é imposto na escrita, evitando que duas
+    // associações concorrentes criem dois principais na mesma modalidade.
+    const participacao = await prisma.$transaction(
+      async (tx) => {
+        // Primeiro principal de uma modalidade nova (B3 — Apêndice C, §9): se o
+        // atleta ainda não tem PRINCIPAL ativo na modalidade do escalão destino,
+        // a participação nasce PRINCIPAL — única exceção à regra «associar nunca
+        // força principal». Caso contrário, mantém-se o tipo pedido
+        // (SIMULTANEA/OCASIONAL).
+        const principaisAtivos = await tx.atletaEscalao.findMany({
+          where: {
+            atletaId: atleta.id,
+            epocaId,
+            estado: "ATIVO",
+            tipo: "PRINCIPAL",
+          },
+          select: {
+            escalao: { select: { seccao: { select: { modalidade: true } } } },
+          },
+        });
+
+        const temPrincipalNaModalidade = principaisAtivos.some(
+          (p) => (p.escalao?.seccao?.modalidade ?? null) === modalidadeDestino,
+        );
+        const tipo = temPrincipalNaModalidade ? parsed.data.tipo : "PRINCIPAL";
+
+        return tx.atletaEscalao.create({
+          data: {
+            atletaId: atleta.id,
+            escalaoId: parsed.data.escalaoId,
+            epocaId,
+            tipo,
+            estado: "ATIVO",
+            numero,
+            dataInicio: new Date(),
+          },
+        });
       },
-    });
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
     revalidarParticipacao(atleta.id);
     return ok(participacao);
   } catch (e) {
@@ -127,7 +163,7 @@ export async function transferirEscalao(
 
   const escaloes = await prisma.escalao.findMany({
     where: { id: { in: [parsed.data.deEscalaoId, parsed.data.paraEscalaoId] }, clubeId },
-    select: { id: true },
+    select: { id: true, seccao: { select: { modalidade: true } } },
   });
   if (escaloes.length !== 2) return erro("Um dos escalões selecionados não existe");
 
@@ -139,6 +175,12 @@ export async function transferirEscalao(
     escalaoId: parsed.data.paraEscalaoId,
     tipo: parsed.data.tipo,
   };
+  // Modalidade do escalão destino (§1.7.1): o invariante do principal é aplicado
+  // POR MODALIDADE (§9) — a transferência não pode tocar no principal de outra
+  // modalidade em que o atleta também participe.
+  const modalidadeDestino =
+    escaloes.find((e) => e.id === parsed.data.paraEscalaoId)?.seccao?.modalidade ??
+    null;
 
   // ⚠️ CAMPO LEGADO NÃO SINCRONIZADO: esta transferência opera exclusivamente
   // sobre `AtletaEscalao` (fonte de verdade da fase expand). O campo legado
@@ -157,15 +199,30 @@ export async function transferirEscalao(
     async (tx): Promise<{ erro: string } | { destino: AtletaEscalao }> => {
       const ativas = await tx.atletaEscalao.findMany({
         where: { atletaId: atleta.id, epocaId: epoca.epocaId, estado: "ATIVO" },
-        select: { id: true, escalaoId: true, tipo: true, numero: true },
+        select: {
+          id: true,
+          escalaoId: true,
+          tipo: true,
+          numero: true,
+          escalao: { select: { seccao: { select: { modalidade: true } } } },
+        },
       });
 
       const origem = ativas.find((p) => p.escalaoId === parsed.data.deEscalaoId);
       if (!origem)
         return { erro: "O atleta não tem uma participação ativa no escalão de origem." };
 
-      // A transferência não pode deixar o atleta sem participação principal.
-      if (ficariaSemPrincipal(ativas, destinoRef, [parsed.data.deEscalaoId]))
+      // Invariante do principal POR MODALIDADE (§9): só as participações da
+      // modalidade de destino entram na verificação e na despromoção. Assim, uma
+      // transferência dentro do futsal nunca despromove nem exige o principal do
+      // futebol (e vice-versa).
+      const naModalidadeDestino = ativas.filter(
+        (p) => (p.escalao?.seccao?.modalidade ?? null) === modalidadeDestino,
+      );
+
+      // A transferência não pode deixar o atleta sem participação principal na
+      // modalidade de destino.
+      if (ficariaSemPrincipal(naModalidadeDestino, destinoRef, [parsed.data.deEscalaoId]))
         return {
           erro: "A transferência deixaria o atleta sem participação principal nesta época. Escolhe o tipo «Principal» no escalão de destino.",
         };
@@ -179,8 +236,9 @@ export async function transferirEscalao(
       });
 
       // Um destino PRINCIPAL despromove qualquer outro principal que sobrasse
-      // ativo, garantindo o principal único por atleta/época.
-      for (const outro of principaisADespromover(ativas, destinoRef, [
+      // ativo na mesma modalidade, garantindo o principal único por
+      // atleta/época/modalidade.
+      for (const outro of principaisADespromover(naModalidadeDestino, destinoRef, [
         parsed.data.deEscalaoId,
       ])) {
         await tx.atletaEscalao.update({
