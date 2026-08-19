@@ -18,7 +18,7 @@ export default async function RegistarPage() {
     <Card className="w-full max-w-sm">
       <CardHeader className="text-center">
         <CardTitle className="text-titulo-pagina">Criar conta</CardTitle>
-        <CardDescription>Regista-te para começares a usar o FutsalCoach</CardDescription>
+        <CardDescription>Regista-te para começares a usar o Mister</CardDescription>
       </CardHeader>
       <CardContent>
         <RegistarForm />
