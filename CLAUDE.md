@@ -1,6 +1,6 @@
-# FutsalCoach — Instruções do projeto
+# Mister — Instruções do projeto
 
-Training Management System dedicado ao futsal (marca: **FutsalCoach**; guia visual em `docs/BRAND.md`). A **bíblia** do produto é `docs/FutsalManager_Spec_v6.md` — **fonte única de verdade** do produto final. (`docs/FutsalManager_Spec_v5.md` é o histórico pré-brainstorming 2026-08-05, arquivado. `docs/FutsalManager_Spec_v4_MVP_historico.md` é o histórico do MVP, arquivado — não usar como referência ativa.)
+Training Management System dedicado ao futsal (marca: **Mister**; guia visual em `docs/BRAND.md`). A **bíblia** do produto é `docs/FutsalManager_Spec_v6.md` — **fonte única de verdade** do produto final. (`docs/FutsalManager_Spec_v5.md` é o histórico pré-brainstorming 2026-08-05, arquivado. `docs/FutsalManager_Spec_v4_MVP_historico.md` é o histórico do MVP, arquivado — não usar como referência ativa.)
 
 ## Documentação (regra inquebrável)
 
@@ -29,7 +29,7 @@ Next.js 15 (App Router) · React 19 · TypeScript strict · Prisma + PostgreSQL 
 - Todas as actions: validam input → verificam `auth()` → obtêm época via `obterEpocaAtiva()` → devolvem `Resultado<T>` (`lib/utils.ts`) → `revalidatePath()`.
 - Todas as queries filtram pelo **clube** do utilizador autenticado e, quando aplicável, pela **época ativa**.
 - Interface 100% em **português de Portugal**, com a terminologia do glossário (secção 2).
-- Sistema de design da secção 12 + `docs/BRAND.md`. **Marca FutsalCoach** (laranja `#F0531E` + preto quente + Bricolage Grotesque) é **fixa**; a **cor do clube** é dinâmica e alimenta todos os acentos (via `--cor-primaria` e `--primary`). Alvos de toque ≥44px. Sem dark mode no MVP.
+- Sistema de design da secção 12 + `docs/BRAND.md`. **Marca Mister** (laranja `#F0531E` + preto quente + Bricolage Grotesque) é **fixa**; a **cor do clube** é dinâmica e alimenta todos os acentos (via `--cor-primaria` e `--primary`). Alvos de toque ≥44px. Sem dark mode no MVP.
 
 ## Estado dos passos (MVP — concluído)
 

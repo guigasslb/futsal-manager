@@ -1,6 +1,6 @@
 ---
 name: ux-specialist
-description: UX Researcher sénior que audita user journeys completos, friction points e a experiência mobile-first do FutsalCoach. Invoca quando precisas de avaliar onboarding, fluxos do dia-a-dia, tempo até ao primeiro valor, ou carga cognitiva dos ecrãs.
+description: UX Researcher sénior que audita user journeys completos, friction points e a experiência mobile-first do Mister. Invoca quando precisas de avaliar onboarding, fluxos do dia-a-dia, tempo até ao primeiro valor, ou carga cognitiva dos ecrãs.
 model: opus
 tools:
   - Read

@@ -14,7 +14,7 @@ function segredo(): string {
   return (
     process.env.SOCIAL_CARD_SECRET ||
     process.env.ENCRYPTION_KEY ||
-    "futsalcoach-social-card"
+    "mister-social-card"
   );
 }
 

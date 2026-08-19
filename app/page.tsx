@@ -308,11 +308,11 @@ export default function RootPage() {
             Fala connosco
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-lg text-white/75">
-            Tens dúvidas, sugestões ou queres saber mais sobre o FutsalCoach?
+            Tens dúvidas, sugestões ou queres saber mais sobre o Mister?
             Envia-nos um email.
           </p>
           <a
-            href="mailto:goncalo.pereira.1992@gmail.com?subject=Contacto%20FutsalCoach"
+            href="mailto:goncalo.pereira.1992@gmail.com?subject=Contacto%20Mister"
             className="mt-8 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-7 py-3.5 text-base font-semibold text-white shadow-lg transition-transform hover:-translate-y-0.5"
             style={{ backgroundColor: LARANJA_ACAO }}
           >
@@ -327,7 +327,7 @@ export default function RootPage() {
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-10 sm:flex-row">
           <Logo size={20} variant="dark" />
           <p className="text-corpo-sec text-white/60">
-            © 2026 FutsalCoach · Feito em Portugal
+            © 2026 Mister · Feito em Portugal
           </p>
         </div>
       </footer>

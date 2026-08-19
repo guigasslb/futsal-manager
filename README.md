@@ -1,4 +1,4 @@
-# FutsalManager
+# Mister
 
 Training Management System dedicado ao futsal. Implementação da especificação v4.0.
 

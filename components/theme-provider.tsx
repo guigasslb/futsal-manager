@@ -24,7 +24,7 @@ export function ThemeProvider({
       defaultTheme="dark"
       enableSystem={false}
       disableTransitionOnChange
-      storageKey="futsalcoach-tema"
+      storageKey="mister-tema"
       themes={["light", "dark"]}
       {...props}
     >

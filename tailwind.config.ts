@@ -14,7 +14,7 @@ const config: Config = {
         display: ["var(--font-display)", "Bricolage Grotesque", "system-ui", "sans-serif"],
       },
       colors: {
-        // ─── Marca FutsalCoach (secção 12) ───
+        // ─── Marca Mister (secção 12) ───
         // Preto quente (texto/ícone) e laranja (acento da marca / default sem clube).
         ink: "#141210",
         laranja: {

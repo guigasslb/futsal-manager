@@ -13,10 +13,10 @@ const display = Bricolage_Grotesque({
 });
 
 export const metadata: Metadata = {
-  title: { default: "FutsalCoach", template: "FutsalCoach – %s" },
+  title: { default: "Mister", template: "Mister – %s" },
   description: "Gestão de treino e desenvolvimento do atleta, dedicada ao futsal",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "FutsalCoach", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "Mister", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

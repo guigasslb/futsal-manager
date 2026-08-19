@@ -130,7 +130,7 @@ describe("google-calendar — configuração", () => {
   });
 
   it("obterRedirectUri compõe o URL do callback a partir de NEXTAUTH_URL", () => {
-    process.env.NEXTAUTH_URL = "https://app.futsalcoach.pt/";
-    expect(obterRedirectUri()).toBe("https://app.futsalcoach.pt/api/google/callback");
+    process.env.NEXTAUTH_URL = "https://app.mister.pt/";
+    expect(obterRedirectUri()).toBe("https://app.mister.pt/api/google/callback");
   });
 });

@@ -96,13 +96,13 @@ pequenas e de correção rápida, mas numa auditoria de venda contam.
 
 ### Email 1 — Boas-vindas (imediato após registo)
 
-**Assunto:** Bem-vindo ao FutsalCoach — o teu escalão começa aqui
+**Assunto:** Bem-vindo ao Mister — o teu escalão começa aqui
 
 **Corpo:**
 
 Olá {primeiro_nome},
 
-Bem-vindo ao FutsalCoach. Foi feito para o futsal a sério — não é futebol adaptado.
+Bem-vindo ao Mister. Foi feito para o futsal a sério — não é futebol adaptado.
 
 O caminho mais rápido para veres valor é montares o teu primeiro escalão. Em cerca de
 10 minutos ficas com o plantel carregado, o primeiro treino agendado e a primeira
@@ -113,7 +113,7 @@ convocatória pronta para o WhatsApp.
 Qualquer dúvida, responde a este email. Lemos todas.
 
 Até já,
-Equipa FutsalCoach
+Equipa Mister
 
 ---
 
@@ -134,7 +134,7 @@ arrancar. Os detalhes (posições, contactos, foto) preenches quando te der jeit
 
 Com o plantel montado, o treino e a convocatória saem num instante.
 
-Equipa FutsalCoach
+Equipa Mister
 
 ---
 
@@ -146,7 +146,7 @@ Equipa FutsalCoach
 
 Olá {primeiro_nome},
 
-Já tens o plantel — boa. Falta pôr o FutsalCoach a trabalhar por ti: **agendar o
+Já tens o plantel — boa. Falta pôr o Mister a trabalhar por ti: **agendar o
 primeiro treino**.
 
 Não começas do zero. Escolhe um dos nossos modelos prontos, mete a data e o escalão, e
@@ -157,7 +157,7 @@ está feito. Depois é só marcar presenças no telemóvel, à beira do campo.
 E se preferires ver primeiro como funciona, responde a este email que marcamos 10
 minutos contigo.
 
-Equipa FutsalCoach
+Equipa Mister
 
 ---
 

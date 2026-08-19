@@ -1,7 +1,7 @@
 import React from "react";
 
 /**
- * FutsalCoach — logótipo (portátil, sem dependências).
+ * Mister — logótipo (portátil, sem dependências).
  * Ícone = quadra preta com marcadores do quadro tático (O, X, seta) a laranja.
  */
 
@@ -32,7 +32,7 @@ export function LogoIcon({
       className={className}
       style={style}
       role="img"
-      aria-label="FutsalCoach"
+      aria-label="Mister"
     >
       <rect width="48" height="48" rx="13" fill={c.tile} />
       <path d="M6 18 A6.5 6.5 0 0 1 6 30 Z" fill={c.area} />

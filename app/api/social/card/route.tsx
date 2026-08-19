@@ -137,7 +137,7 @@ function Rodape() {
         F
       </div>
       <div style={{ display: "flex", fontSize: 30, fontWeight: 700, color: MUTED }}>
-        FutsalCoach
+        Mister
       </div>
     </div>
   );

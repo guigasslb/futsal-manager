@@ -4,7 +4,7 @@ import { LogoIcon } from "@/components/layout/Logo";
 /**
  * Degradação graciosa do AppLayout quando a base de dados está inacessível
  * (ex.: Supabase P1001 / pool esgotado P2024). Server Component puro — não
- * depende de dados de BD nem de auth, apenas do branding FutsalCoach.
+ * depende de dados de BD nem de auth, apenas do branding Mister.
  *
  * O retry usa `<a href=".">`, que recarrega a rota atual sem exigir um Client
  * Component (evita bundle JS extra num ecrã de erro).
@@ -21,7 +21,7 @@ export function ServicoIndisponivel() {
               "var(--font-display), 'Bricolage Grotesque', system-ui, sans-serif",
           }}
         >
-          FutsalCoach
+          Mister
         </span>
       </header>
 

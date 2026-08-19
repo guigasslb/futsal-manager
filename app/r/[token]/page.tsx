@@ -10,7 +10,7 @@ import { BotaoImprimir } from "@/components/relatorios/BotaoImprimir";
 import { LogoIcon } from "@/components/layout/Logo";
 
 export const metadata: Metadata = {
-  title: "Relatório — FutsalCoach",
+  title: "Relatório — Mister",
   robots: { index: false, follow: false },
 };
 
@@ -98,7 +98,7 @@ export default async function RelatorioPublicoPage({
         >
           <span className="flex items-center gap-2 text-legenda font-medium text-cinza-500">
             <LogoIcon size={22} />
-            FutsalCoach
+            Mister
           </span>
           <BotaoImprimir label="Imprimir / Guardar PDF" />
         </div>
@@ -141,7 +141,7 @@ export default async function RelatorioPublicoPage({
           data-print-hidden
           className="mt-6 text-center text-legenda text-cinza-400 print:hidden"
         >
-          Relatório gerado por FutsalCoach
+          Relatório gerado por Mister
         </p>
       </div>
     </main>

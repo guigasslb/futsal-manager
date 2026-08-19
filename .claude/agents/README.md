@@ -1,4 +1,4 @@
-# Equipa FutsalCoach — QA, Personas & Produto
+# Equipa Mister — QA, Personas & Produto
 
 Agentes autónomos e críticos para garantir a qualidade do produto antes de ir a mercado.
 Três tipos: **Técnicos** (auditam o código), **Personas** (simulam utilizadores reais) e

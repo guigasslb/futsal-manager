@@ -1,6 +1,6 @@
 # Auditoria UI/Design — Sofia Alves (UI Design Reviewer)
 
-> FutsalCoach · revisão de sistema de design, marca, estados e acessibilidade visual.
+> Mister · revisão de sistema de design, marca, estados e acessibilidade visual.
 > Âmbito: `globals.css`, `tailwind.config.ts`, `docs/BRAND.md`, `app/page.tsx`, `app/layout.tsx`, e componentes de layout (`BarraTopo`, `Navegacao`, `AlternadorTema`, `theme-provider`) + primitivos `button`/`input`.
 
 ## Checklist de Qualidade Visual
@@ -52,7 +52,7 @@ A primeira impressão do produto é a única superfície construída **fora dos 
 
 ## O que está bem (não regredir)
 
-- **Arquitetura de tema dupla** (marca fixa FutsalCoach + `--cor-primaria` dinâmica do clube injetada em `--primary`/`--ring`) é uma decisão de design system madura e bem documentada em `BRAND.md`.
+- **Arquitetura de tema dupla** (marca fixa Mister + `--cor-primaria` dinâmica do clube injetada em `--primary`/`--ring`) é uma decisão de design system madura e bem documentada em `BRAND.md`.
 - **Remapeamento `.dark`** das utilitárias claras (`globals.css:238-322`) — solução pragmática e correta para dar dark mode a toda a app sem editar centenas de ficheiros; especificidade bem raciocinada nos comentários.
 - **Bricolage Grotesque** corretamente carregada via `next/font` com pesos certos e `letter-spacing` negativo nos títulos — dá a personalidade editorial esperada.
 - **Escala tipográfica e de raio/sombra tokenizadas** (`tailwind.config.ts:88-104`) — semântica clara (`titulo-pagina`, `corpo`, `legenda`).

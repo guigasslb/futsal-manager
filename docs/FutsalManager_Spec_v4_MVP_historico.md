@@ -1,9 +1,9 @@
-# FutsalManager — Especificação Técnica
+# Mister — Especificação Técnica
 
 **Versão:** 4.0 — Especificação do Produto Completo (MVP + Fase 2)
 **Data:** Julho 2026
 **Autor:** Gonçalo Pereira
-**Objetivo:** Especificação completa e autossuficiente do FutsalManager — um Training Management System (TMS) dedicado ao futsal. Cobre o **produto final por inteiro**: a Parte I especifica o MVP (primeira fase de implementação) e a Parte II o produto completo (fase 2), ambos ao mesmo nível de detalhe. Este é o documento único e definitivo do projeto — escrito para ser implementado sem decisões implícitas e sem depender de contexto externo. Cada comportamento, validação e estado está especificado.
+**Objetivo:** Especificação completa e autossuficiente do Mister — um Training Management System (TMS) dedicado ao futsal. Cobre o **produto final por inteiro**: a Parte I especifica o MVP (primeira fase de implementação) e a Parte II o produto completo (fase 2), ambos ao mesmo nível de detalhe. Este é o documento único e definitivo do projeto — escrito para ser implementado sem decisões implícitas e sem depender de contexto externo. Cada comportamento, validação e estado está especificado.
 
 ---
 
@@ -75,11 +75,11 @@ As adições da Parte II são **retrocompatíveis** com o MVP (novas tabelas e c
 
 ### 1.1 O que é
 
-O **FutsalManager** é uma aplicação web de gestão de treino e equipas dedicada ao futsal. Permite planear sessões de treino, gerir o plantel, construir uma biblioteca de exercícios com diagramas de campo, controlar presenças e convocatórias, registar jogos com estatísticas por atleta, e acompanhar o desenvolvimento técnico individual através de uma caderneta de habilidades.
+O **Mister** é uma aplicação web de gestão de treino e equipas dedicada ao futsal. Permite planear sessões de treino, gerir o plantel, construir uma biblioteca de exercícios com diagramas de campo, controlar presenças e convocatórias, registar jogos com estatísticas por atleta, e acompanhar o desenvolvimento técnico individual através de uma caderneta de habilidades.
 
 ### 1.2 Porquê existe
 
-As ferramentas de gestão de treino existentes são pensadas para futebol e tratam o futsal como subproduto — dimensões de campo erradas, terminologia incorreta, ausência de lógica pedagógica adaptada, e sem noção das rotações constantes que caracterizam o futsal. O FutsalManager é construído de raiz para futsal.
+As ferramentas de gestão de treino existentes são pensadas para futebol e tratam o futsal como subproduto — dimensões de campo erradas, terminologia incorreta, ausência de lógica pedagógica adaptada, e sem noção das rotações constantes que caracterizam o futsal. O Mister é construído de raiz para futsal.
 
 ### 1.3 Âmbito do MVP
 
@@ -161,7 +161,7 @@ Termos de futsal usados no modelo e na interface. Implementação DEVE usar exat
 ### 4.1 Estrutura de pastas
 
 ```
-futsalmanager/
+mister/
 ├── app/
 │   ├── (auth)/
 │   │   ├── login/page.tsx
@@ -1400,8 +1400,8 @@ App nativa; billing; notificações push; chat; recuperação de password por em
 
 ### 17.1 Setup do projeto
 ```bash
-npx create-next-app@latest futsalmanager --typescript --tailwind --app --no-src-dir --import-alias "@/*"
-cd futsalmanager
+npx create-next-app@latest mister --typescript --tailwind --app --no-src-dir --import-alias "@/*"
+cd mister
 
 npm install @prisma/client next-auth@beta bcryptjs zod date-fns
 npm install -D prisma @types/bcryptjs
@@ -1414,7 +1414,7 @@ npx prisma init
 
 `.env.example` (versionado, sem valores) e `.env.local` (real, não versionado):
 ```
-DATABASE_URL="postgresql://user:pass@host:5432/futsalmanager"   # Supabase
+DATABASE_URL="postgresql://user:pass@host:5432/mister"   # Supabase
 AUTH_SECRET="..."      # gerar: npx auth secret
 ```
 
@@ -1584,7 +1584,7 @@ Layout prescritivo dos ecrãs. Cada wireframe mostra a estrutura em tablet (refe
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│ [≡] FutsalManager        [Época: 2025/26 ▾]      [GP ▾]      │  ← barra topo (56px)
+│ [≡] Mister        [Época: 2025/26 ▾]      [GP ▾]      │  ← barra topo (56px)
 ├──────────┬─────────────────────────────────────────────────┤
 │          │                                                   │
 │ ▣ Início │              ÁREA DE CONTEÚDO                     │
@@ -1924,7 +1924,7 @@ O MVP está concluído quando todos os itens da secção 18 estão feitos e a ch
 
 ## 25. Visão do Produto Completo
 
-### 25.1 O que o FutsalManager é, no fim
+### 25.1 O que o Mister é, no fim
 
 Uma plataforma de gestão de futsal que cobre o ciclo completo do treinador e do clube: planeamento de época estruturado (macrociclo→sessão), gestão de treino e jogo, desenvolvimento individual do atleta (caderneta), e um portal onde pais e atletas acompanham a evolução. Preparada para operar num clube ou, opcionalmente, em várias organizações.
 
@@ -2404,4 +2404,4 @@ Toda entidade com dados de um clube tem (direta ou indiretamente) um caminho at�
 
 ---
 
-*Fim do documento. Versão 4.0 — Especificação do Produto Completo. A Parte I define o MVP (primeira fase); a Parte II define o produto completo (fase 2), ambos ao mesmo nível de detalhe. Documento único e definitivo do projeto FutsalManager: modelo de dados consolidado (23 entidades, 9 enums), contratos de API, validação, tratamento de erros, sistema de design, wireframes, interação do editor de campo, casos-limite, requisitos não-funcionais, e roadmap de implementação faseada. Concebido para ser implementado na íntegra sem depender de contexto externo.*
+*Fim do documento. Versão 4.0 — Especificação do Produto Completo. A Parte I define o MVP (primeira fase); a Parte II define o produto completo (fase 2), ambos ao mesmo nível de detalhe. Documento único e definitivo do projeto Mister: modelo de dados consolidado (23 entidades, 9 enums), contratos de API, validação, tratamento de erros, sistema de design, wireframes, interação do editor de campo, casos-limite, requisitos não-funcionais, e roadmap de implementação faseada. Concebido para ser implementado na íntegra sem depender de contexto externo.*

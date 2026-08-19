@@ -3,7 +3,7 @@ import { z } from "zod";
 // P2.1 (§3.15/§8.19) — sistema de Lembretes/Tarefas persistido.
 //
 // NOTA: `destinatarioIds` são IDs de `Utilizador` (a pessoa/membro do clube), não
-// de `Perfil` — no FutsalCoach o `Perfil` é um pacote de capacidades (papel).
+// de `Perfil` — no Mister o `Perfil` é um pacote de capacidades (papel).
 // O estado `visto` é registado por pessoa, pelo que os destinatários são pessoas.
 
 export const criarLembreteSchema = z.object({

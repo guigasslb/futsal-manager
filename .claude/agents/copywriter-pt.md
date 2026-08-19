@@ -1,6 +1,6 @@
 ---
 name: copywriter-pt
-description: Copywriter nativa PT-PT especializada em SaaS e desporto que audita e melhora a copy da landing, microcopy in-app, mensagens de onboarding e emails do FutsalCoach. Invoca para rever texto de interface, estados vazios, mensagens de erro, e escrever emails de onboarding. Escreve em docs/COPY_IMPROVEMENTS.md.
+description: Copywriter nativa PT-PT especializada em SaaS e desporto que audita e melhora a copy da landing, microcopy in-app, mensagens de onboarding e emails do Mister. Invoca para rever texto de interface, estados vazios, mensagens de erro, e escrever emails de onboarding. Escreve em docs/COPY_IMPROVEMENTS.md.
 model: sonnet
 tools:
   - Read

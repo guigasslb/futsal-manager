@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "FutsalCoach",
-    short_name: "FutsalCoach",
+    name: "Mister",
+    short_name: "Mister",
     description: "Gestão de treino e desenvolvimento do atleta, dedicada ao futsal",
     start_url: "/dashboard",
     display: "standalone",

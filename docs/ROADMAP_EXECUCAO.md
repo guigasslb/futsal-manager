@@ -1,10 +1,10 @@
-# FutsalCoach — Roadmap de Execução (features de auditoria QA + personas)
+# Mister — Roadmap de Execução (features de auditoria QA + personas)
 
 > **Fonte de verdade do produto:** `docs/FutsalManager_Spec_v6.md` (secção 8 = analytics, secção 16 = ordem de desenvolvimento).
 > **Regra inquebrável:** nenhuma alteração de código sem atualizar a bíblia no mesmo passo (changelog na secção 19).
 > **Definição de pronto (por task):** conforme a bíblia · validação Zod + `Resultado<T>` · `auth()` + `obterEpocaAtiva()` + filtro por clube/época no servidor · estados loading/vazio/erro · responsivo (alvos ≥44px) · `npm run typecheck` + `npm run lint` + `npm run test` limpos (910 testes verdes) · secção da bíblia atualizada.
 
-Este roadmap consolida os *findings* das **13 personas/agentes QA** de produto sobre o FutsalManager e traduz as 5 features de roadmap (F1–F5) numa sequência priorizada por **impacto × esforço**. Complementa (não substitui) o `docs/EXECUTION_PLAN.md` — sempre que uma feature toca uma task já existente lá, é referenciada explicitamente para evitar duplicação e *scope creep*.
+Este roadmap consolida os *findings* das **13 personas/agentes QA** de produto sobre o Mister e traduz as 5 features de roadmap (F1–F5) numa sequência priorizada por **impacto × esforço**. Complementa (não substitui) o `docs/EXECUTION_PLAN.md` — sempre que uma feature toca uma task já existente lá, é referenciada explicitamente para evitar duplicação e *scope creep*.
 
 **Legenda de esforço:** S (≤0,5 dia) · M (~1–2 dias) · L (~3–5 dias) · XL (>1 semana).
 **Legenda de impacto:** ALTO (pedido transversal / desbloqueia caso de uso sénior) · MÉDIO (fecha gap de completude) · BAIXO (higiene / rasto).

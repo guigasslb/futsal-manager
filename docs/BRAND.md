@@ -1,6 +1,6 @@
-# FutsalCoach — Guia de marca
+# Mister — Guia de marca
 
-Identidade visual do produto **FutsalCoach**. Complementa a secção 12 da bíblia (`FutsalManager_Spec_v5.md`). Regra de ouro: **a marca do produto é fixa; a cor do clube é dinâmica**.
+Identidade visual do produto **Mister**. Complementa a secção 12 da bíblia (`FutsalManager_Spec_v5.md`). Regra de ouro: **a marca do produto é fixa; a cor do clube é dinâmica**.
 
 ## 1. Logótipo
 
@@ -42,7 +42,7 @@ A cor primária escolhida no **criar clube** (`Clube.corPrimaria`) alimenta **to
 - Usada em: cartão-herói (gradiente), navegação ativa, botões primários, chips, avatar, links/tabs (via `text-primary`/`bg-primary`), focus rings, e a **cor da marca de água**.
 - **Default** (sem clube, ex.: login) = laranja da marca.
 
-> Arquitetura: o *shell* (logo, tipografia, neutros quentes) é sempre FutsalCoach; a cor do clube entra nos acentos. Um clube azul → app quente com acentos azuis; um clube vermelho → acentos vermelhos.
+> Arquitetura: o *shell* (logo, tipografia, neutros quentes) é sempre Mister; a cor do clube entra nos acentos. Um clube azul → app quente com acentos azuis; um clube vermelho → acentos vermelhos.
 
 ## 4. Marca de água do clube
 

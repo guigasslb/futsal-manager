@@ -16,7 +16,7 @@
 
 ## Top 3 Mensagens que FALTAM
 
-1. **A dualidade treinador↔clube — o ÚNICO diferenciador real, e está escondido.** A bíblia (secção 1.2) diz preto no branco: *"Esta dualidade é a vantagem competitiva. O concorrente (Dossier do Treinador) é apenas individual. O FutsalCoach é individual E plataforma de clube."* A landing page não menciona isto em lado nenhum. É o argumento que justifica os €15-34/mês do clube e o percurso "começa solo → mostra ao clube → o clube adere". Enterrar isto é atirar fora o único fosso competitivo que existe.
+1. **A dualidade treinador↔clube — o ÚNICO diferenciador real, e está escondido.** A bíblia (secção 1.2) diz preto no branco: *"Esta dualidade é a vantagem competitiva. O concorrente (Dossier do Treinador) é apenas individual. O Mister é individual E plataforma de clube."* A landing page não menciona isto em lado nenhum. É o argumento que justifica os €15-34/mês do clube e o percurso "começa solo → mostra ao clube → o clube adere". Enterrar isto é atirar fora o único fosso competitivo que existe.
 
 2. **"O que crias é teu para toda a carreira."** A bíblia trata isto como argumento central de venda ao treinador (secção 17.3): a biblioteca pessoal viaja com ele mesmo que mude de clube. Nenhum concorrente comunica isto. É emocional, é concreto, é único — e não aparece. Para um treinador que já perdeu trabalho ao trocar de clube, isto vale mais do que qualquer feature.
 
@@ -32,7 +32,7 @@
 
 ## Posicionamento Recomendado
 
-O FutsalCoach é a **única** ferramenta de treino desenhada de raiz para futsal português (campo com dimensões corretas, terminologia FPF, faltas por parte, quintetos, power play) que **cresce com a carreira do treinador**: começa como o teu caderno digital pessoal por €4,99/mês, e quando o clube adere torna-se a plataforma de todos os escalões — sem nunca perderes o trabalho que é teu. Não compete com o Spond (que é logística de calendário e pagamentos, não metodologia de treino); compete e ganha ao Dossier do Treinador porque este morre na conta individual, enquanto o FutsalCoach acompanha o treinador do banco de suplentes à direção técnica do clube. Para o clube, é a diferença entre metodologia dispersa em cadernos e telemóveis vs. um modelo de jogo vivo e analytics transversais a todos os escalões.
+O Mister é a **única** ferramenta de treino desenhada de raiz para futsal português (campo com dimensões corretas, terminologia FPF, faltas por parte, quintetos, power play) que **cresce com a carreira do treinador**: começa como o teu caderno digital pessoal por €4,99/mês, e quando o clube adere torna-se a plataforma de todos os escalões — sem nunca perderes o trabalho que é teu. Não compete com o Spond (que é logística de calendário e pagamentos, não metodologia de treino); compete e ganha ao Dossier do Treinador porque este morre na conta individual, enquanto o Mister acompanha o treinador do banco de suplentes à direção técnica do clube. Para o clube, é a diferença entre metodologia dispersa em cadernos e telemóveis vs. um modelo de jogo vivo e analytics transversais a todos os escalões.
 
 ## Headline Alternativa
 

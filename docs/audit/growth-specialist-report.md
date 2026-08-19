@@ -1,6 +1,6 @@
 # Auditoria de Growth — Tiago Lopes (Growth Specialist)
 
-> Análise de ativação do FutsalCoach. Foco: time-to-value, Day-1/Day-7 retention,
+> Análise de ativação do Mister. Foco: time-to-value, Day-1/Day-7 retention,
 > adoção de features. Método: leitura do funil real de entrada
 > (`app/page.tsx`, `(auth)/registar`, `(auth)/login`, `criar-clube`, `(app)/layout.tsx`,
 > `(app)/dashboard`, `(app)/onboarding`, `(app)/vitoria-rapida`) e das server actions
@@ -193,7 +193,7 @@ até ao valor fá-lo **apesar** do onboarding, não **através** dele — e a cu
 tem nenhum gancho externo que combata o esquecimento.
 
 São correções de baixo/médio esforço com efeito desproporcional: ligar o auto-login, semear
-época+escalão, forçar o wizard e apontá-lo ao aha. Feito isto, o FutsalCoach passa de
+época+escalão, forçar o wizard e apontá-lo ao aha. Feito isto, o Mister passa de
 "cresce se o utilizador for teimoso" para "vende-se sozinho nos primeiros 5 minutos" — e o
 output partilhável fecha o loop de crescimento orgânico.
 

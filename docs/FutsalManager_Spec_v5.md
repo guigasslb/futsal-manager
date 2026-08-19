@@ -1,4 +1,4 @@
-# FutsalManager — Especificação do Produto Final (v5)
+# Mister — Especificação do Produto Final (v5)
 
 > **Estatuto:** Bíblia do produto. Fonte única de verdade. Substitui o `FutsalManager_Spec_v4_MVP_historico.md` (arquivado).
 > **Regra de ouro:** nenhuma alteração de código sem a atualização correspondente neste documento, no mesmo passo. Toda a modificação é registada no **changelog (secção 19)** com data e descrição. Se o código se perder, este documento tem de permitir recriar tudo do zero a 100%.
@@ -34,14 +34,14 @@
 ## 1. Visão, âmbito e princípios
 
 ### 1.1 O que é
-O **FutsalManager** é uma aplicação **web (PWA)** de gestão de treino e de clube dedicada ao **futsal de formação**, em português de Portugal. Permite a um treinador planear e conduzir a época — plantel, periodização, treinos, exercícios com diagramas de campo, presenças, jogos com estatísticas, convocatórias, caderneta de desenvolvimento do atleta, scouting e reuniões — e permite a um **clube** organizar vários escalões e treinadores num único ecossistema com permissões.
+O **Mister** é uma aplicação **web (PWA)** de gestão de treino e de clube dedicada ao **futsal de formação**, em português de Portugal. Permite a um treinador planear e conduzir a época — plantel, periodização, treinos, exercícios com diagramas de campo, presenças, jogos com estatísticas, convocatórias, caderneta de desenvolvimento do atleta, scouting e reuniões — e permite a um **clube** organizar vários escalões e treinadores num único ecossistema com permissões.
 
 ### 1.2 O modelo "2 em 1" (posicionamento central)
 O produto funciona a dois níveis, com o mesmo código:
 - **Individual:** um treinador usa-o sozinho, com a sua conta e o seu portfólio de trabalho.
 - **Clube (ecossistema):** um clube tem vários escalões e treinadores, dados partilhados e permissões por papel.
 
-Esta dualidade é a vantagem competitiva. O concorrente de referência (**Dossier do Treinador**) é **apenas individual** (uma equipa por conta, sem partilha editável entre contas — confirmado no FAQ oficial). O FutsalManager é individual **e** plataforma de clube.
+Esta dualidade é a vantagem competitiva. O concorrente de referência (**Dossier do Treinador**) é **apenas individual** (uma equipa por conta, sem partilha editável entre contas — confirmado no FAQ oficial). O Mister é individual **e** plataforma de clube.
 
 ### 1.3 Estratégia de venda
 - Venda **individual** (licença de treinador).
@@ -1159,9 +1159,9 @@ O mesmo editor e formato servem **exercícios**, **modelos de jogo** e **quadros
 
 ## 12. Sistema de design
 
-Prescritivo — sem reinterpretar "cartão" ou "cor primária". Base Tailwind + shadcn/ui. **Marca do produto: FutsalCoach** (guia completo em `docs/BRAND.md`). Princípio: **a marca é fixa; a cor do clube é dinâmica**.
+Prescritivo — sem reinterpretar "cartão" ou "cor primária". Base Tailwind + shadcn/ui. **Marca do produto: Mister** (guia completo em `docs/BRAND.md`). Princípio: **a marca é fixa; a cor do clube é dinâmica**.
 
-### 12.1 Tokens de cor (marca FutsalCoach — neutros quentes + laranja)
+### 12.1 Tokens de cor (marca Mister — neutros quentes + laranja)
 - **ink** `#141210` (texto/ícone/preto quente) · **laranja** 500 `#F0531E` (acento da marca / default) · 600 `#C7430F` · 100 `#FBE4DA` · 50 `#FDF1EB`
 - **cinza (neutros quentes):** 900 `#141210` (ink) · 700 `#2E2A25` · 600 `#57514A` · 500 `#6C665F` · 400 `#98938D` · 300 `#C7C1B8` · 200 `#E4E1DB` (bordas) · 100 `#EEEBE6` · 50 `#F7F5F2` (superfície). Fundo da página = papel `#EDEBE7`.
 - **verde** 600 `#1E9E5A` (sucesso) · **âmbar** 600 `#8A5A06` (texto de aviso, AA) · 500 `#E0900A` (ícone/borda) · **vermelho** 600 `#D33A3A` (erro)
@@ -1171,7 +1171,7 @@ Prescritivo — sem reinterpretar "cartão" ou "cor primária". Base Tailwind + 
 
 ### 12.2 Branding dinâmico do clube
 - A cor **primária** do `Clube` (escolhida no criar clube) alimenta **todos os acentos**: aplicada como `--cor-primaria` e convertida para HSL em `--primary`/`--ring` (shadcn) para os **botões** seguirem o clube. Usada no herói, navegação ativa, botões, chips, avatar, links/tabs (`text-primary`/`bg-primary`), focus e cor da marca de água. **Default** (sem clube) = laranja da marca.
-- **Logótipo do produto** (`components/layout/Logo.tsx`) na barra de topo/login — **só a marca FutsalCoach** (o clube não fica ao lado).
+- **Logótipo do produto** (`components/layout/Logo.tsx`) na barra de topo/login — **só a marca Mister** (o clube não fica ao lado).
 - **Logótipo do clube** (`Clube.logoUrl`) como **marca de água centrada a preencher a página** (`.club-watermark`), visível em desktop e mobile; o nome do clube fica no contexto da página. Ver `docs/BRAND.md`.
 - Garantir contraste AA independentemente da cor escolhida (validar/escurecer texto quando necessário).
 
@@ -1319,7 +1319,7 @@ Toda a alteração a este documento é registada aqui, com data e descrição. D
 
 - **2026-08-02** — **Gráficos com a cor do clube + fluxo de entrada.** (1) Gráficos (`GraficoBarrasH/V`, `GraficoLinhas`) passam a usar `var(--cor-primaria)` na série principal (herda do layout) + neutros quentes no grid/texto; 2.ª série das linhas fica em âmbar (contraste). (2) **Entrada:** sessão inválida/obsoleta → **`/login`** (deixa de ser forçada para `/criar-clube`); guarda no `/login` (só redireciona para dashboard se o utilizador existir) evita loop. `(app)`/layout e `/criar-clube` validam a existência do utilizador da sessão.
 
-- **2026-08-02** — **Rebranding: FutsalManager → FutsalCoach + nova identidade visual.** Projeto renomeado para **FutsalCoach** (package, manifest, títulos, favicon `public/icon.svg`, login/registar). Nova marca (guia em `docs/BRAND.md`): logótipo do quadro tático (`components/layout/Logo.tsx`) — preto + laranja `#F0531E`; tipografia **Bricolage Grotesque** (display) + Inter, via `next/font`; **neutros quentes** (papel `#EDEBE7`, superfície `#F7F5F2`, tinta `#141210`) — retunados nos tokens `cinza-*`; laranja como primária default. **Arquitetura de cor:** marca fixa + **cor do clube dinâmica** — `Clube.corPrimaria` convertida hex→HSL para `--primary`/`--ring` (botões seguem o clube) e usada em todos os acentos (herói, nav, chips, avatar, tabs/links via `text-primary`). Barra de topo mostra **só a marca FutsalCoach**; o clube identifica-se por **marca de água centrada a preencher a página** (`.club-watermark`, logótipo do clube) visível em todos os tamanhos + nome no cabeçalho de identidade da página (treinador · papel / clube · escalões · época). Migração de acentos `azul-*`→`primary` em 35 ficheiros. Bíblia §12 atualizada. typecheck+build+51 testes verdes.
+- **2026-08-02** — **Rebranding: Mister → Mister + nova identidade visual.** Projeto renomeado para **Mister** (package, manifest, títulos, favicon `public/icon.svg`, login/registar). Nova marca (guia em `docs/BRAND.md`): logótipo do quadro tático (`components/layout/Logo.tsx`) — preto + laranja `#F0531E`; tipografia **Bricolage Grotesque** (display) + Inter, via `next/font`; **neutros quentes** (papel `#EDEBE7`, superfície `#F7F5F2`, tinta `#141210`) — retunados nos tokens `cinza-*`; laranja como primária default. **Arquitetura de cor:** marca fixa + **cor do clube dinâmica** — `Clube.corPrimaria` convertida hex→HSL para `--primary`/`--ring` (botões seguem o clube) e usada em todos os acentos (herói, nav, chips, avatar, tabs/links via `text-primary`). Barra de topo mostra **só a marca Mister**; o clube identifica-se por **marca de água centrada a preencher a página** (`.club-watermark`, logótipo do clube) visível em todos os tamanhos + nome no cabeçalho de identidade da página (treinador · papel / clube · escalões · época). Migração de acentos `azul-*`→`primary` em 35 ficheiros. Bíblia §12 atualizada. typecheck+build+51 testes verdes.
 
 - **2026-08-02** — **Fix: sessão obsoleta em `criarClube`.** Um JWT que referencie um utilizador inexistente (BD reseeded / conta apagada) fazia o insert de `MembroClube` rebentar com erro de FK (500). `criarClube` passa a validar que o utilizador da sessão existe e devolve erro limpo ("sessão inválida, volta a entrar") em vez de crashar.
 

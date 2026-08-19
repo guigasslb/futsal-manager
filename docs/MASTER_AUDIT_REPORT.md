@@ -1,7 +1,7 @@
-# Relatório Master de Auditoria — FutsalCoach
+# Relatório Master de Auditoria — Mister
 
 **Data:** 2026-08-11 | **Agentes:** 22 (8 QA técnica + 6 personas + 8 produto/marketing/crescimento)
-**Produto:** FutsalCoach — SaaS de gestão de treino de futsal, mercado português (PT-PT)
+**Produto:** Mister — SaaS de gestão de treino de futsal, mercado português (PT-PT)
 **Base:** `docs/FutsalManager_Spec_v6.md` (bíblia) + verificação directa no código
 **Estado:** Consolidação executiva dos 22 relatórios individuais
 
@@ -11,7 +11,7 @@
 
 ## Veredicto Executivo
 
-O FutsalCoach é, no seu núcleo, um produto **genuinamente bom e já operacional**. O consenso transversal dos 22 agentes é inequívoco num ponto: quem percebe de futsal reconhece aqui uma ferramenta de trabalho a sério, não um protótipo. O editor de campo SVG animado, a periodização, o modelo de jogo, as estatísticas específicas de futsal (faltas por parte, blocos de tempo, power play/GR-jogador, quintetos), a caderneta de habilidades, os analytics em três níveis e o relatório de fim de época com a identidade do clube colocam o produto numa categoria — *metodologia e desenvolvimento* — que os concorrentes internacionais (Spond, SportEasy, TeamSnap) simplesmente não tocam. Em PT-PT nativo com terminologia FPF, num nicho denso e mal servido, existe aqui um fosso competitivo real e defensável. O Product Owner resume-o melhor do que ninguém: *"este produto já serviria a minha equipa amanhã"*.
+O Mister é, no seu núcleo, um produto **genuinamente bom e já operacional**. O consenso transversal dos 22 agentes é inequívoco num ponto: quem percebe de futsal reconhece aqui uma ferramenta de trabalho a sério, não um protótipo. O editor de campo SVG animado, a periodização, o modelo de jogo, as estatísticas específicas de futsal (faltas por parte, blocos de tempo, power play/GR-jogador, quintetos), a caderneta de habilidades, os analytics em três níveis e o relatório de fim de época com a identidade do clube colocam o produto numa categoria — *metodologia e desenvolvimento* — que os concorrentes internacionais (Spond, SportEasy, TeamSnap) simplesmente não tocam. Em PT-PT nativo com terminologia FPF, num nicho denso e mal servido, existe aqui um fosso competitivo real e defensável. O Product Owner resume-o melhor do que ninguém: *"este produto já serviria a minha equipa amanhã"*.
 
 O problema é que **existe uma distância entre "funciona" e "é um negócio"**, e essa distância concentra-se precisamente nas três peças que sustentam a narrativa comercial: **monetização** (billing/checkout inexistente — não é possível cobrar a ninguém), **retenção/coordenação** (calendário unificado do DT e lembretes de equipa persistidos em falta) e **diferenciação individual** (perfil/carreira do treinador — o âncora emocional da venda ao treinador solo — não tem sequer modelo em Prisma). A landing page, que é a primeira e única superfície que um comprador vê antes de decidir, pontua 21/60: descreve a categoria em vez de vender a transformação, esconde o único diferenciador real, e — o pecado mortal — promete "Registar grátis" cinco vezes num produto que a própria bíblia define como "sem trial, sem freemium". É uma promessa falsa no momento mais sensível do funil.
 
@@ -150,8 +150,8 @@ Cruzamento módulo-a-módulo da spec (§8) com rota real + Server Action real (P
 - ✅ **Microcopy in-app é de nível profissional** (Copy) — botões específicos, estados vazios com próximo passo, terminologia de futsal correta. Deve servir de padrão.
 
 ### Competição (Luís Costa)
-- **Concorrente direto PT: o Dossier do Treinador** (individual-only, uma equipa por conta). O FutsalCoach ganha-lhe porque este "morre na conta individual", enquanto o FutsalCoach acompanha o treinador do escalão à direção técnica.
-- **Concorrentes internacionais (Spond, SportEasy, TeamSnap)** são fortes onde o FutsalCoach é fraco — comunicação com pais, RSVP nativo, push, app nativa, pagamentos — mas **nenhum toca em metodologia/tática/desenvolvimento nem em futsal a sério**. Janela de oportunidade clara na **camada de clube de futsal federado**, onde não há concorrente PT credível.
+- **Concorrente direto PT: o Dossier do Treinador** (individual-only, uma equipa por conta). O Mister ganha-lhe porque este "morre na conta individual", enquanto o Mister acompanha o treinador do escalão à direção técnica.
+- **Concorrentes internacionais (Spond, SportEasy, TeamSnap)** são fortes onde o Mister é fraco — comunicação com pais, RSVP nativo, push, app nativa, pagamentos — mas **nenhum toca em metodologia/tática/desenvolvimento nem em futsal a sério**. Janela de oportunidade clara na **camada de clube de futsal federado**, onde não há concorrente PT credível.
 - **Maior risco estrutural: vender contra o "grátis" do Spond.** Recomendação forte: introduzir trial de 14–30 dias ou tier grátis limitado. Pricing de clube (€15–34) está **subvalorizado** — há margem para subir.
 
 ### Growth (Tiago Lopes)
@@ -273,4 +273,4 @@ Síntese das prioridades dos 22 agentes, agrupadas por urgência. A ordenação 
 
 ---
 
-> **Conclusão do master:** o FutsalCoach é um **8/10 de produto a esconder-se atrás de um 3/10 comercial e de meia dúzia de bloqueadores legais/técnicos concentrados**. O núcleo operacional está sólido e é genuinamente diferenciado no seu nicho. Nenhum dos 22 agentes recomenda parar ou reconstruir — todos convergem em que **um esforço focado e curto** (RGPD + billing-decision + landing honesta + quick wins de UI + calendário DT + fim do write-only) transforma "impressiona numa demo e não fecha" em "opera, vende e retém". A ordem certa é primeiro **não perder a confiança** (grátis mentiroso, RGPD, relatório partilhável), depois **poder cobrar** (billing), depois **justificar o clube** (calendário DT, lembretes, métricas vivas), e por fim **dominar** (trial, FPF, social, mobile).
+> **Conclusão do master:** o Mister é um **8/10 de produto a esconder-se atrás de um 3/10 comercial e de meia dúzia de bloqueadores legais/técnicos concentrados**. O núcleo operacional está sólido e é genuinamente diferenciado no seu nicho. Nenhum dos 22 agentes recomenda parar ou reconstruir — todos convergem em que **um esforço focado e curto** (RGPD + billing-decision + landing honesta + quick wins de UI + calendário DT + fim do write-only) transforma "impressiona numa demo e não fecha" em "opera, vende e retém". A ordem certa é primeiro **não perder a confiança** (grátis mentiroso, RGPD, relatório partilhável), depois **poder cobrar** (billing), depois **justificar o clube** (calendário DT, lembretes, métricas vivas), e por fim **dominar** (trial, FPF, social, mobile).

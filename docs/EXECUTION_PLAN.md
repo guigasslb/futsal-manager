@@ -1,4 +1,4 @@
-# FutsalCoach — Plano de Execução
+# Mister — Plano de Execução
 
 > **Fonte de verdade do produto:** `docs/FutsalManager_Spec_v6.md` (secção 16 = ordem de desenvolvimento).
 > **Regra inquebrável:** nenhuma alteração de código sem atualizar a bíblia no mesmo passo (changelog na secção 19).

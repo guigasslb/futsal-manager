@@ -1,4 +1,4 @@
-# Guia de deploy — FutsalCoach
+# Guia de deploy — Mister
 
 Complemento operacional da bíblia (`FutsalManager_Spec_v5.md`, secção 15). Passos para colocar a app em produção.
 
