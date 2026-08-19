@@ -99,9 +99,11 @@ export function Logo({
             whiteSpace: "nowrap",
           }}
         >
-          {/* Cor do texto depende do variant (ver classeTexto acima) */}
-          <span className={classeTexto} style={{ fontWeight: 800 }}>
-            Mister
+          {/* "M" sempre laranja da marca (#F0531E = laranja-500);
+              "ister" adapta ao contexto (ver classeTexto acima) */}
+          <span style={{ fontWeight: 800 }}>
+            <span className="text-laranja-500">M</span>
+            <span className={classeTexto}>ister</span>
           </span>
         </span>
       )}
