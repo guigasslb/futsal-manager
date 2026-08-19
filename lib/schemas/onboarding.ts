@@ -14,6 +14,10 @@ export const criarClubeSchema = z.object({
   nome: z.string().min(2, "Nome do clube obrigatório").max(100),
   corPrimaria: corHex.optional(),
   corSecundaria: corHex.optional(),
+  // 🔁 v7 (§8.1.1): modalidade escolhida no onboarding. Determina a secção
+  // inicial do clube e o conteúdo curado instalado. Default FUTSAL (retro-compat).
+  // Literal (não `z.nativeEnum`) para não puxar @prisma/client ao bundle cliente.
+  modalidade: z.enum(["FUTSAL", "FUTEBOL"]).default("FUTSAL"),
 });
 
 export const brandingSchema = z.object({

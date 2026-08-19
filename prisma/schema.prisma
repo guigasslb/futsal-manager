@@ -1351,7 +1351,12 @@ model Licenca {
   tier          TierClube? // só se tipo=CLUBE: PEQUENO | MEDIO | GRANDE | PARCEIRO
   estado        EstadoLicenca  @default(ATIVA) // ATIVA | EXPIRADA | CANCELADA | SUSPENSA
   ciclo         CicloFaturacao // MENSAL | ANUAL
-  precoCentimos Int? // preço praticado (cêntimos)
+  precoCentimos Int? // preço praticado (cêntimos) — já com acréscimo multi-secção
+
+  // 🔁 v7 (§3.11/§17.1) — Individual: modalidade contratada (futsal ou futebol). null em licenças de Clube.
+  modalidade Modalidade? // registo explícito do produto Individual vendido
+  // 🔁 v7 (§3.11/§17.1) — Clube: nº de secções faturadas (pricing: tier mais caro + 50%/secção adicional).
+  numSeccoes Int         @default(1) // 1 = comportamento v6; >1 aplica acréscimo por secção adicional
 
   // Titular (exatamente um dos dois preenchido)
   utilizadorId String?     @unique

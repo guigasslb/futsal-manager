@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { terminarSessao } from "@/lib/actions/auth-actions";
 import { SeletorEpoca } from "@/components/layout/SeletorEpoca";
+import { SeletorSeccao, type SeccaoOpcao } from "@/components/layout/SeletorSeccao";
 import { AlternadorTema } from "@/components/layout/AlternadorTema";
 import { Logo } from "@/components/layout/Logo";
 import type { Epoca } from "@prisma/client";
@@ -26,6 +27,10 @@ interface Props {
   nomeUtilizador: string;
   epocas: Epoca[];
   epocaAtivaId: string | null;
+  /** Secções do clube (§8.1.1) — o seletor só aparece com 2+ secções. */
+  seccoes?: SeccaoOpcao[];
+  /** Secção ativa (cookie de UI) — contexto transversal (§8.1.1). */
+  seccaoAtivaId?: string | null;
   /** Há treino ou jogo hoje (F14 / §8.16) — mostra o indicador no cabeçalho. */
   eventoHoje?: boolean;
 }
@@ -34,6 +39,8 @@ export function BarraTopo({
   nomeUtilizador,
   epocas,
   epocaAtivaId,
+  seccoes = [],
+  seccaoAtivaId = null,
   eventoHoje = false,
 }: Props) {
   const [pending, startTransition] = useTransition();
@@ -49,6 +56,7 @@ export function BarraTopo({
 
       {/* Seletor de época + ações + menu do utilizador */}
       <div className="flex items-center gap-2 ml-auto sm:gap-3">
+        <SeletorSeccao seccoes={seccoes} seccaoAtivaId={seccaoAtivaId} />
         <SeletorEpoca epocas={epocas} epocaAtivaId={epocaAtivaId} />
 
         {/* Indicador de evento hoje (treino/jogo) → dashboard */}

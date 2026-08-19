@@ -90,6 +90,10 @@ export const novaEpocaRolloverSchema = novaEpocaStep1Base
   .extend({
     atletas: z.array(transicaoAtletaSchema).default([]),
     promocoes: z.array(promocaoEscalaoSchema).default([]),
+    // 🔁 v7 (§8.21): transição multi-secção. Se fornecido, o snapshot de plantel
+    // restringe-se aos escalões dessa secção; se omitido, transita todas as
+    // secções para a mesma época (a época é de nível clube).
+    seccaoId: z.string().cuid("Secção inválida").optional(),
   })
   .refine(datasCoerentes, datasMsg);
 

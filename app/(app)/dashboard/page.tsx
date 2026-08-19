@@ -19,7 +19,9 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { obterEpocaAtiva, obterClubeIdAtual } from "@/lib/epoca-context";
 import { obterClubeAtivo, obterMembroAtual } from "@/lib/permissoes";
+import { obterSeccoes } from "@/lib/actions/seccoes";
 import { EstadoVazio } from "@/components/layout/EstadosUI";
+import { BadgeModalidade } from "@/components/plantel/BadgeModalidade";
 import {
   construirLembretesHoje,
   type EventoLite,
@@ -162,6 +164,7 @@ export default async function DashboardPage() {
       select: {
         id: true,
         nome: true,
+        seccaoId: true,
         _count: {
           select: {
             participacoes: { where: { epocaId: epoca.id, estado: "ATIVO" } },
@@ -171,6 +174,13 @@ export default async function DashboardPage() {
       orderBy: { ordem: "asc" },
     }),
   ]);
+
+  // Secções do clube (§8.16 v7): quando há >1 secção, os "atletas por escalão"
+  // são agrupados por secção/modalidade para futsal e futebol não se confundirem.
+  const resSeccoes = await obterSeccoes();
+  const seccoes = resSeccoes.sucesso ? resSeccoes.dados : [];
+  const multiSeccao = seccoes.length > 1;
+  const seccaoPorId = new Map(seccoes.map((s) => [s.id, s]));
 
   // Lembretes in-app: treino/jogo hoje (usa os dados existentes; sem push).
   const sessoesHojeLite: EventoLite[] = sessoesHoje.map((s) => ({
@@ -193,6 +203,16 @@ export default async function DashboardPage() {
 
   // Escalões com atletas (para o contador por escalão).
   const escaloesComAtletas = escaloesContagem.filter((e) => e._count.participacoes > 0);
+
+  // Agrupamento por secção (só quando o clube tem >1 secção — §8.16 v7).
+  const gruposSeccao = multiSeccao
+    ? seccoes
+        .map((s) => ({
+          seccao: s,
+          escaloes: escaloesComAtletas.filter((e) => e.seccaoId === s.id),
+        }))
+        .filter((g) => g.escaloes.length > 0)
+    : [];
 
   // Qual evento é o mais próximo → vai para o herói; o outro fica como secundário.
   const sessaoT = proximaSessao ? new Date(proximaSessao.data).getTime() : Infinity;
@@ -361,36 +381,47 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Atletas por escalão (contador) — F14 / §8.16 */}
-      {escaloesComAtletas.length > 0 && (
-        <div className="space-y-3">
-          <p className="text-legenda font-semibold uppercase tracking-wide text-cinza-400">
-            Atletas por escalão
-          </p>
-          <div className="animar-cascata grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {escaloesComAtletas.map((e) => (
-              <Link
-                key={e.id}
-                href="/plantel"
-                className="card-base card-hover group flex items-center gap-3 p-4"
-              >
-                <span className="chip-clube flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl">
-                  <Users className="h-5 w-5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-corpo font-semibold text-cinza-900">{e.nome}</p>
-                  <p className="text-legenda text-cinza-500">
-                    <span className="tabular-nums font-semibold text-cinza-700">
-                      {e._count.participacoes}
-                    </span>{" "}
-                    {e._count.participacoes === 1 ? "atleta" : "atletas"}
-                  </p>
+      {/* Atletas por escalão (contador) — F14 / §8.16 · agrupado por secção (v7) */}
+      {escaloesComAtletas.length > 0 &&
+        (multiSeccao && gruposSeccao.length > 0 ? (
+          <div className="space-y-5">
+            <p className="text-legenda font-semibold uppercase tracking-wide text-cinza-400">
+              Atletas por escalão
+            </p>
+            {gruposSeccao.map((g) => (
+              <div key={g.seccao.id} className="space-y-3">
+                <p className="flex items-center gap-2 text-corpo-sec font-semibold text-cinza-700">
+                  {g.seccao.nome ?? g.seccao.modalidade}
+                  <BadgeModalidade modalidade={g.seccao.modalidade} compacto />
+                </p>
+                <div className="animar-cascata grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {g.escaloes.map((e) => (
+                    <CartaoEscalaoDashboard
+                      key={e.id}
+                      nome={e.nome}
+                      n={e._count.participacoes}
+                    />
+                  ))}
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="space-y-3">
+            <p className="text-legenda font-semibold uppercase tracking-wide text-cinza-400">
+              Atletas por escalão
+            </p>
+            <div className="animar-cascata grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {escaloesComAtletas.map((e) => (
+                <CartaoEscalaoDashboard
+                  key={e.id}
+                  nome={e.nome}
+                  n={e._count.participacoes}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
         </>
       )}
 
@@ -554,6 +585,24 @@ function EstadoVazioEpoca() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Cartão de contador de atletas por escalão (dashboard — §8.16). */
+function CartaoEscalaoDashboard({ nome, n }: { nome: string; n: number }) {
+  return (
+    <Link href="/plantel" className="card-base card-hover group flex items-center gap-3 p-4">
+      <span className="chip-clube flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl">
+        <Users className="h-5 w-5" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-corpo font-semibold text-cinza-900">{nome}</p>
+        <p className="text-legenda text-cinza-500">
+          <span className="tabular-nums font-semibold text-cinza-700">{n}</span>{" "}
+          {n === 1 ? "atleta" : "atletas"}
+        </p>
+      </div>
+    </Link>
   );
 }
 

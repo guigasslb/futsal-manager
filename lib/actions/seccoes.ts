@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { exigirCapacidade, obterMembroAtual } from "@/lib/permissoes";
 import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
+import { calcularPrecoLicenca } from "@/lib/billing";
 import { z } from "zod";
 import { Modalidade, PapelSeccao, type Seccao } from "@prisma/client";
 
@@ -30,6 +31,29 @@ export async function garantirSeccaoParaModalidade(
 ): Promise<Resultado<{ seccaoId: string }>> {
   const ctx = await obterMembroAtual();
   if (!ctx) return erro("Sem acesso a este clube");
+
+  // Bloqueio Individual = uma modalidade (§17.1, DEVE): um clube técnico
+  // Individual só pode ter UMA secção. Se já existir uma secção de modalidade
+  // diferente, recusar a criação de uma segunda (sugere a licença de Clube).
+  // Só bloqueia quando a secção-alvo ainda não existe (o upsert abaixo é
+  // idempotente para a modalidade já presente).
+  const seccoesExistentes = await prisma.seccao.findMany({
+    where: { clubeId: ctx.clube.id },
+    select: { modalidade: true },
+  });
+  const jaTemEstaModalidade = seccoesExistentes.some((s) => s.modalidade === modalidade);
+  if (!jaTemEstaModalidade && seccoesExistentes.length > 0) {
+    const licenca = await prisma.licenca.findFirst({
+      where: { clubeId: ctx.clube.id, estado: "ATIVA" },
+      select: { tipo: true },
+    });
+    const eIndividual = licenca?.tipo === "INDIVIDUAL" || ctx.clube.clubeTecnico;
+    if (eIndividual) {
+      return erro(
+        "A licença Individual dá acesso a uma só modalidade. Para gerir futsal e futebol, muda para uma licença de Clube.",
+      );
+    }
+  }
 
   const seccao = await prisma.seccao.upsert({
     where: { clubeId_modalidade: { clubeId: ctx.clube.id, modalidade } },
@@ -156,4 +180,89 @@ export async function removerMembroSeccao(dados: unknown): Promise<Resultado<voi
 
   revalidatePath(PATH);
   return ok(undefined);
+}
+
+const modalidadeSchema = z.nativeEnum(Modalidade);
+
+/**
+ * Adiciona uma segunda modalidade (secção) ao clube (§17.1).
+ *
+ * Estrutural, de nível clube: exige `CLUBE_ESCALOES` (um Coordenador de Secção
+ * — âmbito SECCAO — não pode adicionar modalidades ao clube). Cria/garante a
+ * secção (idempotente; `garantirSeccaoParaModalidade` bloqueia a 2.ª modalidade
+ * numa licença Individual), recalcula `Licenca.numSeccoes` a partir das secções
+ * reais e atualiza o preço praticado (aviso suave — o enforcement de billing é
+ * deferido). Devolve o novo preço em cêntimos para o frontend mostrar o aviso.
+ */
+export async function adicionarSeccaoAoClube(
+  modalidade: Modalidade,
+): Promise<Resultado<{ seccaoId: string; novoPreco: number | null; numSeccoes: number }>> {
+  const perm = await exigirCapacidade("CLUBE_ESCALOES");
+  if (!perm.ok) return erro(perm.erro);
+
+  const parsed = modalidadeSchema.safeParse(modalidade);
+  if (!parsed.success) return erroDeValidacao(parsed.error);
+
+  const clubeId = perm.ctx.clube.id;
+
+  // Cria/garante a secção (idempotente; aplica o bloqueio Individual — §17.1).
+  const res = await garantirSeccaoParaModalidade(parsed.data);
+  if (!res.sucesso) return erro(res.erro);
+  const seccaoId = res.dados.seccaoId;
+
+  // Nº de secções faturadas = secções reais do clube (bounded a 2 — só existem
+  // duas modalidades). Recontar (em vez de incrementar) é idempotente perante
+  // repetições da mesma modalidade.
+  const totalSeccoes = await prisma.seccao.count({ where: { clubeId } });
+  const numSeccoes = Math.min(totalSeccoes, 2);
+
+  // Atualiza a licença de Clube, se existir (o billing é deferido — pode não haver).
+  let novoPreco: number | null = null;
+  const licenca = await prisma.licenca.findFirst({
+    where: { clubeId, estado: "ATIVA" },
+    select: { id: true, tipo: true, tier: true, ciclo: true },
+  });
+  if (licenca && licenca.tipo === "CLUBE" && licenca.tier) {
+    // PARCEIRO é negociado — não recalcula o preço, só o nº de secções.
+    novoPreco =
+      licenca.tier === "PARCEIRO"
+        ? null
+        : calcularPrecoLicenca(licenca.tier, numSeccoes, licenca.ciclo);
+    await prisma.licenca.update({
+      where: { id: licenca.id },
+      data: { numSeccoes, ...(novoPreco !== null ? { precoCentimos: novoPreco } : {}) },
+    });
+  }
+
+  revalidatePath(PATH);
+  revalidatePath("/definicoes/licenca");
+  return ok({ seccaoId, novoPreco, numSeccoes });
+}
+
+const seccaoIdSchema = z.string().min(1);
+
+/**
+ * Contexto de uma secção para um Coordenador de Secção (§6.9).
+ *
+ * Devolve a secção se o membro a coordenar (âmbito SECCAO) ou tiver âmbito de
+ * todo o clube (Administrador). Caso contrário devolve erro. Guarda de acesso
+ * reutilizável por páginas/actions com âmbito de secção.
+ */
+export async function obterContextoSeccao(seccaoId: unknown): Promise<Resultado<Seccao>> {
+  const ctx = await obterMembroAtual();
+  if (!ctx) return erro("Sem acesso a este clube");
+
+  const parsed = seccaoIdSchema.safeParse(seccaoId);
+  if (!parsed.success) return erroDeValidacao(parsed.error);
+
+  const seccao = await prisma.seccao.findFirst({
+    where: { id: parsed.data, clubeId: ctx.clube.id },
+  });
+  if (!seccao) return erro("Secção não encontrada");
+
+  const temAmbitoClube = ctx.ambito === "TODO_CLUBE";
+  const eCoordenador = ctx.seccoesCoordenadas.includes(seccao.id);
+  if (!temAmbitoClube && !eCoordenador) return erro("Sem permissão nesta secção");
+
+  return ok(seccao);
 }

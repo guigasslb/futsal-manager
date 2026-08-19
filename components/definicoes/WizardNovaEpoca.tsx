@@ -29,6 +29,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { Modalidade } from "@prisma/client";
+import { BadgeModalidade } from "@/components/plantel/BadgeModalidade";
 import { cn } from "@/lib/utils";
 import {
   novaEpocaStep1Schema,
@@ -163,13 +165,31 @@ function CartaoPasso({ children }: { children: React.ReactNode }) {
 // Ponto de entrada — escolhe o fluxo pelo cenário detetado
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface SeccaoWizard {
+  id: string;
+  nome: string | null;
+  modalidade: Modalidade;
+}
+
 export function WizardNovaEpoca({
   elegibilidade,
+  seccoes = [],
+  seccaoPorEscalao = {},
 }: {
   elegibilidade: ElegibilidadeWizard;
+  /** Secções do clube (§8.21 v7) — agrupam os escalões por modalidade no wizard. */
+  seccoes?: SeccaoWizard[];
+  /** Mapa escalãoId → secçãoId (ou null se sem secção). */
+  seccaoPorEscalao?: Record<string, string | null>;
 }) {
   if (elegibilidade.cenario === "C") return <WizardNovoClube />;
-  return <WizardRollover elegibilidade={elegibilidade} />;
+  return (
+    <WizardRollover
+      elegibilidade={elegibilidade}
+      seccoes={seccoes}
+      seccaoPorEscalao={seccaoPorEscalao}
+    />
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -214,13 +234,30 @@ function novoBloco(): BlocoPromocao {
 
 function WizardRollover({
   elegibilidade,
+  seccoes,
+  seccaoPorEscalao,
 }: {
   elegibilidade: ElegibilidadeWizard;
+  seccoes: SeccaoWizard[];
+  seccaoPorEscalao: Record<string, string | null>;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   const { atletasAtivos, escaloes } = elegibilidade;
+
+  // §8.21 v7: agrupa os escalões por secção quando o clube tem >1 secção. Cada
+  // grupo permite incluir/excluir a modalidade inteira na nova época.
+  const multiSeccao = seccoes.length > 1;
+  const gruposEscaloes = useMemo(() => {
+    if (!multiSeccao) return [];
+    return seccoes
+      .map((s) => ({
+        seccao: s,
+        escaloes: escaloes.filter((e) => seccaoPorEscalao[e.id] === s.id),
+      }))
+      .filter((g) => g.escaloes.length > 0);
+  }, [multiSeccao, seccoes, escaloes, seccaoPorEscalao]);
 
   // Passo 1 — dados da nova época
   const [nome, setNome] = useState("");
@@ -325,6 +362,18 @@ function WizardRollover({
     setEscalaoIds((atual) =>
       atual.includes(id) ? atual.filter((x) => x !== id) : [...atual, id],
     );
+  }
+
+  /** Inclui/exclui todos os escalões de uma secção de uma só vez (§8.21 v7). */
+  function alternarSeccao(idsSeccao: string[], incluir: boolean) {
+    setEscalaoIds((atual) => {
+      const conjunto = new Set(atual);
+      for (const id of idsSeccao) {
+        if (incluir) conjunto.add(id);
+        else conjunto.delete(id);
+      }
+      return [...conjunto];
+    });
   }
 
   function definirTransicao(atletaId: string, patch: Partial<EstadoTransicao>) {
@@ -527,6 +576,47 @@ function WizardRollover({
                 <p className="text-corpo-sec text-cinza-600">
                   Este clube não tem escalões definidos.
                 </p>
+              ) : multiSeccao && gruposEscaloes.length > 0 ? (
+                // Multi-secção: escalões agrupados por modalidade, com a opção de
+                // incluir/excluir a secção inteira na nova época (§8.21 v7).
+                <div className="space-y-4">
+                  {gruposEscaloes.map((g) => {
+                    const idsSeccao = g.escaloes.map((e) => e.id);
+                    const todos = idsSeccao.every((id) => escalaoIds.includes(id));
+                    return (
+                      <div key={g.seccao.id} className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <p className="flex items-center gap-2 text-corpo-sec font-semibold text-cinza-700">
+                            {g.seccao.nome ?? g.seccao.modalidade}
+                            <BadgeModalidade modalidade={g.seccao.modalidade} compacto />
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => alternarSeccao(idsSeccao, !todos)}
+                            className="text-legenda font-medium text-primary underline-offset-4 hover:underline"
+                          >
+                            {todos ? "Excluir secção" : "Incluir secção"}
+                          </button>
+                        </div>
+                        <ul className="space-y-1.5">
+                          {g.escaloes.map((e) => (
+                            <li key={e.id}>
+                              <label className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-md border border-cinza-200 px-3 hover:bg-primary/5">
+                                <input
+                                  type="checkbox"
+                                  className="h-5 w-5 accent-primary"
+                                  checked={escalaoIds.includes(e.id)}
+                                  onChange={() => alternarEscalao(e.id)}
+                                />
+                                <span className="text-corpo text-cinza-900">{e.nome}</span>
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </div>
               ) : (
                 <ul className="space-y-1.5">
                   {escaloes.map((e) => (

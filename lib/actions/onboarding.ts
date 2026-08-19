@@ -8,6 +8,13 @@ import { obterMembroAtual } from "@/lib/permissoes";
 import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
 import { registarSchema, criarClubeSchema } from "@/lib/schemas/onboarding";
 import { PERFIS_ARRANQUE } from "@/lib/permissoes-catalogo";
+import { instalarConteudoArranquePorModalidade } from "@/lib/biblioteca-arranque-instalar";
+
+// Rótulo pt-PT por modalidade (nome da secção inicial — §3.1.1).
+const ROTULO_MODALIDADE: Record<"FUTSAL" | "FUTEBOL", string> = {
+  FUTSAL: "Futsal",
+  FUTEBOL: "Futebol",
+};
 
 const BCRYPT_COST = 12;
 
@@ -58,12 +65,24 @@ export async function criarClube(dados: unknown): Promise<Resultado<{ clubeId: s
   });
   if (jaAtivo) return erro("Já tens uma adesão ativa a um clube. Sai desse clube primeiro.");
 
+  const modalidade = parsed.data.modalidade;
+
   const resultado = await prisma.$transaction(async (tx) => {
     const clube = await tx.clube.create({
       data: {
         nome: parsed.data.nome,
         corPrimaria: parsed.data.corPrimaria ?? "#1A2FD4",
         corSecundaria: parsed.data.corSecundaria ?? "#FFD700",
+      },
+    });
+
+    // 🔁 v7 (§8.1.1): secção inicial da modalidade escolhida. O escalão-semente
+    // liga-se a esta secção (a modalidade de tudo o resto deriva daí — §1.7.1).
+    const seccao = await tx.seccao.create({
+      data: {
+        clubeId: clube.id,
+        modalidade,
+        nome: ROTULO_MODALIDADE[modalidade],
       },
     });
 
@@ -89,6 +108,7 @@ export async function criarClube(dados: unknown): Promise<Resultado<{ clubeId: s
     await tx.escalao.create({
       data: {
         clubeId: clube.id,
+        seccaoId: seccao.id,
         nome: "Seniores",
         ordem: 1,
         visivelOutrosTreinadores: true,
@@ -120,6 +140,23 @@ export async function criarClube(dados: unknown): Promise<Resultado<{ clubeId: s
     });
 
     return { clubeId: clube.id };
+  });
+
+  // 🔁 v7 (§8.1.1): instala o conteúdo curado da modalidade escolhida para que a
+  // secção inicial nunca comece vazia. Corre APÓS a transação (o membro admin já
+  // existe — o instalador resolve o autor a partir dele). Best-effort: uma falha
+  // na biblioteca de arranque não deve abortar a criação do clube (já persistida).
+  try {
+    await instalarConteudoArranquePorModalidade(resultado.clubeId, modalidade);
+  } catch (e) {
+    console.error("criarClube: falha a instalar o conteúdo de arranque", e);
+  }
+
+  // 🔁 v7 (§17.1/§17.2): regista a modalidade contratada na licença, se já existir
+  // (o billing é deferido — normalmente não há licença no onboarding).
+  await prisma.licenca.updateMany({
+    where: { clubeId: resultado.clubeId },
+    data: { modalidade },
   });
 
   revalidatePath("/", "layout");

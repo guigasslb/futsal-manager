@@ -21,10 +21,11 @@ vi.mock("@/lib/permissoes", () => ({
 vi.mock("@/lib/db", () => ({
   prisma: {
     escalao: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn() },
+    seccao: { findFirst: vi.fn() },
     licenca: { findFirst: vi.fn() },
     atletaEscalao: { findMany: vi.fn(), createMany: vi.fn() },
     atleta: { findMany: vi.fn() },
-    epoca: { create: vi.fn(), updateMany: vi.fn() },
+    epoca: { create: vi.fn(), updateMany: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
     utilizador: { findUnique: vi.fn() },
     membroClube: { findFirst: vi.fn(), count: vi.fn(), update: vi.fn(), create: vi.fn() },
     clube: { create: vi.fn() },
@@ -239,6 +240,9 @@ beforeEach(() => {
   mocked(prisma.atleta.findMany).mockResolvedValue([]);
   mocked(prisma.epoca.updateMany).mockResolvedValue({ count: 1 });
   mocked(prisma.epoca.create).mockResolvedValue({ id: "epNova" });
+  mocked(prisma.epoca.findFirst).mockResolvedValue(null);
+  mocked(prisma.epoca.update).mockResolvedValue({ id: "epExistente" });
+  mocked(prisma.seccao.findFirst).mockResolvedValue({ id: "seccao1" });
 });
 
 // ─── verificarElegibilidadeWizard ────────────────────────────────────────────
@@ -410,6 +414,64 @@ describe("criarEpocaRollover (cenário A/B)", () => {
     if (!r.sucesso) expect(r.erro).toMatch(/atletas selecionados/i);
     // não chega a criar participações
     expect(prisma.atletaEscalao.createMany).not.toHaveBeenCalled();
+  });
+});
+
+// ─── criarEpocaRollover multi-secção (§8.21) ─────────────────────────────────
+
+describe("criarEpocaRollover — transição por secção (§8.21)", () => {
+  const SEC1 = "cku00000000000000000secc1";
+  const baseSeccao = {
+    nome: "2026/2027",
+    dataInicio: "2026-09-01",
+    dataFim: "2027-06-30",
+    escalaoIds: [ESC_A],
+    atletas: [{ atletaId: AT1, transitaParaNova: true }],
+    seccaoId: SEC1,
+  };
+
+  beforeEach(() => {
+    mocked(prisma.escalao.findMany).mockResolvedValue([{ id: ESC_A }]);
+    mocked(prisma.atletaEscalao.findMany).mockResolvedValue([
+      { atletaId: AT1, escalaoId: ESC_A, numero: 7 },
+    ]);
+    mocked(prisma.atleta.findMany).mockResolvedValue([{ id: AT1 }]);
+    mocked(prisma.seccao.findFirst).mockResolvedValue({ id: SEC1 });
+  });
+
+  it("transita a secção indicada e cria a época quando ainda não existe", async () => {
+    mocked(prisma.epoca.findFirst).mockResolvedValue(null);
+    const r = await criarEpocaRollover(baseSeccao);
+    expect(r.sucesso).toBe(true);
+    if (r.sucesso) expect(r.dados.epocaId).toBe("epNova");
+    // valida a pertença da secção ao clube
+    expect(prisma.seccao.findFirst).toHaveBeenCalled();
+    expect(prisma.epoca.create).toHaveBeenCalledOnce();
+  });
+
+  it("recusa uma secção que não pertence ao clube", async () => {
+    mocked(prisma.seccao.findFirst).mockResolvedValue(null);
+    const r = await criarEpocaRollover(baseSeccao);
+    expect(r.sucesso).toBe(false);
+    if (!r.sucesso) expect(r.erro).toMatch(/secção selecionada não pertence/i);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("reutiliza a época já criada por outra secção (não duplica) — mesma época p/ ambas", async () => {
+    mocked(prisma.epoca.findFirst).mockResolvedValue({ id: "epExistente" });
+    const r = await criarEpocaRollover(baseSeccao);
+    expect(r.sucesso).toBe(true);
+    if (r.sucesso) expect(r.dados.epocaId).toBe("epExistente");
+    expect(prisma.epoca.update).toHaveBeenCalledOnce();
+    expect(prisma.epoca.create).not.toHaveBeenCalled();
+  });
+
+  it("recusa escalão fora da secção indicada", async () => {
+    mocked(prisma.escalao.findMany).mockResolvedValue([]); // filtro por secção não devolve nada
+    const r = await criarEpocaRollover(baseSeccao);
+    expect(r.sucesso).toBe(false);
+    if (!r.sucesso) expect(r.erro).toMatch(/não pertence a esta secção/i);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });
 

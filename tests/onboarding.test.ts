@@ -11,13 +11,21 @@ vi.mock("@/lib/db", () => ({
     membroClube: { findFirst: vi.fn(), create: vi.fn() },
     clube: { create: vi.fn(), update: vi.fn() },
     epoca: { create: vi.fn() },
+    seccao: { create: vi.fn() },
     escalao: { create: vi.fn() },
     perfil: { create: vi.fn() },
+    licenca: { updateMany: vi.fn() },
     $transaction: vi.fn(),
   },
 }));
 
+// A instalação de conteúdo curado é testada à parte — aqui isola-se de criarClube.
+vi.mock("@/lib/biblioteca-arranque-instalar", () => ({
+  instalarConteudoArranquePorModalidade: vi.fn(),
+}));
+
 import { criarClube } from "@/lib/actions/onboarding";
+import { instalarConteudoArranquePorModalidade } from "@/lib/biblioteca-arranque-instalar";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
@@ -43,12 +51,20 @@ beforeEach(() => {
   // Writes dentro da transação.
   mocked(prisma.clube.create).mockResolvedValue({ id: "clube1" });
   mocked(prisma.epoca.create).mockResolvedValue({ id: "epoca1" });
+  mocked(prisma.seccao.create).mockResolvedValue({ id: "seccao1" });
   mocked(prisma.escalao.create).mockResolvedValue({ id: "escalao1" });
   mocked(prisma.perfil.create).mockImplementation((args: unknown) => {
     const { data } = args as { data: { nome: string } };
     return Promise.resolve({ id: `perfil-${data.nome}` });
   });
   mocked(prisma.membroClube.create).mockResolvedValue({ id: "membro1" });
+  mocked(prisma.licenca.updateMany).mockResolvedValue({ count: 0 });
+  mocked(instalarConteudoArranquePorModalidade).mockResolvedValue({
+    subcategorias: 0,
+    exercicios: 0,
+    templates: 0,
+    habilidades: 0,
+  });
 
   // $transaction interativo: invoca o callback com o próprio prisma como `tx`.
   mocked(prisma.$transaction).mockImplementation((arg: unknown) =>
@@ -146,5 +162,52 @@ describe("criarClube — semeia época ativa + escalão (P1.6)", () => {
     const r = await criarClube({ nome: "" });
     expect(r.sucesso).toBe(false);
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("cria a secção inicial da modalidade e liga-lhe o escalão-semente (§8.1.1)", async () => {
+    const r = await criarClube({ nome: "Juventude SC", modalidade: "FUTEBOL" });
+    expect(r.sucesso).toBe(true);
+
+    expect(prisma.seccao.create).toHaveBeenCalledOnce();
+    const secArg = calls(prisma.seccao.create)[0][0] as {
+      data: { clubeId: string; modalidade: string; nome: string };
+    };
+    expect(secArg.data).toMatchObject({ clubeId: "clube1", modalidade: "FUTEBOL", nome: "Futebol" });
+
+    // O escalão-semente liga-se à secção criada.
+    const escArg = calls(prisma.escalao.create)[0][0] as { data: { seccaoId: string } };
+    expect(escArg.data.seccaoId).toBe("seccao1");
+  });
+
+  it("por defeito (sem modalidade) cria secção FUTSAL", async () => {
+    const r = await criarClube({ nome: "Juventude SC" });
+    expect(r.sucesso).toBe(true);
+    const secArg = calls(prisma.seccao.create)[0][0] as { data: { modalidade: string } };
+    expect(secArg.data.modalidade).toBe("FUTSAL");
+  });
+
+  it("instala o conteúdo curado da modalidade escolhida após criar o clube", async () => {
+    const r = await criarClube({ nome: "Juventude SC", modalidade: "FUTEBOL" });
+    expect(r.sucesso).toBe(true);
+    expect(instalarConteudoArranquePorModalidade).toHaveBeenCalledWith("clube1", "FUTEBOL");
+  });
+
+  it("regista a modalidade contratada na licença (se existir)", async () => {
+    await criarClube({ nome: "Juventude SC", modalidade: "FUTEBOL" });
+    const arg = calls(prisma.licenca.updateMany)[0][0] as {
+      where: { clubeId: string };
+      data: { modalidade: string };
+    };
+    expect(arg.where.clubeId).toBe("clube1");
+    expect(arg.data.modalidade).toBe("FUTEBOL");
+  });
+
+  it("uma falha na instalação de conteúdo não aborta a criação do clube", async () => {
+    mocked(instalarConteudoArranquePorModalidade).mockImplementation(() => {
+      throw new Error("falha de biblioteca");
+    });
+    const r = await criarClube({ nome: "Juventude SC" });
+    expect(r.sucesso).toBe(true);
+    if (r.sucesso) expect(r.dados.clubeId).toBe("clube1");
   });
 });

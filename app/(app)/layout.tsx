@@ -1,7 +1,9 @@
+import { cookies } from "next/headers";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { listarEpocas } from "@/lib/actions/epocas";
+import { obterSeccoes } from "@/lib/actions/seccoes";
 import { obterEpocaAtiva } from "@/lib/epoca-context";
 import { obterMembroAtual } from "@/lib/permissoes";
 import { BarraTopo } from "@/components/layout/BarraTopo";
@@ -60,12 +62,27 @@ export default async function AppLayout({
     const membro = await obterMembroAtual();
     if (!membro) redirect("/criar-clube");
 
-    const [epocasResult, epocaAtiva] = await Promise.all([
+    const [epocasResult, epocaAtiva, seccoesResult] = await Promise.all([
       listarEpocas(),
       obterEpocaAtiva(),
+      obterSeccoes(),
     ]);
     const epocas = epocasResult.sucesso ? epocasResult.dados : [];
     const clube = membro.clube;
+
+    // Secções do clube (§8.1.1): alimentam o seletor transversal, que só aparece
+    // com 2+ secções. A secção ativa vive num cookie de UI (nunca é autorização).
+    const seccoes = seccoesResult.sucesso
+      ? seccoesResult.dados.map((s) => ({
+          id: s.id,
+          nome: s.nome,
+          modalidade: s.modalidade,
+        }))
+      : [];
+    const cookieSeccao = (await cookies()).get("seccaoAtiva")?.value ?? null;
+    const seccaoAtivaId = seccoes.some((s) => s.id === cookieSeccao)
+      ? cookieSeccao
+      : null;
 
     // Indicador de "evento hoje" no cabeçalho (F14 / §8.16) — treino ou jogo do
     // clube na época ativa, no dia de hoje. Usa os dados existentes.
@@ -112,6 +129,8 @@ export default async function AppLayout({
           nomeUtilizador={session.user.name ?? "Utilizador"}
           epocas={epocas}
           epocaAtivaId={epocaAtiva?.id ?? null}
+          seccoes={seccoes}
+          seccaoAtivaId={seccaoAtivaId}
           eventoHoje={eventoHoje}
         />
 

@@ -160,21 +160,40 @@ export async function criarEpocaRollover(
   if (!perm.ok) return erro(perm.erro);
   const clubeId = perm.ctx.clube.id;
 
-  const { nome, dataInicio, dataFim, escalaoIds, atletas, promocoes } =
+  const { nome, dataInicio, dataFim, escalaoIds, atletas, promocoes, seccaoId } =
     parsed.data;
 
-  // Todos os escalões referenciados têm de pertencer ao clube.
+  // 🔁 v7 (§8.21): transição por secção. Quando `seccaoId` é fornecido, valida
+  // que a secção pertence ao clube — os escalões referenciados têm depois de
+  // pertencer a essa secção (filtro `seccaoId` na query de validação abaixo).
+  if (seccaoId) {
+    const seccao = await prisma.seccao.findFirst({
+      where: { id: seccaoId, clubeId },
+      select: { id: true },
+    });
+    if (!seccao) return erro("A secção selecionada não pertence a este clube.");
+  }
+
+  // Todos os escalões referenciados têm de pertencer ao clube (e à secção, se dada).
   const escaloesReferenciados = new Set<string>(escalaoIds);
   for (const p of promocoes) {
     escaloesReferenciados.add(p.escalaoOrigemId);
     escaloesReferenciados.add(p.escalaoDestinoId);
   }
   const escaloesDoClube = await prisma.escalao.findMany({
-    where: { id: { in: [...escaloesReferenciados] }, clubeId },
+    where: {
+      id: { in: [...escaloesReferenciados] },
+      clubeId,
+      ...(seccaoId ? { seccaoId } : {}),
+    },
     select: { id: true },
   });
   if (escaloesDoClube.length !== escaloesReferenciados.size)
-    return erro("Um dos escalões selecionados não pertence a este clube.");
+    return erro(
+      seccaoId
+        ? "Um dos escalões selecionados não pertence a esta secção."
+        : "Um dos escalões selecionados não pertence a este clube.",
+    );
 
   const escalaoIdsSet = new Set(escalaoIds);
 
@@ -195,7 +214,8 @@ export async function criarEpocaRollover(
             epocaId: epocaAnterior.id,
             estado: "ATIVO",
             tipo: "PRINCIPAL",
-            escalao: { clubeId },
+            // 🔁 v7 (§8.21): snapshot por secção quando `seccaoId` é fornecido.
+            escalao: { clubeId, ...(seccaoId ? { seccaoId } : {}) },
           },
           select: { atletaId: true, escalaoId: true, numero: true },
         });
@@ -242,12 +262,28 @@ export async function criarEpocaRollover(
           return { erro: "Um dos atletas selecionados não pertence a este clube." };
       }
 
-      // Nova época ativa: desmarca as restantes e cria a nova como ativa
-      // (recalcula o seletor de época).
+      // Nova época ativa: desmarca as restantes e cria/reutiliza a época-alvo
+      // como ativa (recalcula o seletor de época). A época é de nível clube:
+      // numa transição multi-secção (com `seccaoId`), se uma secção anterior já
+      // criou a época com este nome, reutiliza-a em vez de duplicar (as duas
+      // secções partilham a mesma época — §8.21).
       await tx.epoca.updateMany({ where: { clubeId }, data: { ativa: false } });
-      const novaEpoca = await tx.epoca.create({
-        data: { clubeId, nome, dataInicio, dataFim, ativa: true },
-      });
+      let novaEpoca: { id: string };
+      const existente = seccaoId
+        ? await tx.epoca.findFirst({ where: { clubeId, nome }, select: { id: true } })
+        : null;
+      if (existente) {
+        novaEpoca = await tx.epoca.update({
+          where: { id: existente.id },
+          data: { dataInicio, dataFim, ativa: true },
+          select: { id: true },
+        });
+      } else {
+        novaEpoca = await tx.epoca.create({
+          data: { clubeId, nome, dataInicio, dataFim, ativa: true },
+          select: { id: true },
+        });
+      }
 
       // Uma participação PRINCIPAL por atleta na nova época (invariante secção 9).
       if (atletaIds.length > 0) {

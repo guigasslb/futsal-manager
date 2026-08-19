@@ -19,9 +19,17 @@ import { Label } from "@/components/ui/label";
 import { atualizarBrandingClube } from "@/lib/actions/clubes";
 import { criarEscalao, apagarEscalao } from "@/lib/actions/escaloes";
 import { criarEpoca, definirEpocaAtiva } from "@/lib/actions/epocas";
+import { garantirSeccaoParaModalidade } from "@/lib/actions/seccoes";
 import { marcarOnboardingConcluido } from "@/lib/actions/onboarding";
 import { cn } from "@/lib/utils";
-import type { Clube, Escalao, Epoca } from "@prisma/client";
+import type { Clube, Escalao, Epoca, Modalidade } from "@prisma/client";
+
+// Modalidades disponíveis no onboarding (§8.1.1). A escolha determina a secção do
+// escalão criado; um clube pode acrescentar a outra modalidade depois em Definições.
+const MODALIDADES: { valor: Modalidade; rotulo: string; emoji: string }[] = [
+  { valor: "FUTSAL", rotulo: "Futsal", emoji: "🥅" },
+  { valor: "FUTEBOL", rotulo: "Futebol", emoji: "⚽" },
+];
 
 /** Flag local (§8.1): marca o onboarding como concluído/saltado neste browser. */
 const CHAVE_ONBOARDING = "fc:onboarding:concluido";
@@ -285,6 +293,7 @@ function PassoEscaloes({
 }) {
   const [escaloes, setEscaloes] = useState<Escalao[]>(escaloesIniciais);
   const [nome, setNome] = useState("");
+  const [modalidade, setModalidade] = useState<Modalidade>("FUTSAL");
   const [pending, startTransition] = useTransition();
   const [erro, setErro] = useState<string | null>(null);
 
@@ -293,7 +302,14 @@ function PassoEscaloes({
     if (!limpo) return;
     setErro(null);
     startTransition(async () => {
-      const res = await criarEscalao({ nome: limpo });
+      // §8.1.1: garante a secção da modalidade escolhida (idempotente) e cria o
+      // escalão nessa secção. Quem só faz futsal nunca sai do comportamento base.
+      const resSeccao = await garantirSeccaoParaModalidade(modalidade);
+      if (!resSeccao.sucesso) {
+        setErro(resSeccao.erro);
+        return;
+      }
+      const res = await criarEscalao({ nome: limpo, seccaoId: resSeccao.dados.seccaoId });
       if (res.sucesso) {
         setEscaloes((atual) => [...atual, res.dados]);
         setNome("");
@@ -325,6 +341,33 @@ function PassoEscaloes({
       />
 
       {erro && <p className="text-corpo-sec text-vermelho-600">{erro}</p>}
+
+      {/* Modalidade do escalão (§8.1.1) — o escalão é criado na secção escolhida. */}
+      <div className="space-y-1.5">
+        <Label>Modalidade</Label>
+        <div className="grid grid-cols-2 gap-2">
+          {MODALIDADES.map((m) => {
+            const ativo = modalidade === m.valor;
+            return (
+              <button
+                key={m.valor}
+                type="button"
+                onClick={() => setModalidade(m.valor)}
+                aria-pressed={ativo}
+                className={cn(
+                  "flex min-h-[44px] items-center justify-center gap-2 rounded-lg border px-4 py-2 text-corpo font-medium transition-colors",
+                  ativo
+                    ? "border-primary bg-primary/5 text-primary"
+                    : "border-cinza-200 text-cinza-600 hover:bg-cinza-50",
+                )}
+              >
+                <span aria-hidden>{m.emoji}</span>
+                {m.rotulo}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="flex items-end gap-2">
         <div className="flex-1 space-y-1.5">
