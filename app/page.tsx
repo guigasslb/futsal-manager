@@ -12,7 +12,6 @@ import {
   Mail,
 } from "lucide-react";
 import { Logo } from "@/components/layout/Logo";
-import { FormularioContacto } from "@/components/landing/FormularioContacto";
 
 const LARANJA = "#F0531E"; // acento/decorativo (ícones, bordas, texto sobre escuro)
 const LARANJA_ACAO = "#C7430F"; // laranja-600: fundos c/ texto branco (AA 4.95:1)
@@ -289,27 +288,37 @@ export default function RootPage() {
       </section>
 
       {/* ── Contacto ────────────────────────────────────────────────────── */}
-      <section id="contacto" className="scroll-mt-20 bg-white py-20">
-        <div className="mx-auto max-w-3xl px-6">
-          <div className="mx-auto max-w-2xl text-center">
-            <div
-              className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl"
-              style={{ backgroundColor: "rgba(240,83,30,0.12)", color: LARANJA }}
-            >
-              <Mail size={24} aria-hidden />
-            </div>
-            <h2 className="mt-5 font-display text-3xl font-bold tracking-tight text-cinza-900 sm:text-4xl">
-              Fala connosco
-            </h2>
-            <p className="mt-4 text-lg text-cinza-600">
-              Dúvidas, sugestões ou queres trazer o teu clube? Envia-nos uma
-              mensagem — respondemos o mais rápido possível.
-            </p>
+      <section
+        id="contacto"
+        className="scroll-mt-20 text-white"
+        style={{
+          backgroundColor: "#0F0E13",
+          backgroundImage:
+            "radial-gradient(120% 70% at 0% 110%, rgba(240,83,30,0.28) 0%, transparent 55%)",
+        }}
+      >
+        <div className="mx-auto max-w-3xl px-6 py-20 text-center">
+          <div
+            className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl"
+            style={{ backgroundColor: "rgba(240,83,30,0.15)", color: LARANJA }}
+          >
+            <Mail size={24} aria-hidden />
           </div>
-
-          <div className="mt-12 rounded-2xl border border-cinza-200 bg-cinza-50 p-6 sm:p-8">
-            <FormularioContacto />
-          </div>
+          <h2 className="mt-5 font-display text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            Fala connosco
+          </h2>
+          <p className="mx-auto mt-4 max-w-xl text-lg text-white/75">
+            Tens dúvidas, sugestões ou queres saber mais sobre o FutsalCoach?
+            Envia-nos um email.
+          </p>
+          <a
+            href="mailto:goncalo.pereira.1992@gmail.com?subject=Contacto%20FutsalCoach"
+            className="mt-8 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-7 py-3.5 text-base font-semibold text-white shadow-lg transition-transform hover:-translate-y-0.5"
+            style={{ backgroundColor: LARANJA_ACAO }}
+          >
+            <Mail size={18} aria-hidden />
+            goncalo.pereira.1992@gmail.com
+          </a>
         </div>
       </section>
 
