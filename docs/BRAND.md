@@ -1,6 +1,6 @@
 # Mister — Guia de marca
 
-Identidade visual do produto **Mister**. Complementa a secção 12 da bíblia (`FutsalManager_Spec_v5.md`). Regra de ouro: **a marca do produto é fixa; a cor do clube é dinâmica**.
+Identidade visual do produto **Mister**. Complementa a secção 12 da bíblia (`FutsalManager_Spec_v7.md`). Regra de ouro: **a marca do produto é fixa; a cor do clube é dinâmica**.
 
 ## 1. Logótipo
 

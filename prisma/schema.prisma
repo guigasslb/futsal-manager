@@ -1,5 +1,5 @@
 // prisma/schema.prisma
-// FutsalManager — Modelo de dados do MVP (secção 5.2 da especificação v4.0)
+// Mister — Modelo de dados (bíblia: docs/FutsalManager_Spec_v7.md)
 
 generator client {
   provider      = "prisma-client-js"
@@ -1440,7 +1440,7 @@ enum TipoMovimento {
 // hoje" derivados no dashboard (lib/dashboard-lembretes.ts), que são efémeros.
 //
 // NOTA de modelação: o campo `criadoPor` referencia `Utilizador` (a pessoa), não
-// `Perfil` — no FutsalCoach o `Perfil` é um pacote de capacidades (papel), pelo
+// `Perfil` — no Mister o `Perfil` é um pacote de capacidades (papel), pelo
 // que criador e destinatário têm de ser pessoas para que o estado `visto` e o
 // filtro "criados por mim / onde sou destinatário" façam sentido.
 model Lembrete {

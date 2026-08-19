@@ -6,6 +6,7 @@ import { listarEpocas } from "@/lib/actions/epocas";
 import { obterSeccoes } from "@/lib/actions/seccoes";
 import { obterEpocaAtiva } from "@/lib/epoca-context";
 import { obterMembroAtual } from "@/lib/permissoes";
+import { temLicencaValida } from "@/lib/licenca";
 import { BarraTopo } from "@/components/layout/BarraTopo";
 import { Navegacao } from "@/components/layout/Navegacao";
 import { ScrollTopo } from "@/components/layout/ScrollTopo";
@@ -61,6 +62,13 @@ export default async function AppLayout({
     // Sem clube ativo → onboarding (criar clube ou aceitar convite).
     const membro = await obterMembroAtual();
     if (!membro) redirect("/criar-clube");
+
+    // Guarda de licença (§3.11) — SEPARADA da autenticação: só entra na área da
+    // app quem tem subscrição válida (licença do clube OU Individual). Sem
+    // licença válida → paywall. A página /sem-licenca vive fora deste grupo de
+    // rotas, pelo que não reentra nesta guarda (sem ciclo de redirect).
+    const licencaOk = await temLicencaValida(membro.clube.id, membro.utilizadorId);
+    if (!licencaOk) redirect("/sem-licenca");
 
     const [epocasResult, epocaAtiva, seccoesResult] = await Promise.all([
       listarEpocas(),
