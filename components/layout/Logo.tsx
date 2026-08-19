@@ -72,7 +72,7 @@ export function Logo({
   // Ícone com fundo laranja (inverted) é visível em ambos os fundos
   const inverted = variant === "dark" || variant === "auto";
 
-  // Cor do texto "Futsal" segundo o contexto:
+  // Cor do wordmark "Mister" segundo o contexto:
   // - "dark"  → branco fixo (fundos sempre escuros: landing, footer)
   // - "light" → tinta fixa
   // - "auto"  → adapta ao tema (tinta em light mode, branco em .dark)
@@ -100,13 +100,9 @@ export function Logo({
           }}
         >
           {/* Cor do texto depende do variant (ver classeTexto acima) */}
-          <span
-            className={classeTexto}
-            style={{ fontWeight: 800 }}
-          >
-            Futsal
+          <span className={classeTexto} style={{ fontWeight: 800 }}>
+            Mister
           </span>
-          <span style={{ fontWeight: 500, color: ORANGE }}>coach</span>
         </span>
       )}
     </span>

@@ -14,7 +14,7 @@ const display = Bricolage_Grotesque({
 
 export const metadata: Metadata = {
   title: { default: "Mister", template: "Mister – %s" },
-  description: "Gestão de treino e desenvolvimento do atleta, dedicada ao futsal",
+  description: "Gestão de treino e desenvolvimento do atleta, para futsal e futebol",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "Mister", statusBarStyle: "default" },
 };

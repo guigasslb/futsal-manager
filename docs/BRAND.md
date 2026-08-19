@@ -5,7 +5,7 @@ Identidade visual do produto **Mister**. Complementa a secção 12 da bíblia (`
 ## 1. Logótipo
 
 - **Símbolo:** quadra de futsal (preto) com marcadores do quadro tático — círculo (O), cruz (X) e seta — a laranja. Ecoa a ferramenta do treinador.
-- **Wordmark:** *Futsal**coach*** — "Futsal" a preto (peso 800), "coach" a laranja (peso 500), em Bricolage Grotesque.
+- **Wordmark:** **Mister** — palavra única em Bricolage Grotesque (peso 800); adapta a cor ao contexto (tinta em fundo claro, branco em fundo escuro). O acento laranja da marca vive no símbolo, ao lado.
 - **Ficheiros:**
   - `components/layout/Logo.tsx` — `<Logo />` (lockup) e `<LogoIcon />` (só símbolo); variantes `light`/`dark` (`inverted`).
   - `public/icon.svg` — ícone da app / favicon / PWA.

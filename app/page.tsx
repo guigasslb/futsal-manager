@@ -26,21 +26,21 @@ type Funcionalidade = {
 const FUNCIONALIDADES: Funcionalidade[] = [
   {
     icon: Users,
-    titulo: "Gestão de plantel e escalões",
+    titulo: "Plantel organizado, em qualquer modalidade",
     descricao:
-      "Atletas, posições, escalões e histórico numa base multi-escalão pronta para o clube inteiro.",
+      "Regista cada atleta uma vez. A app organiza escalões, posições, histórico de época e taxa de presença — para futsal e futebol no mesmo clube.",
   },
   {
     icon: ClipboardList,
-    titulo: "Treinos com diagramas de campo",
+    titulo: "Sessões planeadas, campo desenhado em segundos",
     descricao:
-      "Planeia sessões e desenha exercícios num editor de campo interativo, com animação de movimentos.",
+      "Cria as tuas sessões e desenha exercícios directamente no campo — quadra de futsal ou relvado de futebol, à escala certa, com animações de movimento.",
   },
   {
     icon: LineChart,
     titulo: "Jogos, estatísticas e analytics",
     descricao:
-      "Convocatórias, estatísticas de futsal e gráficos de evolução por atleta, equipa e clube.",
+      "Convocatórias, estatísticas de jogo e gráficos de evolução por atleta — em futsal e em futebol. Os dados entram pelo uso; os relatórios saem sozinhos.",
   },
   {
     icon: MessageCircle,
@@ -70,22 +70,25 @@ type Plano = {
   destaque: boolean;
   itens: string[];
   cta: string;
+  href: string;
 };
 
 const PLANOS: Plano[] = [
   {
     nome: "Individual",
-    publico: "Para treinadores",
+    publico: "Para treinadores — uma modalidade",
     preco: "€4,99",
     sufixo: "/mês",
     destaque: false,
     itens: [
+      "Uma modalidade (futsal ou futebol)",
       "Plantel, treinos e jogos",
       "Editor de campo e biblioteca de exercícios",
       "Estatísticas e caderneta do atleta",
       "Comunicação via WhatsApp",
     ],
     cta: "Começar agora",
+    href: "/registar",
   },
   {
     nome: "Clube",
@@ -100,6 +103,7 @@ const PLANOS: Plano[] = [
       "Analytics transversais e relatórios de clube",
     ],
     cta: "Falar connosco",
+    href: "#contacto",
   },
 ];
 
@@ -149,12 +153,13 @@ export default function RootPage() {
               className="font-display text-4xl font-extrabold leading-tight tracking-tight text-white sm:text-5xl md:text-6xl"
               style={{ letterSpacing: "-0.03em" }}
             >
-              A plataforma de gestão de futsal para{" "}
-              <span style={{ color: LARANJA }}>treinadores e clubes</span>
+              Gere o teu clube.{" "}
+              <span style={{ color: LARANJA }}>Futsal e futebol.</span>
             </h1>
             <p className="mt-6 max-w-2xl text-lg text-white/75 sm:text-xl">
-              Plantel, treinos, jogos, estatísticas, comunicação e muito mais —
-              tudo num só lugar.
+              O Mister junta tudo o que o treinador precisa: plantel, treinos,
+              jogos, estatísticas e comunicação. Numa app feita para a
+              beira-campo — em futsal e em futebol.
             </p>
 
             <div className="mt-10 flex flex-col gap-3 sm:flex-row">
@@ -184,7 +189,7 @@ export default function RootPage() {
             Tudo o que o treinador precisa
           </h2>
           <p className="mt-4 text-lg text-cinza-600">
-            Futsal a sério, não futebol adaptado. Feito para a beira-campo real.
+            Futsal a sério. Futebol a sério. Feito para a beira-campo.
           </p>
         </div>
 
@@ -270,7 +275,7 @@ export default function RootPage() {
                 </ul>
 
                 <Link
-                  href="/registar"
+                  href={plano.href}
                   className="mt-8 inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-base font-semibold transition-transform hover:-translate-y-0.5"
                   style={
                     plano.destaque

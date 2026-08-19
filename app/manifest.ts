@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Mister",
     short_name: "Mister",
-    description: "Gestão de treino e desenvolvimento do atleta, dedicada ao futsal",
+    description: "Gestão de treino e desenvolvimento do atleta, para futsal e futebol",
     start_url: "/dashboard",
     display: "standalone",
     orientation: "portrait",
