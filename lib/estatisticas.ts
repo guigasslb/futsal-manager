@@ -1,9 +1,13 @@
-import type { BlocoTempo, Utilizacao } from "@prisma/client";
+import type { BlocoTempo, FormatoJogo, Utilizacao } from "@prisma/client";
 
 /**
  * Conversão de cada bloco de tempo em minutos (secção 10.1 da bíblia).
  * O registo do tempo de jogo é por bloco (não minuto-a-minuto); o tempo
  * acumulado da época soma estes valores. `NAO_JOGOU` = 0.
+ *
+ * Esta é a tabela BASE (futsal — `FUTSAL_5`), mantida para retrocompatibilidade
+ * total: `blocoParaMinutos(bloco)` sem formato usa-a. Para futebol, o tempo por
+ * bloco depende do formato — ver `MINUTOS_POR_PARTE` (§10.8).
  */
 export const MINUTOS_POR_BLOCO: Record<BlocoTempo, number> = {
   JOGO_COMPLETO: 40,
@@ -14,12 +18,52 @@ export const MINUTOS_POR_BLOCO: Record<BlocoTempo, number> = {
 };
 
 /**
+ * Minutos de UMA parte (meia parte) por formato de jogo (§10.8 / Apêndice B).
+ * O "jogo completo" = 2 × este valor; a "meia parte" = este valor. Os blocos
+ * curtos (`BLOCO_10MIN`/`BLOCO_5MIN`) são constantes em qualquer formato.
+ *
+ * ⚠️ Decisão da Fase 28 (§10.8 deixava em aberto): `MINUTOS_POR_BLOCO` passa a
+ * depender do formato via esta tabela de minutos-por-parte. Optou-se por manter
+ * o nome `MINUTOS_POR_BLOCO` (tabela de futsal, testada) e introduzir
+ * `MINUTOS_POR_PARTE: Record<FormatoJogo, number>` para evitar colidir com o
+ * export existente e preservar zero-regressão no futsal (FUTSAL_5 → 40/20).
+ */
+export const MINUTOS_POR_PARTE: Record<FormatoJogo, number> = {
+  FUTSAL_5: 20, // 2 × 20 min
+  FUTEBOL_3_3: 15, // formação / formato livre
+  FUTEBOL_5_5: 20, // 2 × 20 min
+  FUTEBOL_7: 25, // 2 × 25 min
+  FUTEBOL_9: 35, // 2 × 35 min
+  FUTEBOL_11: 45, // 2 × 45 min
+};
+
+/** Tabela `bloco → minutos` para um formato concreto (derivada de `MINUTOS_POR_PARTE`). */
+export function minutosPorBlocoDoFormato(formato: FormatoJogo): Record<BlocoTempo, number> {
+  const parte = MINUTOS_POR_PARTE[formato];
+  return {
+    JOGO_COMPLETO: parte * 2,
+    MEIA_PARTE: parte,
+    BLOCO_10MIN: 10,
+    BLOCO_5MIN: 5,
+    NAO_JOGOU: 0,
+  };
+}
+
+/**
  * Minutos correspondentes a um bloco de tempo. `null`/`undefined` (bloco não
  * registado) conta como 0 para o tempo acumulado. Função pura.
+ *
+ * `formato` (§10.8): quando ausente/`null`, usa a tabela base de futsal
+ * (`MINUTOS_POR_BLOCO`) — retrocompatível. Quando indicado, usa os minutos por
+ * parte do formato (`FUTSAL_5` continua a dar 40/20).
  */
-export function blocoParaMinutos(bloco: BlocoTempo | null | undefined): number {
+export function blocoParaMinutos(
+  bloco: BlocoTempo | null | undefined,
+  formato?: FormatoJogo | null,
+): number {
   if (bloco == null) return 0;
-  return MINUTOS_POR_BLOCO[bloco];
+  if (formato == null) return MINUTOS_POR_BLOCO[bloco];
+  return minutosPorBlocoDoFormato(formato)[bloco];
 }
 
 export interface EstatisticasAgregadas {
@@ -43,6 +87,11 @@ export interface LinhaEstatistica {
   minutos: number | null;
   /** Bloco de tempo de jogo (F5). Ausente/null = não registado (0 minutos). */
   blocoTempo?: BlocoTempo | null;
+  /**
+   * Formato do jogo desta linha (§10.8). Ausente/null = futsal base (`JOGO_COMPLETO=40`);
+   * determina os minutos por bloco no `tempoJogoAcumulado` para jogos de futebol.
+   */
+  formato?: FormatoJogo | null;
   golos: number;
   assistencias: number;
   defesas: number | null;
@@ -88,7 +137,7 @@ export function agregarEstatisticas(entrada: EntradaAgregacao): EstatisticasAgre
   // Tempo de jogo acumulado a partir dos blocos (secção 10.1). Ao contrário de
   // `totalMinutos` (que distingue "não registado" de zero), este é sempre numérico.
   const tempoJogoAcumulado = estatisticas.reduce(
-    (acc, e) => acc + blocoParaMinutos(e.blocoTempo ?? null),
+    (acc, e) => acc + blocoParaMinutos(e.blocoTempo ?? null, e.formato ?? null),
     0,
   );
 

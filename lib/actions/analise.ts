@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import {
   Prisma,
+  type Modalidade,
   type Posicao,
   type TipoEventoJogo,
   type TipoJogo,
@@ -27,6 +28,7 @@ import {
   type EstatisticasAgregadas,
   type LinhaEstatistica,
 } from "@/lib/estatisticas";
+import { filtroModalidadeJogo } from "@/lib/modalidade-escalao";
 import {
   analiticoAtletaSchema,
   analiticoEscalaoSchema,
@@ -308,8 +310,9 @@ export async function obterAnaliticoAtleta(
   atletaId: string,
   escalaoId?: string,
   epocaId?: string,
+  modalidade?: Modalidade,
 ): Promise<Resultado<AnaliticoAtleta>> {
-  const parsed = analiticoAtletaSchema.safeParse({ atletaId, escalaoId, epocaId });
+  const parsed = analiticoAtletaSchema.safeParse({ atletaId, escalaoId, epocaId, modalidade });
   if (!parsed.success) return erroDeValidacao(parsed.error);
 
   const perm = await exigirRelatorios();
@@ -329,7 +332,12 @@ export async function obterAnaliticoAtleta(
       dataIngresso: true,
       participacoes: {
         where: { epocaId: epoca.id, estado: "ATIVO" },
-        select: { escalaoId: true, escalao: { select: { nome: true } } },
+        select: {
+          escalaoId: true,
+          escalao: {
+            select: { nome: true, seccao: { select: { modalidade: true } } },
+          },
+        },
       },
     },
   });
@@ -338,6 +346,14 @@ export async function obterAnaliticoAtleta(
   const escaloesAtivos = atleta.participacoes.map((p) => p.escalaoId);
   if (!(await podeLerAlgumEscalao(escaloesAtivos)))
     return erro("Sem permissão neste escalão");
+
+  // 🔁 v7 (§10.1/§10.8): a vista conjunta segmenta por modalidade — só entram as
+  // participações da modalidade pedida (o escalão é monomodalidade via secção).
+  const participacoesRelevantes = parsed.data.modalidade
+    ? atleta.participacoes.filter(
+        (p) => p.escalao.seccao?.modalidade === parsed.data.modalidade,
+      )
+    : atleta.participacoes;
 
   // Escalão de contexto: o pedido (tem de ser uma participação) ou vista conjunta.
   let escaloesCtx: string[];
@@ -350,13 +366,19 @@ export async function obterAnaliticoAtleta(
     escaloesCtx = [escalaoId];
     escalaoContexto = { id: escalaoId, nome: participacao.escalao.nome };
   } else {
-    escaloesCtx = escaloesAtivos;
+    escaloesCtx = participacoesRelevantes.map((p) => p.escalaoId);
     escalaoContexto = null;
   }
 
   const eGR = atleta.posicoes.includes("GUARDA_REDES");
   const ingresso = atleta.dataIngresso ?? atleta.criadoEm;
-  const filtroJogo = { epocaId: epoca.id, escalaoId: { in: escaloesCtx } };
+  // Núcleo de jogos filtrado por modalidade efetiva (§10.8): atividade pontual
+  // ou secção do escalão. Não afeta sessões/presenças (já limitadas a `escaloesCtx`).
+  const filtroJogo = {
+    epocaId: epoca.id,
+    escalaoId: { in: escaloesCtx },
+    ...filtroModalidadeJogo(parsed.data.modalidade),
+  };
 
   const [
     jogosConvocado,
@@ -380,7 +402,8 @@ export async function obterAnaliticoAtleta(
           assistencias: true,
           defesas: true,
           golosSofridosGR: true,
-          jogo: { select: { data: true, adversario: true } },
+          // §10.8: o formato determina os minutos por bloco (tempo de jogo).
+          jogo: { select: { data: true, adversario: true, formato: true } },
         },
         orderBy: { jogo: { data: "asc" } },
       }),
@@ -426,6 +449,8 @@ export async function obterAnaliticoAtleta(
     assistencias: e.assistencias,
     defesas: e.defesas,
     golosSofridosGR: e.golosSofridosGR,
+    // §10.8: tempo de jogo por bloco depende do formato (futsal null → 40/20).
+    formato: e.jogo.formato,
   }));
 
   const presencasSet = new Set(presencas.map((p) => p.sessaoId));
@@ -455,7 +480,7 @@ export async function obterAnaliticoAtleta(
 
   const comparacaoEquipa =
     escalaoContexto !== null
-      ? await calcularComparacaoEquipa(escalaoContexto.id, epoca.id)
+      ? await calcularComparacaoEquipa(escalaoContexto.id, epoca.id, parsed.data.modalidade)
       : null;
 
   return ok({
@@ -475,15 +500,19 @@ export async function obterAnaliticoAtleta(
 async function calcularComparacaoEquipa(
   escalaoId: string,
   epocaId: string,
+  modalidade?: Modalidade,
 ): Promise<ComparacaoEquipa> {
+  // §10.8: em coerência com a vista do atleta, filtra os jogos pela modalidade.
+  const filtroJogo = { epocaId, escalaoId, ...filtroModalidadeJogo(modalidade) };
   const [nAtletas, sessoes, estatisticas, presencas] = await Promise.all([
     prisma.atletaEscalao.count({
       where: { escalaoId, epocaId, estado: "ATIVO", atleta: { ativo: true } },
     }),
     prisma.sessao.count({ where: { epocaId, escalaoId } }),
     prisma.estatisticaAtleta.findMany({
-      where: { jogo: { epocaId, escalaoId } },
-      select: { golos: true, blocoTempo: true },
+      where: { jogo: filtroJogo },
+      // §10.8: formato para o tempo por bloco correto (futebol ≠ futsal).
+      select: { golos: true, blocoTempo: true, jogo: { select: { formato: true } } },
     }),
     prisma.presenca.count({
       where: {
@@ -495,7 +524,10 @@ async function calcularComparacaoEquipa(
   ]);
 
   const totalGolos = estatisticas.reduce((acc, e) => acc + e.golos, 0);
-  const totalTempo = estatisticas.reduce((acc, e) => acc + blocoParaMinutos(e.blocoTempo), 0);
+  const totalTempo = estatisticas.reduce(
+    (acc, e) => acc + blocoParaMinutos(e.blocoTempo, e.jogo?.formato),
+    0,
+  );
   const slots = nAtletas * sessoes;
 
   return {
@@ -688,6 +720,8 @@ export async function obterAnaliticoEscalao(
         assistencias: true,
         blocoTempo: true,
         utilizacao: true,
+        // §10.8: formato do jogo para o tempo por bloco (futebol ≠ futsal).
+        jogo: { select: { formato: true } },
         atleta: { select: { nome: true } },
       },
     }),
@@ -759,7 +793,7 @@ export async function obterAnaliticoEscalao(
       assistMap.set(e.atletaId, a);
     }
     const u = utilMap.get(e.atletaId) ?? { nome: e.atleta.nome, tempo: 0, jogos: 0 };
-    u.tempo += blocoParaMinutos(e.blocoTempo);
+    u.tempo += blocoParaMinutos(e.blocoTempo, e.jogo?.formato);
     if (e.utilizacao !== "NAO_UTILIZADO") u.jogos++;
     utilMap.set(e.atletaId, u);
   }

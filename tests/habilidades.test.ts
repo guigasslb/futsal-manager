@@ -78,6 +78,21 @@ describe("listarHabilidades", () => {
     const arg = calls(prisma.habilidade.findMany)[0][0] as { where: { clubeId: string } };
     expect(arg.where.clubeId).toBe("clube1");
   });
+
+  it("sem modalidade não filtra por modalidade (todas)", async () => {
+    await listarHabilidades();
+    const arg = calls(prisma.habilidade.findMany)[0][0] as { where: Record<string, unknown> };
+    expect(arg.where.OR).toBeUndefined();
+  });
+
+  it("com modalidade inclui as habilidades dessa modalidade + universais (null)", async () => {
+    await listarHabilidades("FUTEBOL");
+    const arg = calls(prisma.habilidade.findMany)[0][0] as {
+      where: { clubeId: string; OR: { modalidade: string | null }[] };
+    };
+    expect(arg.where.clubeId).toBe("clube1");
+    expect(arg.where.OR).toEqual([{ modalidade: "FUTEBOL" }, { modalidade: null }]);
+  });
 });
 
 // ─── criarHabilidade ──────────────────────────────────────────────────────────

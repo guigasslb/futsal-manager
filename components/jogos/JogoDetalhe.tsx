@@ -30,6 +30,7 @@ import {
   guardarRelatorio,
 } from "@/lib/actions/jogos";
 import { LABEL_BLOCO_TEMPO, LABEL_UTILIZACAO } from "@/lib/schemas/jogo";
+import { blocoParaMinutos } from "@/lib/modalidade-escalao";
 import { PlanoTatico } from "@/components/jogos/PlanoTatico";
 import { RegistoAoVivo } from "@/components/jogos/RegistoAoVivo";
 import { ScoutingJogo } from "@/components/jogos/ScoutingJogo";
@@ -37,6 +38,8 @@ import { TimelineEventos, type EventoTimeline } from "@/components/jogos/Timelin
 import type {
   BlocoTempo,
   CasaFora,
+  FormatoJogo,
+  Modalidade,
   ObservacaoAdversario,
   Posicao,
   TipoMetrica,
@@ -73,6 +76,12 @@ type EstatLinha = {
   defesas: number | null;
   golosSofridosGR: number | null;
   faltasCometidas: number | null;
+  // 🔁 v7 (§10.8): núcleo estatístico de futebol. Só editado/gravado em jogos de
+  // futebol; em futsal fica sempre a null (a grelha nem os mostra).
+  remates: number | null;
+  cantos: number | null;
+  forasDeJogo: number | null;
+  desarmes: number | null;
   valoresMetricas: Record<string, number>;
 };
 
@@ -89,6 +98,8 @@ export function JogoDetalhe({
   observacoes,
   casaFora,
   adversario,
+  modalidade,
+  formato,
 }: {
   jogoId: string;
   atletas: Atleta[];
@@ -102,7 +113,12 @@ export function JogoDetalhe({
   observacoes: ObservacaoAdversario[];
   casaFora: CasaFora;
   adversario: string;
+  // 🔁 v7 (§10.8): modalidade efetiva do jogo → decide o núcleo estatístico
+  // exibido; `formato` alimenta a conversão bloco→minutos (tempo de jogo).
+  modalidade: Modalidade;
+  formato: FormatoJogo | null;
 }) {
+  const eFutebol = modalidade === "FUTEBOL";
   const [convocados, setConvocados] = useState<Set<string>>(
     () => new Set(convocadosIniciais),
   );
@@ -169,6 +185,10 @@ export function JogoDetalhe({
         defesas: null,
         golosSofridosGR: null,
         faltasCometidas: null,
+        remates: null,
+        cantos: null,
+        forasDeJogo: null,
+        desarmes: null,
         valoresMetricas: {},
       }
     );
@@ -278,6 +298,8 @@ export function JogoDetalhe({
             posicoes: a.posicoes,
           }))}
           planoInicial={planoInicial}
+          modalidade={modalidade}
+          formato={formato}
         />
       </TabsContent>
 
@@ -374,11 +396,17 @@ export function JogoDetalhe({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">— sem bloco —</SelectItem>
-                          {BLOCOS.map((b) => (
-                            <SelectItem key={b} value={b}>
-                              {LABEL_BLOCO_TEMPO[b]}
-                            </SelectItem>
-                          ))}
+                          {BLOCOS.map((b) => {
+                            // §10.8: minutos do bloco dependem do formato do jogo
+                            // (ex.: JOGO_COMPLETO = 90 min em futebol 11).
+                            const min = blocoParaMinutos(b, formato);
+                            return (
+                              <SelectItem key={b} value={b}>
+                                {LABEL_BLOCO_TEMPO[b]}
+                                {b !== "NAO_JOGOU" ? ` (${min} min)` : ""}
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
                     </div>
@@ -388,7 +416,9 @@ export function JogoDetalhe({
                         valor={e.minutos}
                         onChange={(n) => atualizarEstat(a.id, { minutos: n })}
                       />
-                      {eGR ? (
+                      {/* Núcleo específico do GR (defesas / golos sofridos), comum às
+                          duas modalidades (§10.8). */}
+                      {eGR && (
                         <>
                           <CampoNum
                             label="Defesas"
@@ -400,13 +430,11 @@ export function JogoDetalhe({
                             valor={e.golosSofridosGR}
                             onChange={(n) => atualizarEstat(a.id, { golosSofridosGR: n })}
                           />
-                          <CampoNum
-                            label="Faltas"
-                            valor={e.faltasCometidas}
-                            onChange={(n) => atualizarEstat(a.id, { faltasCometidas: n })}
-                          />
                         </>
-                      ) : (
+                      )}
+                      {/* Golos/assistências: só se mostram para jogadores de campo
+                          (mantém o comportamento de futsal — GR não os edita). */}
+                      {!eGR && (
                         <>
                           <CampoNum
                             label="Golos"
@@ -418,12 +446,39 @@ export function JogoDetalhe({
                             valor={e.assistencias}
                             onChange={(n) => atualizarEstat(a.id, { assistencias: n ?? 0 })}
                           />
+                        </>
+                      )}
+                      {eFutebol ? (
+                        // 🥅 §10.8: núcleo de futebol substitui as faltas por parte.
+                        <>
                           <CampoNum
-                            label="Faltas"
-                            valor={e.faltasCometidas}
-                            onChange={(n) => atualizarEstat(a.id, { faltasCometidas: n })}
+                            label="Remates"
+                            valor={e.remates}
+                            onChange={(n) => atualizarEstat(a.id, { remates: n })}
+                          />
+                          <CampoNum
+                            label="Cantos"
+                            valor={e.cantos}
+                            onChange={(n) => atualizarEstat(a.id, { cantos: n })}
+                          />
+                          <CampoNum
+                            label="Foras-de-jogo"
+                            valor={e.forasDeJogo}
+                            onChange={(n) => atualizarEstat(a.id, { forasDeJogo: n })}
+                          />
+                          <CampoNum
+                            label="Desarmes"
+                            valor={e.desarmes}
+                            onChange={(n) => atualizarEstat(a.id, { desarmes: n })}
                           />
                         </>
+                      ) : (
+                        // ⚽ Futsal: faltas cometidas por atleta.
+                        <CampoNum
+                          label="Faltas"
+                          valor={e.faltasCometidas}
+                          onChange={(n) => atualizarEstat(a.id, { faltasCometidas: n })}
+                        />
                       )}
                     </div>
 

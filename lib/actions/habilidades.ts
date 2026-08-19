@@ -6,16 +6,26 @@ import { obterClubeIdAtual } from "@/lib/epoca-context";
 import { exigirCapacidade } from "@/lib/permissoes";
 import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
 import { habilidadeSchema } from "@/lib/schemas/habilidade";
-import type { Habilidade, NivelHabilidade } from "@prisma/client";
+import type { Habilidade, Modalidade, NivelHabilidade } from "@prisma/client";
 
 const PATH = "/definicoes/habilidades";
 
-export async function listarHabilidades(): Promise<Resultado<Habilidade[]>> {
+/**
+ * Habilidades do clube (caderneta §8.14). Filtro opcional por modalidade (§3.8):
+ * sem filtro devolve todas; com modalidade concreta inclui as universais
+ * (`modalidade = null`), que servem as duas modalidades.
+ */
+export async function listarHabilidades(
+  modalidade?: Modalidade,
+): Promise<Resultado<Habilidade[]>> {
   const clubeId = await obterClubeIdAtual();
   if (!clubeId) return erro("Não autenticado");
 
   const habilidades = await prisma.habilidade.findMany({
-    where: { clubeId },
+    where: {
+      clubeId,
+      ...(modalidade ? { OR: [{ modalidade }, { modalidade: null }] } : {}),
+    },
     orderBy: [{ nivel: "asc" }, { ordem: "asc" }],
   });
   return ok(habilidades);

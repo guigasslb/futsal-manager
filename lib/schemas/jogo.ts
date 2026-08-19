@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BlocoTempo, Posicao, TipoEventoJogo } from "@prisma/client";
+import { BlocoTempo, FormatoJogo, Posicao, TipoEventoJogo } from "@prisma/client";
 
 /**
  * Valida um URL de vídeo: só https e só domínios YouTube (secção 8 da bíblia).
@@ -33,6 +33,10 @@ export const jogoSchema = z.object({
   // faz-se por `competicaoId`. O campo legado mantém-se no modelo Prisma só para
   // leitura de jogos antigos.
   competicaoId: z.string().cuid().nullable().optional(),
+  // 🔁 v7 (§3.7/§10.8): formato de jogo (FUTSAL_5 | FUTEBOL_*). Opcional no input:
+  // se ausente, é derivado da modalidade da secção do escalão (FUTSAL → FUTSAL_5;
+  // FUTEBOL → obrigatório indicar, não há default entre os 5 formatos). Editável.
+  formato: z.nativeEnum(FormatoJogo).nullable().optional(),
   local: z.string().max(100).optional(),
   golosMarcados: z.number().int().min(0).max(99).nullable().optional(),
   golosSofridos: z.number().int().min(0).max(99).nullable().optional(),
@@ -132,6 +136,12 @@ export const estatisticaSchema = z.object({
   defesas: z.number().int().min(0).nullable().optional(),
   golosSofridosGR: z.number().int().min(0).nullable().optional(),
   faltasCometidas: z.number().int().min(0).nullable().optional(),
+  // 🔁 v7 (§3.7/§10.8): núcleo estatístico de FUTEBOL 🥅. Só é gravado em jogos de
+  // futebol; em jogos de futsal estes campos são ignorados/postos a null pela action.
+  remates: z.number().int().min(0).nullable().optional(),
+  cantos: z.number().int().min(0).nullable().optional(),
+  forasDeJogo: z.number().int().min(0).nullable().optional(),
+  desarmes: z.number().int().min(0).nullable().optional(),
   valoresMetricas: z
     .array(z.object({ metricaId: z.string().cuid(), valor: z.number().int() }))
     .optional(),

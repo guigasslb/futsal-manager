@@ -17,8 +17,16 @@ import { Prisma } from "@prisma/client";
 import type {
   CategoriaExercicioPrincipal,
   Exercicio,
+  Modalidade,
   ParteTreino,
 } from "@prisma/client";
+
+/**
+ * Filtro de modalidade da biblioteca (§8.6). `"TODAS"` (ou ausente) = sem filtro.
+ * Uma modalidade concreta inclui sempre os itens universais (`modalidade = null`),
+ * que servem as duas modalidades.
+ */
+export type FiltroModalidade = Modalidade | "TODAS";
 
 const PATH = "/exercicios";
 
@@ -78,12 +86,15 @@ async function contextoLeitura(): Promise<ContextoBiblioteca> {
 /**
  * Biblioteca visível ao membro: 🎒 exercícios pessoais do treinador ∪ 🏛️ exercícios
  * do clube (próprios do clube + contribuições explícitas via PartilhaExercicioClube).
- * Filtros opcionais por parte do treino, categoria principal e pesquisa por nome.
+ * Filtros opcionais por parte do treino, categoria principal, pesquisa por nome
+ * e modalidade (§8.6). Na modalidade concreta incluem-se os itens universais
+ * (`modalidade = null`); `"TODAS"` (default) não filtra por modalidade.
  */
 export async function listarExercicios(
   parteTreino?: ParteTreino,
   categoriaPrincipal?: CategoriaExercicioPrincipal,
   q?: string,
+  modalidade: FiltroModalidade = "TODAS",
 ): Promise<Resultado<ExercicioBiblioteca[]>> {
   const ctx = await contextoLeitura();
   if (ctx.estado === "erro") return erro(ctx.erro);
@@ -97,6 +108,9 @@ export async function listarExercicios(
         ...(parteTreino ? [{ parteTreino }] : []),
         ...(categoriaPrincipal ? [{ categoriaPrincipal }] : []),
         ...(termo ? [{ nome: { contains: termo, mode: "insensitive" as const } }] : []),
+        ...(modalidade !== "TODAS"
+          ? [{ OR: [{ modalidade }, { modalidade: null }] }]
+          : []),
       ],
     },
     include: { partilhasClube: { where: { clubeId: ctx.clubeId }, select: { id: true } } },

@@ -13,8 +13,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { definirPlanoTatico } from "@/lib/actions/jogos";
-import { LABEL_POSICAO } from "@/lib/schemas/atleta";
-import type { Posicao } from "@prisma/client";
+import { LABEL_POSICAO, posicoesPorModalidade } from "@/lib/schemas/atleta";
+import { CampoDesenho } from "@/components/campo/CampoDesenho";
+import type { DiagramaCampo, Jogador } from "@/lib/schemas/exercicio";
+import type { FormatoJogo, Modalidade, Posicao } from "@prisma/client";
 
 type Convocado = {
   id: string;
@@ -25,25 +27,59 @@ type Convocado = {
 
 type LinhaPlano = { posicaoPrevista: Posicao | null; titularPrevisto: boolean };
 
-const POSICOES: Posicao[] = ["GUARDA_REDES", "FIXO", "ALA", "PIVO", "UNIVERSAL"];
+/** Linha de formação: sector + coordenada x no espaço 400×200 do campo (§11.5). */
+type LinhaFormacao = { titulo: string; x: number; posicoes: Posicao[] };
 
-/** Linhas de formação (dia de jogo): agrupamento das posições por sector. */
-const LINHAS: { titulo: string; posicoes: Posicao[] }[] = [
-  { titulo: "Guarda-redes", posicoes: ["GUARDA_REDES"] },
-  { titulo: "Defesa", posicoes: ["FIXO"] },
-  { titulo: "Meio", posicoes: ["ALA", "UNIVERSAL"] },
-  { titulo: "Avançado", posicoes: ["PIVO"] },
+// 🔁 v7 (§11.5): linhas de formação por modalidade. A equipa própria defende à
+// esquerda e ataca à direita (x cresce para a frente).
+const LINHAS_FUTSAL: LinhaFormacao[] = [
+  { titulo: "Guarda-redes", x: 35, posicoes: ["GUARDA_REDES"] },
+  { titulo: "Defesa", x: 130, posicoes: ["FIXO"] },
+  { titulo: "Meio", x: 225, posicoes: ["ALA", "UNIVERSAL"] },
+  { titulo: "Avançado", x: 320, posicoes: ["PIVO"] },
 ];
+
+const LINHAS_FUTEBOL: LinhaFormacao[] = [
+  { titulo: "Guarda-redes", x: 35, posicoes: ["GUARDA_REDES"] },
+  {
+    titulo: "Defesa",
+    x: 115,
+    posicoes: ["DEFESA_CENTRAL", "LATERAL_DIREITO", "LATERAL_ESQUERDO"],
+  },
+  {
+    titulo: "Meio",
+    x: 205,
+    posicoes: ["MEDIO_DEFENSIVO", "MEDIO_CENTRO", "MEDIO_OFENSIVO", "UNIVERSAL"],
+  },
+  {
+    titulo: "Ataque",
+    x: 315,
+    posicoes: ["EXTREMO_DIREITO", "EXTREMO_ESQUERDO", "AVANCADO"],
+  },
+];
+
+/** Distribui n jogadores verticalmente (y) numa linha, no espaço útil 45..155. */
+function distribuirY(indice: number, total: number): number {
+  if (total <= 1) return 100;
+  return 45 + ((155 - 45) * indice) / (total - 1);
+}
 
 export function PlanoTatico({
   jogoId,
   convocados,
   planoInicial,
+  modalidade,
+  formato,
 }: {
   jogoId: string;
   convocados: Convocado[];
   planoInicial: Record<string, LinhaPlano>;
+  // 🔁 v7 (§11.5): modalidade → posições/linhas; formato → fundo de campo.
+  modalidade: Modalidade;
+  formato: FormatoJogo | null;
 }) {
+  const POSICOES = posicoesPorModalidade(modalidade);
+  const LINHAS = modalidade === "FUTEBOL" ? LINHAS_FUTEBOL : LINHAS_FUTSAL;
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [plano, setPlano] = useState<Record<string, LinhaPlano>>(() => {
@@ -97,10 +133,41 @@ export function PlanoTatico({
   }
 
   const titulares = convocados.filter((c) => linhaDe(c.id).titularPrevisto);
+  const titularesSemPosicao = titulares.filter(
+    (c) => linhaDe(c.id).posicaoPrevista == null,
+  );
+
+  // 🔁 v7 (§11.5): constrói o diagrama de campo com os titulares posicionados por
+  // linha, para render no CampoDesenho (fundo conforme o formato do jogo).
+  const diagrama: DiagramaCampo = (() => {
+    const elementos: Jogador[] = [];
+    for (const linha of LINHAS) {
+      const daLinha = titulares.filter((c) => {
+        const pos = linhaDe(c.id).posicaoPrevista;
+        return pos != null && linha.posicoes.includes(pos);
+      });
+      daLinha.forEach((c, i) => {
+        elementos.push({
+          id: c.id,
+          tipo: "jogador",
+          x: linha.x,
+          y: distribuirY(i, daLinha.length),
+          cor: "azul",
+          equipa: "propria",
+          ...(c.numero != null ? { numero: c.numero } : {}),
+        });
+      });
+    }
+    return {
+      versao: 2,
+      elementos,
+      campo: formato ?? undefined,
+    };
+  })();
 
   return (
     <div className="space-y-5">
-      {/* Formação visual (titulares por linha) */}
+      {/* Formação visual no campo (titulares posicionados) — §11.5 */}
       <div className="rounded-lg border border-cinza-200 bg-cinza-50 p-4">
         <p className="mb-3 text-legenda font-medium uppercase tracking-wide text-cinza-500">
           Formação prevista ({titulares.length} titular
@@ -112,52 +179,26 @@ export function PlanoTatico({
           </p>
         ) : (
           <div className="space-y-3">
-            {LINHAS.map((linha) => {
-              const daLinha = titulares.filter((c) => {
-                const pos = linhaDe(c.id).posicaoPrevista;
-                return pos != null && linha.posicoes.includes(pos);
-              });
-              if (daLinha.length === 0) return null;
-              return (
-                <div key={linha.titulo} className="flex flex-wrap items-center gap-2">
-                  <span className="w-24 flex-shrink-0 text-legenda text-cinza-500">
-                    {linha.titulo}
+            <div className="mx-auto max-w-xl">
+              <CampoDesenho diagrama={diagrama} formato={formato ?? undefined} />
+            </div>
+            {/* Titulares sem posição atribuída (não aparecem no campo) */}
+            {titularesSemPosicao.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="w-24 flex-shrink-0 text-legenda text-cinza-500">
+                  Sem posição
+                </span>
+                {titularesSemPosicao.map((c) => (
+                  <span
+                    key={c.id}
+                    className="inline-flex items-center gap-1 rounded-full bg-cinza-200 px-3 py-1 text-legenda font-medium text-cinza-700"
+                  >
+                    {c.numero != null && <span className="opacity-80">#{c.numero}</span>}
+                    {c.nome}
                   </span>
-                  {daLinha.map((c) => (
-                    <span
-                      key={c.id}
-                      className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-legenda font-medium text-primary-foreground"
-                    >
-                      {c.numero != null && <span className="opacity-80">#{c.numero}</span>}
-                      {c.nome}
-                    </span>
-                  ))}
-                </div>
-              );
-            })}
-            {/* Titulares sem posição atribuída */}
-            {(() => {
-              const semPosicao = titulares.filter(
-                (c) => linhaDe(c.id).posicaoPrevista == null,
-              );
-              if (semPosicao.length === 0) return null;
-              return (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="w-24 flex-shrink-0 text-legenda text-cinza-500">
-                    Sem posição
-                  </span>
-                  {semPosicao.map((c) => (
-                    <span
-                      key={c.id}
-                      className="inline-flex items-center gap-1 rounded-full bg-cinza-200 px-3 py-1 text-legenda font-medium text-cinza-700"
-                    >
-                      {c.numero != null && <span className="opacity-80">#{c.numero}</span>}
-                      {c.nome}
-                    </span>
-                  ))}
-                </div>
-              );
-            })()}
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

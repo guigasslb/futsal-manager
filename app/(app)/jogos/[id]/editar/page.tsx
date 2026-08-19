@@ -5,6 +5,8 @@ import { ChevronLeft } from "lucide-react";
 import { obterJogo } from "@/lib/actions/jogos";
 import { listarEscaloes } from "@/lib/actions/escaloes";
 import { listarCompeticoes } from "@/lib/actions/competicoes";
+import { obterSeccoes } from "@/lib/actions/seccoes";
+import { escaloesComModalidade } from "@/lib/modalidade-escalao";
 import { JogoForm } from "@/components/jogos/JogoForm";
 import { EstadoErro } from "@/components/layout/EstadosUI";
 
@@ -17,10 +19,11 @@ export default async function EditarJogoPage({
 }) {
   const { id } = await params;
 
-  const [resJogo, resEscaloes, resComp] = await Promise.all([
+  const [resJogo, resEscaloes, resComp, resSeccoes] = await Promise.all([
     obterJogo(id),
     listarEscaloes(),
     listarCompeticoes(),
+    obterSeccoes(),
   ]);
 
   if (!resJogo.sucesso) notFound();
@@ -28,6 +31,9 @@ export default async function EditarJogoPage({
   const competicoes = resComp.sucesso
     ? resComp.dados.map((c) => ({ id: c.id, nome: c.nome, escalaoId: c.escalaoId }))
     : [];
+  const seccoes = resSeccoes.sucesso ? resSeccoes.dados : [];
+  // §3.2: escalões enriquecidos com a modalidade da secção (seletor de formato).
+  const escaloes = escaloesComModalidade(resEscaloes.dados, seccoes);
 
   return (
     <div className="space-y-6">
@@ -44,7 +50,7 @@ export default async function EditarJogoPage({
       <h1>Editar jogo</h1>
 
       <JogoForm
-        escaloes={resEscaloes.dados}
+        escaloes={escaloes}
         competicoes={competicoes}
         jogo={resJogo.dados}
       />

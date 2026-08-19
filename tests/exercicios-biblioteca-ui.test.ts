@@ -179,6 +179,34 @@ describe("listarExercicios — anotação origem + naBibliotecaDoClube", () => {
     });
   });
 
+  it("por omissão (TODAS) não filtra por modalidade", async () => {
+    mocked(prisma.exercicio.findMany).mockResolvedValue([]);
+    await listarExercicios();
+
+    const args = mocked(prisma.exercicio.findMany).mock.calls[0][0] as {
+      where: { AND: Record<string, unknown>[] };
+    };
+    // A cláusula de visibilidade usa OR; o que não pode existir é um OR de modalidade.
+    const temFiltroModalidade = args.where.AND.some(
+      (c) =>
+        Array.isArray((c as { OR?: unknown }).OR) &&
+        ((c as { OR: Record<string, unknown>[] }).OR).some((o) => "modalidade" in o),
+    );
+    expect(temFiltroModalidade).toBe(false);
+  });
+
+  it("filtra por modalidade incluindo os universais (modalidade null)", async () => {
+    mocked(prisma.exercicio.findMany).mockResolvedValue([]);
+    await listarExercicios(undefined, undefined, undefined, "FUTEBOL");
+
+    const args = mocked(prisma.exercicio.findMany).mock.calls[0][0] as {
+      where: { AND: Record<string, unknown>[] };
+    };
+    expect(args.where.AND).toContainEqual({
+      OR: [{ modalidade: "FUTEBOL" }, { modalidade: null }],
+    });
+  });
+
   it("exige autenticação", async () => {
     mocked(auth).mockResolvedValue(null);
     const res = await listarExercicios();

@@ -13,12 +13,22 @@ import {
   planoTaticoSchema,
   isVideoUrlValido,
 } from "@/lib/schemas/jogo";
-import { Prisma, type Epoca, type Jogo, type EventoJogo } from "@prisma/client";
+import { modalidadeEfetiva, filtroModalidadeJogo } from "@/lib/modalidade-escalao";
+import {
+  Prisma,
+  type Epoca,
+  type FormatoJogo,
+  type Jogo,
+  type EventoJogo,
+  type Modalidade,
+} from "@prisma/client";
 
 const PATH = "/jogos";
 
 const INCLUDE_LISTA = {
-  escalao: { select: { id: true, nome: true } },
+  escalao: {
+    select: { id: true, nome: true, seccao: { select: { modalidade: true } } },
+  },
 } as const;
 
 // F5 (M15): eventos ordenados por minuto e depois por ordem de registo.
@@ -29,7 +39,9 @@ const ORDER_EVENTOS: Prisma.EventoJogoOrderByWithRelationInput[] = [
 ];
 
 const INCLUDE_DETALHE = {
-  escalao: { select: { id: true, nome: true } },
+  escalao: {
+    select: { id: true, nome: true, seccao: { select: { modalidade: true } } },
+  },
   convocatorias: {
     include: {
       atleta: { select: { id: true, nome: true, posicoes: true } },
@@ -47,11 +59,21 @@ const INCLUDE_DETALHE = {
 export type JogoLista = Prisma.JogoGetPayload<{ include: typeof INCLUDE_LISTA }>;
 
 /**
+ * Item da lista de jogos com a modalidade EFETIVA já resolvida (§10.8), para o
+ * frontend agrupar/filtrar por modalidade sem recalcular. `formato` (scalar) vem
+ * no payload base.
+ */
+export type JogoListaItem = JogoLista & { modalidade: Modalidade };
+
+/**
  * Detalhe do jogo. O número de camisola já não vive no Atleta (F1) — é resolvido
- * a partir da participação (AtletaEscalao) no escalão/época do jogo.
+ * a partir da participação (AtletaEscalao) no escalão/época do jogo. `modalidade`
+ * é a modalidade EFETIVA (§10.8) — sinaliza que núcleo estatístico mostrar e se
+ * as faltas acumuladas por parte (só futsal) são visíveis.
  */
 export type JogoDetalhe = Prisma.JogoGetPayload<{ include: typeof INCLUDE_DETALHE }> & {
   numeroPorAtleta: Record<string, number | null>;
+  modalidade: Modalidade;
 };
 
 /** Números de camisola dos atletas indicados, no escalão/época dados. */
@@ -83,7 +105,28 @@ async function contexto(): Promise<Contexto> {
   return { estado: "ok", clubeId, epoca };
 }
 
-export async function listarJogos(escalaoId?: string): Promise<Resultado<JogoLista[]>> {
+/**
+ * Resolve o formato do jogo (§3.7/§10.8, "Derivação do formato" — DEVE):
+ * usa o indicado, se houver; senão deriva da modalidade — FUTSAL → `FUTSAL_5`;
+ * FUTEBOL não tem default (5 formatos), pelo que devolve `null` para o caller
+ * sinalizar erro de validação. Função pura.
+ */
+function derivarFormato(
+  indicado: FormatoJogo | null | undefined,
+  modalidade: Modalidade,
+): FormatoJogo | null {
+  if (indicado) return indicado;
+  if (modalidade === "FUTSAL") return "FUTSAL_5";
+  return null;
+}
+
+const ERRO_FORMATO_FUTEBOL =
+  "Indica o formato de jogo (o futebol tem vários formatos).";
+
+export async function listarJogos(
+  escalaoId?: string,
+  modalidade?: Modalidade,
+): Promise<Resultado<JogoListaItem[]>> {
   const ctx = await contexto();
   if (ctx.estado === "erro") return erro(ctx.erro);
 
@@ -101,11 +144,19 @@ export async function listarJogos(escalaoId?: string): Promise<Resultado<JogoLis
       epocaId: ctx.epoca.id,
       escalao: { clubeId: ctx.clubeId },
       ...filtroEscalao,
+      // 🔁 v7 (§10.8): filtro opcional por modalidade efetiva (secção do escalão
+      // ou atividade pontual). Alimenta o seletor de secção do frontend (Fase 28).
+      ...filtroModalidadeJogo(modalidade),
     },
     include: INCLUDE_LISTA,
     orderBy: { data: "desc" },
   });
-  return ok(jogos);
+  return ok(
+    jogos.map((j) => ({
+      ...j,
+      modalidade: modalidadeEfetiva(j.modalidadeAtividade, j.escalao.seccao?.modalidade),
+    })),
+  );
 }
 
 export async function obterJogo(id: string): Promise<Resultado<JogoDetalhe>> {
@@ -124,7 +175,11 @@ export async function obterJogo(id: string): Promise<Resultado<JogoDetalhe>> {
     jogo.epocaId,
     jogo.convocatorias.map((c) => c.atletaId),
   );
-  return ok({ ...jogo, numeroPorAtleta });
+  const modalidade = modalidadeEfetiva(
+    jogo.modalidadeAtividade,
+    jogo.escalao.seccao?.modalidade,
+  );
+  return ok({ ...jogo, numeroPorAtleta, modalidade });
 }
 
 export async function criarJogo(dados: unknown): Promise<Resultado<Jogo>> {
@@ -142,8 +197,14 @@ export async function criarJogo(dados: unknown): Promise<Resultado<Jogo>> {
 
   const escalao = await prisma.escalao.findFirst({
     where: { id: parsed.data.escalaoId, clubeId: ctx.clubeId },
+    select: { id: true, seccao: { select: { modalidade: true } } },
   });
   if (!escalao) return erro("O escalão selecionado não existe");
+
+  // Derivação do formato (§3.7/§10.8): FUTSAL → FUTSAL_5; FUTEBOL exige indicá-lo.
+  const modalidade = modalidadeEfetiva(null, escalao.seccao?.modalidade);
+  const formato = derivarFormato(parsed.data.formato, modalidade);
+  if (!formato) return erro(ERRO_FORMATO_FUTEBOL);
 
   // A competição (se indicada) tem de pertencer ao clube e ao escalão do jogo.
   if (parsed.data.competicaoId) {
@@ -169,6 +230,7 @@ export async function criarJogo(dados: unknown): Promise<Resultado<Jogo>> {
       // `competicao` (texto livre) foi deprecado no formulário (P4.3); usar
       // `competicaoId`. Novos jogos ficam com o campo legado a null.
       competicaoId: parsed.data.competicaoId ?? null,
+      formato,
       local: parsed.data.local ?? null,
       golosMarcados: parsed.data.golosMarcados ?? null,
       golosSofridos: parsed.data.golosSofridos ?? null,
@@ -214,6 +276,22 @@ export async function atualizarJogo(id: string, dados: unknown): Promise<Resulta
       return erro("A competição selecionada não existe ou não pertence a este escalão");
   }
 
+  // Formato (§3.7/§10.8): o indicado prevalece; senão preserva o do jogo; senão
+  // deriva da modalidade do escalão de destino (FUTEBOL exige indicá-lo).
+  let formato: FormatoJogo | null = parsed.data.formato ?? existe.formato ?? null;
+  if (!formato) {
+    const escDestino = await prisma.escalao.findFirst({
+      where: { id: parsed.data.escalaoId, clubeId },
+      select: { seccao: { select: { modalidade: true } } },
+    });
+    const modalidade = modalidadeEfetiva(
+      existe.modalidadeAtividade,
+      escDestino?.seccao?.modalidade,
+    );
+    formato = derivarFormato(null, modalidade);
+    if (!formato) return erro(ERRO_FORMATO_FUTEBOL);
+  }
+
   const jogo = await prisma.jogo.update({
     where: { id },
     data: {
@@ -222,6 +300,7 @@ export async function atualizarJogo(id: string, dados: unknown): Promise<Resulta
       casaFora: parsed.data.casaFora,
       tipo: parsed.data.tipo,
       escalaoId: parsed.data.escalaoId,
+      formato,
       // `competicao` (texto livre) foi deprecado no formulário (P4.3): não é
       // reescrito aqui, preservando eventuais valores legados existentes.
       competicaoId: parsed.data.competicaoId ?? null,
@@ -320,7 +399,10 @@ export async function guardarEstatisticas(
   const clubeId = await obterClubeIdAtual();
   if (!clubeId) return erro("Não autenticado");
 
-  const jogo = await prisma.jogo.findFirst({ where: { id: jogoId, escalao: { clubeId } } });
+  const jogo = await prisma.jogo.findFirst({
+    where: { id: jogoId, escalao: { clubeId } },
+    include: { escalao: { select: { seccao: { select: { modalidade: true } } } } },
+  });
   if (!jogo) return erro("Jogo não encontrado");
 
   const perm = await exigirCapacidade("ESTATISTICAS_GERIR", jogo.escalaoId);
@@ -328,6 +410,12 @@ export async function guardarEstatisticas(
 
   const parsed = guardarEstatisticasSchema.safeParse(estatisticas);
   if (!parsed.success) return erroDeValidacao(parsed.error);
+
+  // Modalidade efetiva do jogo (§10.8): decide se o núcleo de futebol é gravado.
+  // Em futsal os campos de futebol são forçados a `null` (não são núcleo — §10.8).
+  const eFutebol =
+    modalidadeEfetiva(jogo.modalidadeAtividade, jogo.escalao?.seccao?.modalidade) ===
+    "FUTEBOL";
 
   // Só atletas convocados podem ter estatísticas (secção 12.5)
   const convocados = await prisma.convocatoria.findMany({
@@ -356,6 +444,12 @@ export async function guardarEstatisticas(
         defesas: e.defesas ?? null,
         golosSofridosGR: e.golosSofridosGR ?? null,
         faltasCometidas: e.faltasCometidas ?? null,
+        // Núcleo estatístico de FUTEBOL (§10.8): só gravado em jogos de futebol.
+        // Em futsal fica sempre a `null` (a grelha nem os mostra — 10.8).
+        remates: eFutebol ? (e.remates ?? null) : null,
+        cantos: eFutebol ? (e.cantos ?? null) : null,
+        forasDeJogo: eFutebol ? (e.forasDeJogo ?? null) : null,
+        desarmes: eFutebol ? (e.desarmes ?? null) : null,
       };
       const estat = await tx.estatisticaAtleta.upsert({
         where: { jogoId_atletaId: { jogoId, atletaId: e.atletaId } },

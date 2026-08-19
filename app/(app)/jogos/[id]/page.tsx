@@ -14,8 +14,20 @@ import { ApagarJogoButton } from "@/components/jogos/ApagarJogoButton";
 import { ConvocatoriaWhatsApp } from "@/components/jogos/ConvocatoriaWhatsApp";
 import { BotoesPartilhaJogo } from "@/components/social/BotoesPartilhaJogo";
 import { LABEL_CASA_FORA } from "@/lib/schemas/jogo";
+import { MINUTOS_POR_PARTE } from "@/lib/modalidade-escalao";
+import { BadgeModalidade } from "@/components/plantel/BadgeModalidade";
 import { eEscalaoFormacaoJovem } from "@/lib/schemas/social";
 import { urlCard } from "@/lib/social/token";
+
+// 🔁 v7 (§3.7): rótulos PT-PT dos formatos de jogo (para o cabeçalho do detalhe).
+const LABEL_FORMATO: Record<string, string> = {
+  FUTSAL_5: "Futsal 5",
+  FUTEBOL_3_3: "Futebol 3×3",
+  FUTEBOL_5_5: "Futebol 5×5",
+  FUTEBOL_7: "Futebol 7",
+  FUTEBOL_9: "Futebol 9",
+  FUTEBOL_11: "Futebol 11",
+};
 
 function formatarData(data: Date): string {
   return new Date(data).toLocaleDateString("pt-PT", {
@@ -74,6 +86,11 @@ export default async function DetalheJogoPage({
         defesas: e.defesas,
         golosSofridosGR: e.golosSofridosGR,
         faltasCometidas: e.faltasCometidas,
+        // 🔁 v7 (§10.8): núcleo de futebol (null em jogos de futsal).
+        remates: e.remates,
+        cantos: e.cantos,
+        forasDeJogo: e.forasDeJogo,
+        desarmes: e.desarmes,
         valoresMetricas: Object.fromEntries(
           e.valoresMetricas.map((v) => [v.metricaId, v.valor]),
         ),
@@ -148,12 +165,19 @@ export default async function DetalheJogoPage({
           <span className="rounded-full bg-primary/5 px-2.5 py-0.5 text-legenda text-primary">
             {j.escalao.nome}
           </span>
+          <BadgeModalidade modalidade={j.modalidade} />
         </div>
         <p className="text-corpo-sec text-cinza-600 capitalize">
           {formatarData(j.data)}
           {j.competicao ? ` · ${j.competicao}` : ""}
           {j.local ? ` · ${j.local}` : ""}
         </p>
+        {j.formato && (
+          <p className="text-legenda text-cinza-500">
+            {LABEL_FORMATO[j.formato] ?? j.formato} · 2 ×{" "}
+            {MINUTOS_POR_PARTE[j.formato]} min
+          </p>
+        )}
         {temResultado && (
           <p className="text-titulo-pagina font-bold text-cinza-900">
             {j.golosMarcados} – {j.golosSofridos}
@@ -196,6 +220,8 @@ export default async function DetalheJogoPage({
         observacoes={j.observacoes}
         casaFora={j.casaFora}
         adversario={j.adversario}
+        modalidade={j.modalidade}
+        formato={j.formato}
       />
     </div>
   );

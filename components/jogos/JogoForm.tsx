@@ -19,10 +19,35 @@ import { criarJogo, atualizarJogo } from "@/lib/actions/jogos";
 import { verificarConflitoAgenda } from "@/lib/actions/agenda";
 import type { ConflitoAgenda } from "@/lib/utils/agenda-conflitos";
 import { LABEL_CASA_FORA, LABEL_TIPO_JOGO } from "@/lib/schemas/jogo";
-import type { CasaFora, Escalao, Jogo, TipoJogo } from "@prisma/client";
+import type {
+  CasaFora,
+  Escalao,
+  FormatoJogo,
+  Jogo,
+  Modalidade,
+  TipoJogo,
+} from "@prisma/client";
 
 /** Valor sentinela do Select para «sem competição associada». */
 const SEM_COMPETICAO = "__nenhuma__";
+
+// 🔁 v7 (§3.7/§10.8): formatos de futebol selecionáveis + rótulos PT-PT. O futsal
+// tem formato único (FUTSAL_5), derivado no backend, pelo que não aparece na UI.
+const FORMATOS_FUTEBOL: FormatoJogo[] = [
+  "FUTEBOL_3_3",
+  "FUTEBOL_5_5",
+  "FUTEBOL_7",
+  "FUTEBOL_9",
+  "FUTEBOL_11",
+];
+
+const LABEL_FORMATO_FUTEBOL: Record<string, string> = {
+  FUTEBOL_3_3: "Futebol 3×3",
+  FUTEBOL_5_5: "Futebol 5×5",
+  FUTEBOL_7: "Futebol 7",
+  FUTEBOL_9: "Futebol 9",
+  FUTEBOL_11: "Futebol 11",
+};
 
 type CompeticaoBasica = { id: string; nome: string; escalaoId: string };
 
@@ -33,7 +58,9 @@ function paraInputDateTime(date: Date | null | undefined): string {
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 16);
 }
 
-type EscalaoBasico = Pick<Escalao, "id" | "nome">;
+type EscalaoBasico = Pick<Escalao, "id" | "nome"> & {
+  modalidade: Modalidade | null;
+};
 type JogoParaEdicao = Pick<
   Jogo,
   | "id"
@@ -43,6 +70,7 @@ type JogoParaEdicao = Pick<
   | "tipo"
   | "escalaoId"
   | "competicaoId"
+  | "formato"
   | "local"
   | "golosMarcados"
   | "golosSofridos"
@@ -70,7 +98,16 @@ export function JogoForm({
   const [competicaoId, setCompeticaoId] = useState<string>(
     jogo?.competicaoId ?? SEM_COMPETICAO,
   );
+  // 🔁 v7 (§3.7): formato de jogo. Só relevante/visível quando o escalão é de
+  // futebol; em futsal é derivado (FUTSAL_5) pelo backend. "" = por escolher.
+  const [formato, setFormato] = useState<FormatoJogo | "">(jogo?.formato ?? "");
   const [dataValor, setDataValor] = useState<string>(paraInputDateTime(jogo?.data));
+
+  // Modalidade do escalão selecionado (§3.2): decide se o seletor de formato
+  // aparece. Sem escalão/sem secção (backfill pendente) → tratado como futsal.
+  const modalidadeEscalao =
+    escaloes.find((e) => e.id === escalaoId)?.modalidade ?? null;
+  const eFutebol = modalidadeEscalao === "FUTEBOL";
 
   // Aviso não-bloqueante de conflito de pavilhão (F3.3 — §8.16).
   const [conflitos, setConflitos] = useState<ConflitoAgenda[]>([]);
@@ -149,6 +186,12 @@ export function JogoForm({
     const f1 = String(fd.get("faltas1aParte") ?? "").trim();
     const f2 = String(fd.get("faltas2aParte") ?? "").trim();
 
+    // Futebol exige formato (não há default entre os 5 formatos — §3.7/§10.8).
+    if (eFutebol && !formato) {
+      setErros({ formato: "Indica o formato de jogo" });
+      return;
+    }
+
     const dados = {
       data: String(fd.get("data")),
       adversario: String(fd.get("adversario")),
@@ -156,6 +199,8 @@ export function JogoForm({
       tipo,
       escalaoId: escalaoId || undefined,
       competicaoId: competicaoId === SEM_COMPETICAO ? null : competicaoId,
+      // Só se envia o formato em futebol; em futsal o backend deriva FUTSAL_5.
+      formato: eFutebol && formato ? formato : undefined,
       local: String(fd.get("local") ?? "").trim() || undefined,
       golosMarcados: gm !== "" ? Number(gm) : null,
       golosSofridos: gs !== "" ? Number(gs) : null,
@@ -284,6 +329,37 @@ export function JogoForm({
           )}
         </div>
       </div>
+
+      {/* Formato de jogo — só futebol (futsal usa FUTSAL_5 derivado). §3.7/§10.8 */}
+      {eFutebol && (
+        <div className="space-y-1.5">
+          <Label>Formato de jogo *</Label>
+          <Select
+            value={formato}
+            onValueChange={(v) => {
+              setFormato(v as FormatoJogo);
+              setErros((prev) => {
+                const { formato: _omit, ...resto } = prev;
+                return resto;
+              });
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Escolhe o formato" />
+            </SelectTrigger>
+            <SelectContent>
+              {FORMATOS_FUTEBOL.map((f) => (
+                <SelectItem key={f} value={f}>
+                  {LABEL_FORMATO_FUTEBOL[f]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {erros.formato && (
+            <p className="text-legenda text-vermelho-600">{erros.formato}</p>
+          )}
+        </div>
+      )}
 
       <div className="space-y-1.5">
         <Label htmlFor="local">Recinto</Label>

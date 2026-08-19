@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { z } from "zod";
+import type { Modalidade } from "@prisma/client";
 import { Plus, Home, Plane, ClipboardList, Trophy, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { listarJogos } from "@/lib/actions/jogos";
 import { listarEscaloes } from "@/lib/actions/escaloes";
+import { obterSeccoes } from "@/lib/actions/seccoes";
+import { mapaModalidadePorEscalao } from "@/lib/modalidade-escalao";
+import { BadgeModalidade } from "@/components/plantel/BadgeModalidade";
 import { EstadoErro, EstadoVazio } from "@/components/layout/EstadosUI";
 
 function formatarData(data: Date): string {
@@ -16,23 +21,65 @@ function formatarData(data: Date): string {
 
 export const metadata: Metadata = { title: "Jogos" };
 
+const CLS_TAB_BASE =
+  "px-4 py-2.5 text-corpo font-medium border-b-2 transition-colors";
+const CLS_TAB_ATIVO = "border-primary text-primary";
+const CLS_TAB_INATIVO = "border-transparent text-cinza-600 hover:text-cinza-900";
+
+const ROTULO_MODALIDADE: Record<Modalidade, string> = {
+  FUTSAL: "Futsal",
+  FUTEBOL: "Futebol",
+};
+
+/** Constrói uma query string a partir de pares definidos (ignora undefined). */
+function href(params: { escalaoId?: string; modalidade?: Modalidade }): string {
+  const qs = new URLSearchParams();
+  if (params.modalidade) qs.set("modalidade", params.modalidade);
+  if (params.escalaoId) qs.set("escalaoId", params.escalaoId);
+  const s = qs.toString();
+  return s ? `/jogos?${s}` : "/jogos";
+}
+
 export default async function JogosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ escalaoId?: string }>;
+  searchParams: Promise<{ escalaoId?: string; modalidade?: string }>;
 }) {
-  const { escalaoId } = await searchParams;
+  const { escalaoId: escalaoIdRaw, modalidade: modalidadeRaw } = await searchParams;
 
-  const [resEscaloes, resJogos] = await Promise.all([
+  // Query params não confiáveis: valida antes de usar.
+  const escParse = z.string().cuid().safeParse(escalaoIdRaw);
+  const escalaoId = escParse.success ? escParse.data : undefined;
+  const modParse = z.enum(["FUTSAL", "FUTEBOL"]).safeParse(modalidadeRaw);
+  const modalidade = modParse.success ? modParse.data : undefined;
+
+  const [resEscaloes, resSeccoes, resJogos] = await Promise.all([
     listarEscaloes(),
-    listarJogos(escalaoId),
+    obterSeccoes(),
+    listarJogos(escalaoId, modalidade),
   ]);
 
   if (!resEscaloes.sucesso) return <EstadoErro mensagem={resEscaloes.erro} />;
   if (!resJogos.sucesso) return <EstadoErro mensagem={resJogos.erro} />;
 
   const escaloes = resEscaloes.dados;
+  const seccoes = resSeccoes.sucesso ? resSeccoes.dados : [];
   const jogos = resJogos.dados;
+
+  // §3.2: modalidade por escalão + deteção de clube multi-secção (2+ secções).
+  const modalidadePorEscalao = mapaModalidadePorEscalao(escaloes, seccoes);
+  const seccoesPresentes = new Set(escaloes.map((e) => e.seccaoId ?? "__sem__"));
+  const multiSeccao = seccoesPresentes.size >= 2;
+
+  // Modalidades presentes no clube (para as tabs de filtro).
+  const modalidadesPresentes: Modalidade[] = (["FUTSAL", "FUTEBOL"] as const).filter(
+    (m) => [...modalidadePorEscalao.values()].includes(m),
+  );
+
+  // Escalões elegíveis para as tabs de escalão: filtrados pela modalidade ativa.
+  const escaloesVisiveis = modalidade
+    ? escaloes.filter((e) => modalidadePorEscalao.get(e.id) === modalidade)
+    : escaloes;
 
   return (
     <div className="space-y-6">
@@ -66,27 +113,40 @@ export default async function JogosPage({
         </div>
       </div>
 
-      {escaloes.length > 0 && (
+      {/* Filtro por modalidade (só quando o clube tem múltiplas secções) */}
+      {multiSeccao && modalidadesPresentes.length >= 2 && (
         <div className="-mb-px flex flex-wrap border-b border-cinza-200">
           <Link
-            href="/jogos"
-            className={`px-4 py-2.5 text-corpo font-medium border-b-2 transition-colors ${
-              !escalaoId
-                ? "border-primary text-primary"
-                : "border-transparent text-cinza-600 hover:text-cinza-900"
-            }`}
+            href={href({})}
+            className={`${CLS_TAB_BASE} ${!modalidade ? CLS_TAB_ATIVO : CLS_TAB_INATIVO}`}
           >
             Todos
           </Link>
-          {escaloes.map((e) => (
+          {modalidadesPresentes.map((m) => (
+            <Link
+              key={m}
+              href={href({ modalidade: m })}
+              className={`${CLS_TAB_BASE} ${modalidade === m ? CLS_TAB_ATIVO : CLS_TAB_INATIVO}`}
+            >
+              {ROTULO_MODALIDADE[m]}
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {escaloesVisiveis.length > 0 && (
+        <div className="-mb-px flex flex-wrap border-b border-cinza-200">
+          <Link
+            href={href({ modalidade })}
+            className={`${CLS_TAB_BASE} ${!escalaoId ? CLS_TAB_ATIVO : CLS_TAB_INATIVO}`}
+          >
+            Todos
+          </Link>
+          {escaloesVisiveis.map((e) => (
             <Link
               key={e.id}
-              href={`/jogos?escalaoId=${e.id}`}
-              className={`px-4 py-2.5 text-corpo font-medium border-b-2 transition-colors ${
-                escalaoId === e.id
-                  ? "border-primary text-primary"
-                  : "border-transparent text-cinza-600 hover:text-cinza-900"
-              }`}
+              href={href({ escalaoId: e.id, modalidade })}
+              className={`${CLS_TAB_BASE} ${escalaoId === e.id ? CLS_TAB_ATIVO : CLS_TAB_INATIVO}`}
             >
               {e.nome}
             </Link>
@@ -128,9 +188,13 @@ export default async function JogosPage({
                     </span>
                   </div>
                   <div className="flex-1">
-                    <p className="text-corpo font-semibold text-cinza-900">
-                      vs {j.adversario}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-corpo font-semibold text-cinza-900">
+                        vs {j.adversario}
+                      </p>
+                      {/* Badge de modalidade só quando o clube é multi-secção */}
+                      {multiSeccao && <BadgeModalidade modalidade={j.modalidade} compacto />}
+                    </div>
                     <p className="text-legenda text-cinza-500">
                       {j.escalao.nome}
                       {j.competicao ? ` · ${j.competicao}` : ""}

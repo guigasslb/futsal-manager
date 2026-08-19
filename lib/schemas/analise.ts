@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { TipoRelatorio } from "@prisma/client";
+import { Modalidade, TipoRelatorio } from "@prisma/client";
 
 // Schemas de parâmetros dos analytics F9 (secção 15 / §16 fase 19 da bíblia).
 // Fonte única de validação, partilhada cliente/servidor.
@@ -9,6 +9,9 @@ export const analiticoAtletaSchema = z.object({
   atletaId: z.string().cuid(),
   escalaoId: z.string().cuid().optional(),
   epocaId: z.string().cuid().optional(),
+  // 🔁 v7 (§10.1/§10.8): segmenta a vista conjunta por modalidade (futsal vs
+  // futebol). Ausente = todas as modalidades (comportamento pré-v7).
+  modalidade: z.nativeEnum(Modalidade).optional(),
 });
 
 /** Nível 2 — analítico do escalão/equipa (opcionalmente filtrado por competição). */
