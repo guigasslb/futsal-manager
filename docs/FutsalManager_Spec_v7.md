@@ -33,6 +33,8 @@ A **v7** expande o Mister de plataforma dedicada ao **futsal** para plataforma *
 
 **Princípio de compatibilidade:** todas as alterações de schema são **aditivas** (colunas/tabelas novas, nullable ou com default, mais backfill) — dados existentes (100% futsal) migram sem perda. Ver Apêndice C.
 
+> **Pré-requisito de migração:** o schema da v6 tem fases *expand* pendentes não concluídas: `Atleta.escalaoId` (NOT NULL legado), `Atleta.clubeId` (nullable legado), `Exercicio.proprietario @default(CLUBE)` (deve ser `TREINADOR`), `Clube.clubeTecnico` (campo não existe no schema). Antes de aplicar as migrações v7, DEVE concluir-se o *contract* v6: criar `Clube.clubeTecnico Boolean @default(false)`, fixar `Atleta.clubeId` como NOT NULL, remover `Atleta.escalaoId`/`escalaoSecundarioId`/`epocaId` legados, e corrigir `Exercicio.proprietario @default(TREINADOR)`. O Apêndice C pressupõe o modelo *contracted* como ponto de partida.
+
 ---
 
 ## Índice
@@ -145,6 +147,8 @@ O **`Clube` é sempre o tenant de topo**, mesmo na licença Individual. Consequ�
 
 **1.7.4 Individual = uma modalidade.** A licença Individual dá acesso a **uma** modalidade (a escolhida na compra). Não é possível gerir futsal e futebol na mesma licença Individual — para isso existe a licença de Clube com múltiplas secções (secção 17.1).
 
+> **Treinador individual e duas modalidades:** a licença Individual suporta uma única modalidade. Um treinador que dirija escalões de futsal e de futebol em simultâneo DEVE usar uma licença de Clube (ou Clube Técnico). Esta decisão é intencional: a gestão de duas secções implica funcionalidades de coordenação (permissões, analytics cruzados) que a licença Individual não comporta. A persona do treinador dual-sport individual é reconhecida e o seu caminho natural é o Clube Técnico (sem atletas, só escalões do próprio treinador).
+
 **1.7.5 Transparência para quem não precisa.** Um treinador ou clube que só faça uma modalidade **não vê complexidade nova**: a secção é criada automaticamente ao criar o primeiro escalão (secção 8.1.1) e a UI não mostra seletor de secção quando só existe uma. A camada multi-desporto é **invisível por omissão** e **explícita só quando há mais do que uma secção**.
 
 **1.7.6 Três camadas de conhecimento de modalidade** (detalhe em 20.1):
@@ -238,7 +242,7 @@ Interface 100% em **português de Portugal**, terminologia FPF (futsal e futebol
 - **Segunda penalidade** — marca dos 10 m (característica do futsal). **Marca de grande penalidade** — 6 m.
 
 ### 2.3 Bloco Futebol 🥅 (terminologia específica)
-- **Futebol** — modalidade de campo, em vários **formatos** por escalão etário: **3×3** (petizes), **5×5** (traquinas / petizes mais velhos), **7** (benjamins/infantis), **9** (iniciados/transição), **11** (juniores/séniores).
+- **Futebol** — modalidade de campo, em vários **formatos** por escalão etário: **3×3** (petizes), **5×5** (traquinas / petizes mais velhos), **7** (Benjamins, Sub-10/11), **9** (Infantis/Iniciados, Sub-12/13), **11** (Juvenis, Sub-15/17; Juniores, Sub-19; Seniores).
 - **Formatos** — `FUTEBOL_3_3`, `FUTEBOL_5_5`, `FUTEBOL_7`, `FUTEBOL_9`, `FUTEBOL_11` (ver Apêndice B para dimensões).
 - **Posições de futebol** — **Guarda-redes**, **Defesa central**, **Lateral direito**, **Lateral esquerdo**, **Médio defensivo**, **Médio centro**, **Médio ofensivo**, **Extremo direito**, **Extremo esquerdo**, **Avançado** (mais **Universal**, partilhado). Ver secção 3.2.
 - **Estatísticas de futebol (núcleo fixo)** — golos, assistências, defesas (GR), **remates**, **cantos**, **foras-de-jogo**, **desarmes** (secção 10.8).
@@ -692,6 +696,7 @@ model Sessao {
   periodo       PeriodoEpoca?
   volume        Int?
   googleEventId String?  // sincronização Google Calendar (secção 8.16)
+  modalidadeAtividade  Modalidade?  // 🔁 v7: null = herda da secção do escalão; preenchido = actividade pontual noutra modalidade
   criadorId     String
   criadoEm      DateTime @default(now())
   atualizadoEm  DateTime @updatedAt
@@ -803,7 +808,7 @@ enum TipoQuadroTatico { GERAL BOLA_PARADA }
 
 ### 3.7 Competições, jogos, estatísticas, classificação e scouting (🏛️ clube)
 
-> **🔁 Alteração v7:** `Jogo` e `Competicao` ganham **`formato FormatoJogo`** (ver enum). `EstatisticaAtleta` ganha o **núcleo estatístico de futebol** (remates, cantos, foras-de-jogo, desarmes). Os campos `Jogo.faltas1aParte`/`faltas2aParte` **só se aplicam a futsal** (ocultos na UI de futebol). O núcleo estatístico é sempre acompanhado das **métricas configuráveis** (`MetricaConfig`) — mesmo princípio nas duas modalidades (secção 10.8).
+> **🔁 Alteração v7:** `Jogo` ganha **`formato FormatoJogo`** e `Competicao` ganha **`formatoJogo FormatoJogo?`** (ver enum). ⚠️ Em `Competicao` o campo chama-se **`formatoJogo`** (não `formato`) para não colidir com o campo já existente `formato FormatoCompeticao` (LIGA/TORNEIO/TACA). `EstatisticaAtleta` ganha o **núcleo estatístico de futebol** (remates, cantos, foras-de-jogo, desarmes). Os campos `Jogo.faltas1aParte`/`faltas2aParte` **só se aplicam a futsal** (ocultos na UI de futebol). O núcleo estatístico é sempre acompanhado das **métricas configuráveis** (`MetricaConfig`) — mesmo princípio nas duas modalidades (secção 10.8).
 
 ```prisma
 model Competicao {
@@ -814,6 +819,7 @@ model Competicao {
   nome      String
   tipo      TipoJogo     @default(OFICIAL) // OFICIAL | AMIGAVEL
   formato   FormatoCompeticao @default(LIGA) // LIGA | TORNEIO | TACA
+  formatoJogo FormatoJogo?  // 🔁 v7: formato de jogo por defeito da competição (FUTSAL_5 | FUTEBOL_*); NÃO confundir com `formato` (LIGA/TORNEIO/TACA)
   criadoEm  DateTime     @default(now())
 
   jogos      Jogo[]
@@ -868,6 +874,7 @@ model Jogo {
   relatorio             String?
   videoUrl              String?   // link YouTube (allowlist)
   googleEventId         String?   // sincronização Google Calendar (secção 8.16)
+  modalidadeAtividade   Modalidade? // 🔁 v7: null = herda da secção; preenchido = jogo/torneio pontual noutra modalidade
   criadorId             String
   criadoEm              DateTime  @default(now())
   atualizadoEm          DateTime  @updatedAt
@@ -1035,9 +1042,75 @@ Sem alteração de modelo na v7. `Reuniao` (com `ambito CLUBE | ESCALAO`, `googl
 Sem alteração de modelo na v7. `RelatorioPartilhado` (`token @unique`, `tipo TipoRelatorio`, `dadosSnapshot Json?` imutável, `expiraEm?`) — conforme v6 §3.10. O snapshot passa a poder conter dados segmentados por modalidade (secção 10.8), mas o modelo é o mesmo.
 
 ### 3.11 Licenciamento, subscrição e carteira
-Modelo desenhado para suportar Paddle (billing deferido). `Licenca` (Individual/Clube, tier, estado, ciclo), `Carteira`, `MovimentoCarteira` — conforme v6 §3.11.
+Modelo desenhado para suportar Paddle (billing deferido). O enforcement de licença (bloqueio pós-expiração) e o billing são **deferidos**; a arquitetura de dados fica pronta. **🔁 v7:** `Licenca` ganha os campos multi-secção necessários ao pricing por secção (secção 17.1) e o registo da modalidade Individual.
 
-> **🔁 v7 — modalidade na licença Individual (DEVERIA):** a licença Individual passa a registar a **modalidade contratada** (a secção única do clube técnico determina-a; opcionalmente um campo `modalidade Modalidade?` em `Licenca` para tornar explícito o produto vendido). A licença de Clube **não** fixa modalidade (o clube tem as secções que tiver); o pricing escala por secção (secção 17.1). ⚠️ decidir na implementação se `Licenca.modalidade` é campo próprio ou derivado da secção do clube técnico.
+```prisma
+// Licença ativa de um utilizador (Individual) OU de um clube (Clube).
+// Um titular tem no máximo uma ativa (utilizadorId @unique OU clubeId @unique).
+model Licenca {
+  id            String         @id @default(cuid())
+  tipo          TipoLicenca    // INDIVIDUAL | CLUBE
+  tier          TierClube?     // só se tipo=CLUBE: PEQUENO | MEDIO | GRANDE | PARCEIRO
+  estado        EstadoLicenca  @default(ATIVA) // ATIVA | EXPIRADA | CANCELADA | SUSPENSA
+  ciclo         CicloFaturacao // MENSAL | ANUAL
+  precoCentimos Int?           // preço praticado (cêntimos) — já com acréscimo multi-secção
+
+  // 🔁 v7 — Individual: modalidade contratada (futsal ou futebol). null em licenças de Clube.
+  modalidade    Modalidade?    // registo explícito do produto Individual vendido (§17.1)
+  // 🔁 v7 — Clube: nº de secções faturadas (pricing por secção — §17.1: tier mais caro + 50%/secção adicional).
+  numSeccoes    Int            @default(1) // 1 = comportamento v6; >1 aplica acréscimo por secção adicional
+
+  // Titular (exatamente um dos dois preenchido)
+  utilizadorId String?     @unique
+  utilizador   Utilizador? @relation("LicencaIndividual", fields: [utilizadorId], references: [id])
+  clubeId      String?     @unique
+  clube        Clube?      @relation("LicencaClube", fields: [clubeId], references: [id])
+
+  // Datas
+  dataInicio    DateTime  @default(now())
+  dataRenovacao DateTime?
+  dataFim       DateTime?
+
+  // Integração Paddle (futura)
+  paddleSubscriptionId String?
+  paddleCustomerId     String?
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+}
+
+enum TipoLicenca { INDIVIDUAL CLUBE }
+enum TierClube { PEQUENO MEDIO GRANDE PARCEIRO }
+enum EstadoLicenca { ATIVA EXPIRADA CANCELADA SUSPENSA }
+enum CicloFaturacao { MENSAL ANUAL }
+
+// Carteira (wallet) do treinador — crédito de absorção usado em compras futuras.
+model Carteira {
+  id            String     @id @default(cuid())
+  utilizadorId  String     @unique
+  utilizador    Utilizador @relation(fields: [utilizadorId], references: [id], onDelete: Cascade)
+  saldoCentimos Int        @default(0)
+  atualizadoEm  DateTime   @updatedAt
+
+  movimentos MovimentoCarteira[]
+}
+
+model MovimentoCarteira {
+  id            String        @id @default(cuid())
+  carteiraId    String
+  carteira      Carteira      @relation(fields: [carteiraId], references: [id], onDelete: Cascade)
+  tipo          TipoMovimento // CREDITO_ABSORCAO | DEBITO_COMPRA | REEMBOLSO | AJUSTE
+  valorCentimos Int           // positivo = crédito; negativo = débito
+  descricao     String
+  criadoEm      DateTime      @default(now())
+
+  @@index([carteiraId])
+}
+
+enum TipoMovimento { CREDITO_ABSORCAO DEBITO_COMPRA REEMBOLSO AJUSTE }
+```
+
+> **🔁 v7 — modalidade na licença Individual (DEVERIA):** a licença Individual regista a **modalidade contratada** em `Licenca.modalidade` (a secção única do clube técnico determina-a; o campo torna explícito o produto vendido). A licença de Clube **não** fixa modalidade (o clube tem as secções que tiver); o pricing escala por secção via `numSeccoes` (secção 17.1). ⚠️ decidir na implementação se `Licenca.modalidade` é a fonte de verdade ou derivado da secção do clube técnico.
 
 ### 3.12 Integração com calendário externo (Google Calendar)
 Sem alteração na v7. `IntegracaoCalendario` (OAuth Google, `refreshToken` encriptado at-rest), `googleEventId` em `Sessao`/`Jogo`/`Reuniao` — conforme v6 §3.12.
@@ -1177,6 +1250,9 @@ Chaves usadas em `Perfil.capacidades` e nos overrides de membro:
 - `CATALOGO_HABILIDADES` — gerir o catálogo de habilidades.
 - `FATURACAO_GERIR` — **FUTURO** (billing/subscrição; só o Admin).
 
+**Secção (âmbito `SECCAO`) — 🔁 novo v7:**
+- `SECCAO_ESCALOES_GERIR` — criar/editar/apagar escalões e definir visibilidade **dentro da(s) secção(ões) coordenada(s)** (`MembroSeccao`). É a capacidade dedicada do Coordenador de Secção para gerir os escalões da sua modalidade, sem conceder o `CLUBE_ESCALOES` (que é sempre de nível clube). Não permite gerir escalões de outras secções.
+
 **Dados de equipa (conforme o `ambito`):**
 - `PLANTEL_GERIR` · `PROMOVER_ATLETAS` · `TREINOS_GERIR` · `PRESENCAS_MARCAR` · `PERIODIZACAO_GERIR` · `MODELO_JOGO_GERIR` · `JOGOS_GERIR` (variante `gerir_jogos_todos` = âmbito `TODO_CLUBE`) · `CONVOCATORIA_GERIR` · `ESTATISTICAS_GERIR` · `COMPETICOES_GERIR` · `SCOUTING_GERIR` · `CADERNETA_GERIR` · `REUNIOES_GERIR` · `COMUNICACOES_GERIR` · `LEMBRETES_EQUIPA_GERIR` · `EXERCICIOS_GERIR` · `RELATORIOS_VER`.
 
@@ -1186,7 +1262,8 @@ Chaves usadas em `Perfil.capacidades` e nos overrides de membro:
 - `TODO_CLUBE`: as capacidades de dados de equipa aplicam-se a **todos os escalões de todas as secções**.
 - **`SECCAO`** — 🔁 **(novo v7):** aplicam-se a **todos os escalões da(s) secção(ões)** atribuídas ao membro (`MembroSeccao`).
 - `PROPRIOS_ESCALOES`: aplicam-se **apenas aos escalões atribuídos** (`AtribuicaoEscalao`).
-- As capacidades de estrutura (`CLUBE_*`, `CATALOGO_*`, `FATURACAO_GERIR`) são sempre de nível clube.
+- As capacidades de estrutura (`CLUBE_*`, `CATALOGO_*`, `FATURACAO_GERIR`) são **sempre de nível clube** (não são restringíveis a uma secção — em particular, `CLUBE_ESCALOES` é sempre de nível clube).
+- 🔁 **(novo v7):** a gestão de escalões **dentro de uma secção** faz-se pela capacidade dedicada **`SECCAO_ESCALOES_GERIR`** (âmbito `SECCAO`), **não** por um `CLUBE_ESCALOES` restringido. Isto elimina a ambiguidade: quem gere escalões de todo o clube tem `CLUBE_ESCALOES`; quem gere apenas os da sua secção tem `SECCAO_ESCALOES_GERIR`.
 
 ### 6.4 Overrides por membro (decisão 2026-08-05)
 Além do perfil base, o Admin (com `CLUBE_UTILIZADORES`) pode **conceder** (`capacidadesExtra`) ou **revogar** (`capacidadesRevogadas`) capacidades a um membro.
@@ -1202,7 +1279,7 @@ Um membro pode **ler** um escalão que não é seu **se** `Escalao.visivelOutros
 ### 6.6 Modelos de arranque (defaults editáveis)
 - **Administrador** — `TODO_CLUBE`, **todas** as capacidades (exceto `FATURACAO_GERIR`, FUTURO), incluindo `CLUBE_SECCOES`.
 - **Diretor Técnico** — `TODO_CLUBE`, todas as capacidades de **dados de equipa** + `CATALOGO_*` + `RELATORIOS_VER` + `CLUBE_SECCOES` (para organizar as secções). **NÃO** gere billing nem estrutura da conta (`CLUBE_*` de conta desligadas por defeito, exceto secções/escalões conforme configuração).
-- **Coordenador de Secção** — 🔁 **(novo v7):** `SECCAO`, todas as capacidades de **dados de equipa** dos escalões da(s) sua(s) secção(ões) + `EXERCICIOS_GERIR` + `RELATORIOS_VER` + `COMUNICACOES_GERIR` + `PROMOVER_ATLETAS` (dentro da secção) + `CLUBE_ESCALOES` limitado à secção (⚠️ ver 6.9). **NÃO** gere billing, branding, perfis, épocas nem outras secções.
+- **Coordenador de Secção** — 🔁 **(novo v7):** `SECCAO`, todas as capacidades de **dados de equipa** dos escalões da(s) sua(s) secção(ões) + `EXERCICIOS_GERIR` + `RELATORIOS_VER` + `COMUNICACOES_GERIR` + `PROMOVER_ATLETAS` (dentro da secção) + **`SECCAO_ESCALOES_GERIR`** (gestão de escalões da sua secção — ver 6.9). **NÃO** tem `CLUBE_ESCALOES` (nível clube) e **NÃO** gere billing, branding, perfis, épocas nem outras secções.
 - **Treinador Principal** — `PROPRIOS_ESCALOES`, capacidades de dados de equipa dos seus escalões + `EXERCICIOS_GERIR` + `RELATORIOS_VER` + `COMUNICACOES_GERIR`. `PROMOVER_ATLETAS` desligada por defeito.
 - **Adjunto** — `PROPRIOS_ESCALOES`, capacidades operacionais (`TREINOS_GERIR`, `PRESENCAS_MARCAR`, `ESTATISTICAS_GERIR`, `CADERNETA_GERIR`, `EXERCICIOS_GERIR`).
 
@@ -1230,7 +1307,8 @@ Helper `exigirCapacidade(cap, escalaoId?)`:
 - **Scope:** vê e gere **todos os escalões da(s) sua(s) secção(ões)** (`MembroSeccao`), como um "DT da secção". **Não** vê os escalões de outras secções (a menos que `visivelOutrosTreinadores`).
 - **Âmbito `SECCAO`:** as capacidades de dados de equipa aplicam-se a todos os escalões cujo `escalao.seccaoId` esteja nas suas secções coordenadas.
 - **Atribuição:** feita por quem tem `CLUBE_SECCOES` (Admin/DT) — cria-se um `MembroSeccao` ligando o membro à secção com `papel = COORDENADOR`.
-- **Gestão de escalões dentro da secção (DEVERIA):** um Coordenador pode criar/editar escalões **da sua secção** (não de outras) — implementado como `CLUBE_ESCALOES` limitado por âmbito `SECCAO`, ou como capacidade dedicada. ⚠️ decidir na implementação (fase 25).
+- **Gestão de escalões dentro da secção (DEVE):** um Coordenador pode criar/editar/apagar escalões **da sua secção** (não de outras) através da capacidade dedicada **`SECCAO_ESCALOES_GERIR`** (âmbito `SECCAO`) — **não** através de `CLUBE_ESCALOES` (que é sempre de nível clube). Decisão fechada (fase 25): a gestão de escalões por secção usa `SECCAO_ESCALOES_GERIR`, resolvida por `exigirCapacidade` contra `escalao.seccaoId ∈ seccoesCoordenadas`.
+- **Coordenação de múltiplas secções (DEVE):** uma pessoa pode ter `MembroSeccao` em **mais do que uma secção** (ex.: um coordenador que acumula futsal **e** futebol). É **raro, mas válido** — `seccoesCoordenadas` é uma lista e o âmbito `SECCAO` aplica-se a todos os escalões de **todas** as secções coordenadas por esse membro.
 - **Analytics:** vê o analítico da **sua secção** (nível de secção — secção 10.3/10.8) e dos seus escalões; não vê o analítico transversal de todo o clube por defeito (configurável pelo Admin via override `RELATORIOS_VER` de âmbito).
 - **Regra de delegação:** um Coordenador só concede a outros capacidades ≤ às próprias e **só dentro da sua secção**.
 
@@ -1302,6 +1380,7 @@ criarMetrica({ ..., modalidade? })/listarMetricas(modalidade?)/alternarMetrica/m
 criarHabilidade({ ..., modalidade? })/atualizarHabilidade/apagarHabilidade/moverHabilidade/listarHabilidades(modalidade?)
 ```
 > **🔁 `criarEscalao` (DEVE):** recebe `seccaoId` **ou** `modalidade`. Com `modalidade`, chama `garantirSeccaoParaModalidade` (cria a secção se ainda não existir — onboarding transparente, secção 8.1.1) e liga o escalão. Com `seccaoId`, valida que a secção pertence ao clube.
+> **🔁 Bloqueio Individual = uma modalidade (DEVE):** se o clube for técnico Individual (`Clube.clubeTecnico && Licenca.tipo == INDIVIDUAL`), rejeitar com erro de validação se já existe uma `Secção` de modalidade diferente. O helper `garantirSeccaoParaModalidade` verifica esta condição antes de criar (mensagem sugere a licença de Clube — §17.1).
 
 **Plantel e participações** (`atletas.ts`, `participacoes.ts`) — `PLANTEL_GERIR`, `PROMOVER_ATLETAS`
 ```
@@ -1434,7 +1513,8 @@ Cada módulo define **conteúdo**, **ações**, **estado vazio** e **regras**. E
 ### 8.8 Treinos (`TREINOS_GERIR`, `PRESENCAS_MARCAR`)
 - **Lista/Calendário:** **agrupamento por secção quando >1** 🔁, tabs por escalão; alternância lista ⇄ calendário mensal; agrupamento automático por **semana** (8.9).
 - **Detalhe:** cabeçalho + **Exercícios** (picker filtra pela modalidade do escalão) e **Presenças** (motivo de falta quando aplicável). Notas de treino. **RPE da sessão** (§8.20).
-- **Novo/Editar:** data/hora, escalão, duração, objetivo, local, notas, ligação a semana (opcional), criar a partir de template.
+- **Novo/Editar:** data/hora, escalão, duração, objetivo, local, notas, ligação a semana (opcional), criar a partir de template, **modalidade da actividade** (opcional) 🔁.
+- **🔁 Modalidade da actividade (v7):** o campo "Modalidade da actividade" é **opcional** e por defeito herda da secção do escalão. O treinador pode alterá-lo para actividades pontuais (ex: escalão de futebol que participa num torneio de futsal). Quando diferente da modalidade mãe, a sessão é sinalizada com badge de modalidade nos painéis de treino.
 - **Estado vazio:** "Sem sessões nesta época."
 
 ### 8.9 Periodização e semana de trabalho (`PERIODIZACAO_GERIR`)
@@ -1448,6 +1528,7 @@ Conforme v6 §8.9 (sem alteração funcional na v7): grelha anual + planos seman
 ### 8.11 Jogos, competições, estatísticas, classificação e scouting
 - **Calendário/Lista** (`JOGOS_GERIR`): **agrupamento por secção quando >1** 🔁, tabs por escalão; data, adversário, Casa/Fora, resultado, competição, tipo, **formato** 🔁.
 - **Vista de dia de jogo:** convocados + posições previstas (**posições da modalidade** 🔁), notas de scouting, esquemas de bola parada, hora e local.
+- **🔁 Modalidade da actividade (v7):** ao criar/editar um jogo, o campo "Modalidade da actividade" é **opcional** e por defeito herda da secção do escalão. O treinador pode alterá-lo para actividades pontuais (ex: escalão de futebol que participa num torneio de futsal). Quando diferente da modalidade mãe, o jogo é sinalizado com badge de modalidade nos painéis de jogo.
 - **Detalhe do jogo:** cabeçalho + resultado + **campo «Formato»** 🔁 (pré-preenchido pela secção, editável); **faltas acumuladas por parte só em FUTSAL** 🔁 (ocultas em futebol) + abas:
   - **Convocatória** (`CONVOCATORIA_GERIR`): toggle por atleta + posição prevista (da modalidade) + titular.
   - **Estatísticas** (`ESTATISTICAS_GERIR`): por atleta — utilização, tempo de jogo por blocos, **núcleo por modalidade** 🔁 (futsal: golos, assistências, e se GR defesas/sofridos/faltas; futebol: golos, assistências, **remates, cantos, foras-de-jogo, desarmes**, e se GR defesas/sofridos) + **métricas configuráveis**. Aviso se soma de golos ≠ resultado. Ver 10.8.
@@ -1543,12 +1624,17 @@ Conforme v6 §8.21 (cenários A/B/C/D), com uma extensão multi-desporto:
   - `associarAEscalao` nunca cria um principal (só `SIMULTANEA`/`OCASIONAL`);
   - `transferirEscalao` com destino `PRINCIPAL` despromove para `SIMULTANEA` qualquer outro principal ativo **da mesma modalidade** e recusa a transferência que deixasse o atleta sem principal nessa modalidade;
   - `terminarParticipacao` recusa terminar a participação principal de uma modalidade (transferir primeiro).
+- **Primeiro principal de uma modalidade nova:** quando `associarAEscalao` é chamado para um atleta que não tem nenhuma participação PRINCIPAL activa na modalidade da secção destino, o sistema DEVE criar a participação com `tipo = PRINCIPAL` automaticamente (não aplica a SIMULTANEA/OCASIONAL explícitas). Esta é a única excepção à regra "associar nunca força PRINCIPAL".
 - **Estatísticas por modalidade:** o núcleo estatístico exibido/gravado depende do formato/modalidade do jogo (10.8); campos de futebol (remates, cantos, foras-de-jogo, desarmes) ficam a `null` em jogos de futsal e vice-versa (faltas por parte só em futsal).
 - **Formato de jogo:** `Jogo.formato` é pré-preenchido pela secção do escalão e é **editável** (amigáveis podem ser noutro formato); determina o campo do editor e as estatísticas de núcleo.
 - **Posições:** o seletor filtra pela modalidade do contexto; um atleta multi-desporto pode acumular posições de ambas as modalidades em `Atleta.posicoes`.
 - **Licença Individual = uma modalidade:** não é possível criar escalões de duas modalidades num clube técnico Individual (17.1). Tentar fazê-lo é bloqueado com mensagem que sugere a licença de Clube.
 - **Analytics de secção:** um Coordenador vê o analítico da sua secção e escalões; o analítico transversal do clube compara secções/modalidades (10.3, 10.8).
 - **Sem bloqueio de substituições:** o registo ao vivo é informativo em ambas as modalidades (amigáveis não têm regras fixas — 1.6).
+
+**Notas técnicas de invariantes (multi-desporto):** 🔁
+- **Invariante do principal por modalidade (implementação):** o invariante "único PRINCIPAL por (atleta, época, modalidade)" **não é enforçável por índice BD** (modalidade não é coluna de `AtletaEscalao`; deriva de `escalao.seccao.modalidade`). É garantido exclusivamente por **lógica aplicacional dentro de transacção `Serializable`** que consulta todas as participações activas do atleta, atravessando `escalao → seccao`. O helper `modalidadeDoEscalao(escalaoId)` DEVE ser cacheável para evitar N+1 em listagens.
+- **Invariantes cross-entidade (validadas na aplicação, não pela BD):** (1) `escalao.clubeId == escalao.seccao.clubeId`; (2) `membroSeccao.membroClube.clubeId == membroSeccao.seccao.clubeId`; (3) `Convocatoria.posicaoPrevista ∈ configModalidade(jogo.seccao.modalidade).posicoes`.
 
 ---
 
@@ -1569,6 +1655,8 @@ sessoesTotais (desde dataIngresso), presencas (PRESENTE|ATRASADO), taxaPresenca
 
 ### 10.2 Agregado da equipa (escalão + época)
 Conforme v6 §10.2: jogos/V/E/D, golos, taxa de presença média, melhores marcadores/assistentes (por `atletaId`), mais utilizados (blocos), distribuição de tipos de treino, rankings por métrica configurável, ranking de assiduidade (TOP 5), filtro por competição. **🔁 v7:** o escalão tem uma modalidade fixa (a da sua secção), logo o agregado da equipa é naturalmente monomodalidade; o **núcleo estatístico apresentado** é o da modalidade (10.8).
+
+> **🔁 Actividades cross-modalidade (v7):** `obterAnaliticosEscalao` expõe o breakdown de sessões e jogos por `modalidadeAtividade`. Inclui KPI "sessões de modalidade alternativa" e filtro por modalidade da actividade.
 
 ### 10.3 Agregado do clube (transversal)
 Conforme v6 §10.3: comparação entre escalões (assiduidade, V-E-D, golos, nº atletas), assiduidade global, KPIs. **🔁 v7:** ganha **comparação entre secções/modalidades** e **filtro por secção**. Visível a Admin/DT; **Coordenador vê o agregado da sua secção** (6.9); configurável para treinadores.
@@ -1637,6 +1725,8 @@ interface PassoAnimacao {
 Validação **Zod** (`diagramaSchema`) obrigatória. Diagrama vazio válido: `{ versao: 2, elementos: [] }` (`DIAGRAMA_VAZIO_V2`). A leitura aceita v1 (retrocompatível) e diagramas **sem `campo`** (assumem `FUTSAL_5`); **o editor grava sempre `versao: 2`**.
 
 > **🔁 v7 — `campo` (DEVE):** o novo campo opcional `campo: TipoCampo` indica o **fundo de campo** a desenhar (futsal ou um dos formatos de futebol — 11.5). É preenchido a partir da modalidade/formato do contexto (exercício, modelo de jogo, quadro tático). Diagramas legados sem `campo` assumem `FUTSAL_5` (retrocompatibilidade total — Apêndice C). `TipoCampo` alinha com `FormatoJogo`.
+
+> **🔁 v7 — `TipoCampo` (formalização):** `TipoCampo` partilha os mesmos literais que `FormatoJogo` (`FUTSAL_5`, `FUTEBOL_3_3`, etc.) e é representado como string no JSON `DiagramaCampo`. Um campo de diagrama sem `campo` assume `FUTSAL_5`. Exercícios de uso geral (sem modalidade específica) mostram campo neutro — renderizado como `FUTSAL_5` por defeito até existir um preset "neutro" explícito.
 
 **Convenção base ⇄ passos (delta com herança):** conforme v6 §11.2 — `elementos` é o keyframe 0; cada `PassoAnimacao` é um delta que herda do keyframe anterior; `construirKeyframes` reconstrói `[base, base⊕passo0, …]`. Funções puras em `components/campo/animacao.ts`, testadas em `tests/campo.test.ts`.
 
@@ -1786,26 +1876,31 @@ Resumo: **1** Esqueleto · **2** Reconversão de módulos · **3** Periodizaçã
 - **Critério de pronto:** migração aditiva aplicável; backfill idempotente; `@@unique([clubeId, modalidade])`; um clube 100% futsal continua a funcionar **sem qualquer UI nova**; testes de secção/permissões/backfill; **typecheck/lint/test limpos + bíblia atualizada (§3.1.1, §6.9, §8.22, Apêndice C)**; **não toca em auth**.
 
 **Fase 26 — Campo de futebol SVG (todos os formatos).**
+- **Depende de:** Fase 25.
 - **Objetivo:** o editor de campo passa a desenhar os fundos de futebol (3×3 a 11×11), reutilizando todo o motor de elementos/passos/animação.
 - **Entidades/ficheiros:** `components/campo/` (generalização `CampoFutsal`→`CampoDesenho`/`CampoFutebol`; parâmetro `campo`/`TipoCampo`; fundos por formato — Apêndice B); `DiagramaCampo.campo` (schema Zod + retrocompatibilidade FUTSAL_5); `MiniaturaCampo`/`EditorCampo` recebem o formato; `lib/schemas/exercicio.ts` (validação do `campo`).
 - **Critério de pronto:** todos os fundos (Apêndice B) renderizam corretamente; diagramas legados sem `campo` assumem FUTSAL_5; hit area/escala coerentes (1u=10cm); animação e teclado funcionam em todos os campos; testes de `construirKeyframes`/`campo`; **typecheck/lint/test limpos + bíblia atualizada (§11.5)**; **não toca em auth**.
 
 **Fase 27 — Posições e plantel multi-desporto.**
+- **Depende de:** Fase 25.
 - **Objetivo:** posições de futebol no enum e na UI; plantel e participações a respeitar a secção/modalidade.
 - **Entidades/ficheiros:** `Posicao` (enum expandido — §3.2); `LABEL_POSICAO` agrupado por modalidade; seletor de posição filtrado pela modalidade; `lib/actions/atletas.ts`/`participacoes.ts` (invariante do principal **por modalidade** — §9); `lib/actions/atletas.ts` `listarAtletas` agrupado por secção; perfil do atleta com estatísticas/caderneta/percurso segmentados por modalidade (UI).
 - **Critério de pronto:** um atleta pode ter participações em secções diferentes; invariante do principal por modalidade coberto por testes (transação Serializable); seletor de posições correto por modalidade; **typecheck/lint/test limpos + bíblia atualizada (§3.2, §8.5, §9)**; **não toca em auth**.
 
 **Fase 28 — Jogos e estatísticas de futebol.**
+- **Depende de:** Fases 25, 26 e 27.
 - **Objetivo:** `Jogo.formato`, núcleo estatístico de futebol e registo ao vivo de futebol.
 - **Entidades/ficheiros:** `Jogo.formato` (`FormatoJogo`) + derivação da secção + editável; `EstatisticaAtleta` (remates, cantos, foras-de-jogo, desarmes); `EventoJogo`/`TipoEventoJogo` (REMATE/CANTO/FORA_DE_JOGO/DESARME); grelha de estatísticas mostra o núcleo da modalidade (oculta faltas por parte em futebol); `MetricaConfig.modalidade`; agregações (`lib/estatisticas.ts`, `lib/actions/analise.ts`) com núcleo por modalidade e `MINUTOS_POR_BLOCO` parametrizável por formato (⚠️ §10.8); vista de dia de jogo com posições de futebol.
 - **Critério de pronto:** jogos de futebol registam o núcleo correto; jogos de futsal inalterados; agregações e cards sociais corretos por modalidade; testes de agregação de futebol; **typecheck/lint/test limpos + bíblia atualizada (§3.7, §8.11, §10.4, §10.8)**; **não toca em auth**.
 
 **Fase 29 — Conteúdo curado de futebol (exercícios, templates, caderneta).**
+- **Depende de:** Fase 25.
 - **Objetivo:** biblioteca curada e habilidades de futebol, para que uma secção de futebol nunca comece vazia.
 - **Entidades/ficheiros:** `Exercicio.modalidade`/`ModeloSessao.modalidade`/`Habilidade.modalidade`; `lib/biblioteca-arranque.ts`/`lib/templates-arranque.ts` (conteúdo de futebol por formato/parte do treino); `instalarBibliotecaArranque(modalidade)`/`instalarTemplatesArranque(modalidade)`; seed por modalidade; filtros de biblioteca por modalidade (UI §8.6/§8.7); caderneta de futebol (§8.14).
 - **Critério de pronto:** instalar a biblioteca de futebol é idempotente; filtros por modalidade funcionam; exercícios de futebol usam o campo correto; **typecheck/lint/test limpos + bíblia atualizada (§3.3, §3.4, §8.6, §8.7, §8.14, Apêndice B)**; **não toca em auth**.
 
 **Fase 30 — Onboarding, navegação e billing multi-secção.**
+- **Depende de:** Fases 25, 26, 27, 28 e 29.
 - **Objetivo:** experiência de ponta a ponta multi-desporto e pricing por secção.
 - **Entidades/ficheiros:** onboarding (registo Individual = modalidade; setup de clube com secções); seletor de secção condicional em toda a navegação (barra de topo, plantel, treinos, jogos, exercícios, analytics); agrupamento por secção; analytics de clube com filtro/comparação por secção (§10.3/§10.8); wizard «Nova Época» a respeitar secções (§8.21); licenciamento (§17.1 — Individual uma modalidade; Clube escala por secção; `Licenca.modalidade` ⚠️); Coordenador de Secção end-to-end (atribuição, gating de UI).
 - **Critério de pronto:** clube com futsal **e** futebol totalmente utilizável; Individual bloqueia segunda modalidade com mensagem clara; pricing por secção documentado e refletido (aviso suave, enforcement de billing deferido); analytics transversal compara secções; **typecheck/lint/test limpos + bíblia atualizada (§8.1.1, §8.21, §10.3, §17)**; **não toca em auth**.
@@ -1816,6 +1911,8 @@ Resumo: **1** Esqueleto · **2** Reconversão de módulos · **3** Periodizaçã
 
 ### 17.1 Duas licenças (🔁 v7 — multi-secção)
 - **Individual (Treinador):** acesso completo ao produto de treinador, **para uma modalidade** (futsal **ou** futebol, escolhida na compra). **Sem** gestão de clube. Sem trial. **€4,99/mês** ou **€49/ano** (preço **mantém-se**, independentemente da modalidade). **Não** permite gerir as duas modalidades — para isso, licença de Clube.
+
+> **Treinador individual e duas modalidades:** a licença Individual suporta uma única modalidade. Um treinador que dirija escalões de futsal e de futebol em simultâneo DEVE usar uma licença de Clube (ou Clube Técnico). Esta decisão é intencional: a gestão de duas secções implica funcionalidades de coordenação (permissões, analytics cruzados) que a licença Individual não comporta. A persona do treinador dual-sport individual é reconhecida e o seu caminho natural é o Clube Técnico (sem atletas, só escalões do próprio treinador).
 - **Clube:** produto de treinador completo + **camada de gestão de clube** (secções, escalões, membros, perfis, branding, analytics, relatórios), com **uma ou várias secções**. **Tiers por número de escalões** (transversal às secções):
 
 | Tier | Limite de escalões (total, todas as secções) | Mensal | Anual |
@@ -1825,11 +1922,11 @@ Resumo: **1** Esqueleto · **2** Reconversão de módulos · **3** Periodizaçã
 | **Grande** | ≤ 8 | €34 | €340 |
 | **Parceiro** | negociado | negociado | negociado |
 
-**🔁 Escala por secção/modalidade (decisão 2026-08-19):** o preço de clube **escala por secção/modalidade**. Modelo recomendado (a fixar comercialmente antes do enforcement de billing):
+**🔁 Escala por secção/modalidade (decisão 2026-08-19 — fechada):** **Clube multi-secção:** o preço da segunda secção (modalidade adicional) é **+50% do tier base do clube**. Exemplo: clube com 3 escalões (tier Base €15/mês) que adiciona secção de futebol paga €22,50/mês. O sistema calcula automaticamente com base no tier da secção mais cara + 50% por cada secção adicional. O enforcement de billing ocorre na Fase 30.
 - **1 secção:** preço do tier conforme a tabela acima (comportamento atual da v6).
-- **2 secções (futsal + futebol):** aplica-se um **acréscimo por secção adicional** — recomendação: **+50% do valor do tier** pela segunda secção (ex.: Médio 1 secção €19/mês → Médio 2 secções ≈ €28,50/mês), OU cobrança do tier por secção com desconto de pacote. O tier continua a ser determinado pelo **total de escalões** somado nas secções.
+- **2+ secções:** tier da secção mais cara + **50% por cada secção adicional**. O tier de cada secção é determinado pelo **nº de escalões** dessa secção.
 - **Parceiro:** pricing multi-secção negociado.
-- ⚠️ **Enforcement deferido** (como o billing): na versão atual há **aviso suave** ao criar escalões/secções além do plano; o bloqueio efetivo entra com o Paddle. O modelo de dados (`Licenca`, tiers) suporta o cálculo por secção.
+- **Enforcement:** deferido até à **Fase 30** (com o Paddle); na versão atual há **aviso suave** ao criar escalões/secções além do plano. O modelo de dados (`Licenca`, tiers) suporta o cálculo por secção.
 
 O tier **Parceiro** inclui features custom, **voz no roadmap** e reuniões periódicas.
 
@@ -1874,11 +1971,26 @@ Decidida pelo treinador na criação (toggle pessoal vs clube). O pagamento não
 
 Do mais recente para o mais antigo.
 
+- **2026-08-19** — **v7 — Revisão pós-auditoria.** Correções e decisões incorporadas na bíblia v7 (só documentação; **não toca em auth**):
+  - **(B1)** Colisão de nome resolvida: o campo de formato de jogo em `Competicao` passa a **`formatoJogo FormatoJogo?`** (distinto do já existente `formato FormatoCompeticao` LIGA/TORNEIO/TACA) — §3.7, §19(D), Apêndice C.3.
+  - **(B2)** Coordenador de Secção ganha **capacidade dedicada `SECCAO_ESCALOES_GERIR`** (âmbito `SECCAO`) em vez de `CLUBE_ESCALOES` restringido; `CLUBE_*` mantém-se sempre de nível clube — §6.2, §6.3, §6.6, §6.9. Uma pessoa pode ter `MembroSeccao` em múltiplas secções (raro, válido).
+  - **(B3)** Regra do **primeiro principal de uma modalidade nova**: `associarAEscalao` cria `PRINCIPAL` automaticamente quando não há principal activo nessa modalidade (única excepção) — §9.
+  - **(B4)** **Pré-requisito de migração**: concluir o *contract* v6 pendente (`Clube.clubeTecnico`, `Atleta.clubeId` NOT NULL, remover `Atleta.escalaoId` legado, `Exercicio.proprietario @default(TREINADOR)`) antes das migrações v7 — §0, Apêndice C.
+  - **(D1)** **Pricing multi-secção fechado**: 2.ª secção = **+50% do tier base** (tier da secção mais cara + 50% por secção adicional); enforcement na Fase 30 — §17.1.
+  - **(D2)** Persona do **treinador individual dual-sport**: Individual = uma modalidade; para duas, licença de Clube/Clube Técnico — §1.7.4, §17.1.
+  - **(D3)** Nova funcionalidade **modalidade da actividade** em `Sessao` e `Jogo` (`modalidadeAtividade Modalidade?`, null = herda da secção; badge quando difere) + breakdown analítico — §3.5, §3.7, §8.8, §8.11, §10.2, Apêndice C.3.
+  - **(M1)** Modelo `Licenca`/`Carteira`/`MovimentoCarteira` **transcrito integralmente** em §3.11 + campos multi-secção (`modalidade`, `numSeccoes`).
+  - **(M2)** **Dependências explícitas** entre Fases 26–30 — §16.
+  - **(M3)** `TipoCampo` formalizado (alinha com `FormatoJogo`; sem `campo` → `FUTSAL_5`; genérico → campo neutro) — §11.2.
+  - **(M4)** Mapeamento escalão↔formato de futebol corrigido (inclui **Juvenis** → `FUTEBOL_11`) — §2.3, Apêndice B.
+  - **(M5)** Invariante do principal por modalidade: garantido por lógica aplicacional em transacção `Serializable` (não por índice BD); `modalidadeDoEscalao` cacheável — §9.
+  - **(M6)** Invariantes cross-entidade validadas na aplicação (clube↔secção↔escalão; posição↔modalidade da convocatória) — §9.
+  - **(M7)** `criarEscalao` bloqueia segunda modalidade em clube técnico Individual — §7.3.
 - **2026-08-19** — **Criação da bíblia v7 (`FutsalManager_Spec_v7.md`) — Mister passa a plataforma multi-desporto (futsal + futebol).** Novo ficheiro que sucede à `FutsalManager_Spec_v6.md` (**mantida intacta como histórico**, à semelhança do que a v6 fez à v5). Atualização **só de documentação** (nenhuma alteração de código; **não toca em auth**). A v7 expande o produto de dedicado ao futsal para **multi-desporto**, mantendo **um único código, um único modelo de dados multi-tenant e a mesma filosofia**. Todas as decisões de produto abaixo estão **fechadas**.
   - **(A) Nota de versão v7 (§0):** resumo executivo das 12 adições e do princípio de compatibilidade **aditiva** (colunas/tabelas novas, nullable/default + backfill; dados existentes 100% futsal migram sem perda).
   - **(B) Nova entidade `Secção` (§3.1.1, §20.2):** camada entre `Clube` e `Escalão`, **âncora da modalidade**. `Seccao` = `clubeId` + `modalidade` (`Modalidade { FUTSAL FUTEBOL }`) + `nome?` + escalões + membros (coordenadores). **`@@unique([clubeId, modalidade])`** — **uma secção por modalidade por clube**. Novo `MembroSeccao` (vínculo membro↔secção, `PapelSeccao { COORDENADOR }`). `Escalao` ganha **`seccaoId`** + relação. Criação **automática/transparente** ao criar o primeiro escalão de uma modalidade (§8.1.1). Backfill: uma secção FUTSAL por clube existente, com todos os escalões ligados (Apêndice C).
   - **(C) Coordenador de Secção (§6.9, §6.6):** novo papel de arranque + novo valor de âmbito **`AmbitoPerfil.SECCAO`** (todos os escalões de uma secção) + nova capacidade **`CLUBE_SECCOES`**. Vê/gere todos os escalões da sua secção, não os das outras. `exigirCapacidade` (§6.7) e `obterMembroAtual` (§7.2) passam a resolver o âmbito de secção (`seccoesCoordenadas`).
-  - **(D) Formatos de futebol (§3.7, Apêndice B):** enum **`FormatoJogo { FUTSAL_5 FUTEBOL_3_3 FUTEBOL_5_5 FUTEBOL_7 FUTEBOL_9 FUTEBOL_11 }`**. `Jogo.formato` e `Competicao.formato` (`FormatoJogo`) — pré-preenchidos pela secção do escalão, editáveis; determinam o campo do editor e o núcleo estatístico.
+  - **(D) Formatos de futebol (§3.7, Apêndice B):** enum **`FormatoJogo { FUTSAL_5 FUTEBOL_3_3 FUTEBOL_5_5 FUTEBOL_7 FUTEBOL_9 FUTEBOL_11 }`**. `Jogo.formato` e `Competicao.formatoJogo` (`FormatoJogo`) — pré-preenchidos pela secção do escalão, editáveis; determinam o campo do editor e o núcleo estatístico. (Em `Competicao` o campo é `formatoJogo`, distinto do já existente `formato FormatoCompeticao` LIGA/TORNEIO/TACA.)
   - **(E) Posições de futebol (§3.2):** `Posicao` expandido com `DEFESA_CENTRAL`, `LATERAL_DIREITO`, `LATERAL_ESQUERDO`, `MEDIO_DEFENSIVO`, `MEDIO_CENTRO`, `MEDIO_OFENSIVO`, `EXTREMO_DIREITO`, `EXTREMO_ESQUERDO`, `AVANCADO` (mantendo `GUARDA_REDES` e `UNIVERSAL` partilhados; futsal `FIXO`/`ALA`/`PIVO` intactos). Seletor filtra por modalidade do contexto.
   - **(F) Estatísticas de futebol (§3.7, §10.8):** mesmo princípio do futsal — **núcleo fixo** (golos, assistências, defesas GR, **remates, cantos, foras-de-jogo, desarmes**) + **configurável** por cima (`MetricaConfig`, opcionalmente por `modalidade`). `EstatisticaAtleta` ganha `remates/cantos/forasDeJogo/desarmes` (nullable). `TipoEventoJogo` ganha `REMATE/CANTO/FORA_DE_JOGO/DESARME`. `faltas1aParte`/`faltas2aParte` **só visíveis em FUTSAL**. Sem bloqueio de substituições (informativo).
   - **(G) Campo de futebol SVG (§11.5):** todos os formatos (3×3 a 11×11) no mesmo motor de diagrama; `DiagramaCampo.campo?` (`TipoCampo`) determina o fundo (retrocompatível: legados sem `campo` → FUTSAL_5). Coordenadas mantêm 1u=10cm.
@@ -2088,7 +2200,7 @@ Referência da entrada `CONFIG_MODALIDADE.FUTEBOL` (registry — 20.3). **Produt
 
 - **Rótulo:** "Futebol".
 - **Formatos permitidos:** `[FUTEBOL_3_3, FUTEBOL_5_5, FUTEBOL_7, FUTEBOL_9, FUTEBOL_11]`.
-- **Formato por defeito por escalão (recomendação, editável):** petizes → `FUTEBOL_3_3`; traquinas → `FUTEBOL_5_5`; benjamins/infantis → `FUTEBOL_7`; iniciados/transição → `FUTEBOL_9`; juvenis/juniores/séniores → `FUTEBOL_11`.
+- **Formato por defeito por escalão (recomendação, editável):** petizes → `FUTEBOL_3_3`; traquinas → `FUTEBOL_5_5`; Benjamins (Sub-10/11) → `FUTEBOL_7`; Infantis/Iniciados (Sub-12/13) → `FUTEBOL_9`; Juvenis (Sub-15/17)/Juniores (Sub-19)/Seniores → `FUTEBOL_11`.
 - **Posições:** `GUARDA_REDES`, `DEFESA_CENTRAL`, `LATERAL_DIREITO`, `LATERAL_ESQUERDO`, `MEDIO_DEFENSIVO`, `MEDIO_CENTRO`, `MEDIO_OFENSIVO`, `EXTREMO_DIREITO`, `EXTREMO_ESQUERDO`, `AVANCADO`, `UNIVERSAL`.
 - **Núcleo estatístico (`EstatisticaAtleta`):** `golos`, `assistencias`, `remates`, `cantos`, `forasDeJogo`, `desarmes`, e (só GR) `defesas`, `golosSofridosGR`. `faltasCometidas` opcional. **Não usa:** `faltas1aParte`/`faltas2aParte` (equipa) — **`mostraFaltasAcumuladas = false`**.
 - **Eventos ao vivo:** `GOLO`, `ASSISTENCIA`, `FALTA`, `CARTAO_AMARELO`, `CARTAO_VERMELHO`, `SUBSTITUICAO`, `DEFESA`, `GOLO_SOFRIDO`, **`REMATE`**, **`CANTO`**, **`FORA_DE_JOGO`**, **`DESARME`**. (`TIMEOUT` não se aplica.)
@@ -2107,6 +2219,8 @@ Referência da entrada `CONFIG_MODALIDADE.FUTEBOL` (registry — 20.3). **Produt
 - **Biblioteca curada / caderneta:** conteúdo de futebol por formato/parte do treino (fase 29).
 
 ## Apêndice C — Matriz de migração v6→v7
+
+> **Pré-requisito de migração:** o schema da v6 tem fases *expand* pendentes não concluídas: `Atleta.escalaoId` (NOT NULL legado), `Atleta.clubeId` (nullable legado), `Exercicio.proprietario @default(CLUBE)` (deve ser `TREINADOR`), `Clube.clubeTecnico` (campo não existe no schema). Antes de aplicar as migrações v7, DEVE concluir-se o *contract* v6: criar `Clube.clubeTecnico Boolean @default(false)`, fixar `Atleta.clubeId` como NOT NULL, remover `Atleta.escalaoId`/`escalaoSecundarioId`/`epocaId` legados, e corrigir `Exercicio.proprietario @default(TREINADOR)`. Este apêndice pressupõe o modelo *contracted* como ponto de partida.
 
 Todas as alterações são **aditivas** (colunas/tabelas novas, nullable ou com default) + **backfill idempotente**. **Nenhum** `DROP`, `RENAME`, `SET NOT NULL` destrutivo sobre dados existentes, **nenhum** `ALTER COLUMN` que perca dados. **Não toca em auth.**
 
@@ -2131,13 +2245,16 @@ Todas as alterações são **aditivas** (colunas/tabelas novas, nullable ou com 
 |---|---|---|---|
 | `Escalao` | `seccaoId` | `String` (FK `Seccao`) | preenchido por **backfill** (C.4); NOT NULL após backfill |
 | `Jogo` | `formato` | `FormatoJogo?` | nullable (derivado da secção quando ausente) |
+| `Sessao` | `modalidadeAtividade` | `Modalidade?` | nullable — sem backfill (null = herda da secção) |
+| `Jogo` | `modalidadeAtividade` | `Modalidade?` | nullable — sem backfill (null = herda da secção) |
 | `EstatisticaAtleta` | `remates`, `cantos`, `forasDeJogo`, `desarmes` | `Int?` | nullable |
 | `Exercicio` | `modalidade` | `Modalidade?` | nullable (genérico) |
 | `ModeloSessao` | `modalidade` | `Modalidade?` | nullable |
 | `MetricaConfig` | `modalidade` | `Modalidade?` | nullable |
 | `Habilidade` | `modalidade` | `Modalidade?` | nullable |
-| `Competicao` | `formato` (jogo) | `FormatoJogo?` | ⚠️ distinto de `FormatoCompeticao` (LIGA/TORNEIO/TACA) já existente; nullable, derivável |
+| `Competicao` | `formatoJogo` | `FormatoJogo?` | ⚠️ distinto do campo `formato FormatoCompeticao` (LIGA/TORNEIO/TACA) já existente; nullable, derivável |
 | `Licenca` | `modalidade` | `Modalidade?` | nullable (⚠️ ou derivar da secção do clube técnico — §3.11) |
+| `Licenca` | `numSeccoes` | `Int` | default `1` (pricing multi-secção — §17.1) |
 | `DiagramaCampo` (Json) | `campo` | `TipoCampo?` (no JSON) | ausente = `FUTSAL_5` (retrocompatível — §11.2) |
 
 ### C.4 Backfill (idempotente; execução manual após deploy, como as migrações anteriores)
