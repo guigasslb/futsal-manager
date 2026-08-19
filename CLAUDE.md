@@ -1,10 +1,10 @@
 # Mister — Instruções do projeto
 
-Training Management System dedicado ao futsal (marca: **Mister**; guia visual em `docs/BRAND.md`). A **bíblia** do produto é `docs/FutsalManager_Spec_v6.md` — **fonte única de verdade** do produto final. (`docs/FutsalManager_Spec_v5.md` é o histórico pré-brainstorming 2026-08-05, arquivado. `docs/FutsalManager_Spec_v4_MVP_historico.md` é o histórico do MVP, arquivado — não usar como referência ativa.)
+Plataforma de gestão desportiva multi-modalidade (futsal + futebol) focada em treinadores e clubes (marca: **Mister**; guia visual em `docs/BRAND.md`). A **bíblia** do produto é `docs/FutsalManager_Spec_v7.md` — **fonte única de verdade** do produto final. (`docs/FutsalManager_Spec_v6.md` é o histórico pré-expansão multi-desporto 2026-08-19, arquivado. `docs/FutsalManager_Spec_v5.md` é o histórico pré-brainstorming 2026-08-05, arquivado. `docs/FutsalManager_Spec_v4_MVP_historico.md` é o histórico do MVP, arquivado — não usar como referência ativa.)
 
 ## Documentação (regra inquebrável)
 
-- **Uma única bíblia:** `docs/FutsalManager_Spec_v6.md`. Sem ficheiros de informação funcional espalhados.
+- **Uma única bíblia:** `docs/FutsalManager_Spec_v7.md`. Sem ficheiros de informação funcional espalhados.
 - **Nenhuma alteração de código sem atualizar a bíblia no mesmo passo.** A documentação nunca fica atrás do código.
 - Toda a modificação à bíblia regista-se no **changelog dentro do próprio documento** (secção 19), com **data e descrição** da alteração.
 - Objetivo: se o código se perder, a bíblia permite **recriar tudo do zero a 100%**.
