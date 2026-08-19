@@ -87,6 +87,7 @@ function membroComRelatorios(overrides: Record<string, unknown> = {}) {
     capacidades: ["RELATORIOS_VER"],
     ambito: "TODO_CLUBE",
     escaloesAtribuidos: [],
+    seccoesCoordenadas: [],
     ...overrides,
   };
 }

@@ -72,6 +72,7 @@ function membro(overrides: Record<string, unknown> = {}) {
     capacidades: ["RELATORIOS_VER", "TREINOS_GERIR"],
     ambito: "TODO_CLUBE",
     escaloesAtribuidos: [],
+    seccoesCoordenadas: [],
     ...overrides,
   };
 }

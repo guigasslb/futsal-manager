@@ -1,4 +1,10 @@
-// prisma/data-migrations/f1b_backfill_participacoes.ts
+// ⚠️ ARQUIVADO (fase 25): o backfill foi aplicado na migração SQL
+// 20260819120000_fase25_multi_desporto (contract) e as colunas legadas do Atleta
+// (escalaoId / escalaoSecundarioId / epocaId) foram removidas. Este script já não
+// compila contra o schema atual nem é necessário — mantido apenas como referência
+// histórica e excluído do typecheck (ver tsconfig.json → exclude).
+//
+// prisma/data-migrations/archived/f1b_backfill_participacoes.ts
 // M3 — Backfill dos dados da fase expand (M2: f1a_atletaescalao_expand).
 //
 // Preenche:

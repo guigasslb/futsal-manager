@@ -12,6 +12,11 @@ export const EMOJI_EVENTO: Record<TipoEventoJogo, string> = {
   DEFESA: "🧤",
   GOLO_SOFRIDO: "🥅",
   TIMEOUT: "⏱️",
+  // Futebol (§3.7)
+  REMATE: "🎯",
+  CANTO: "🚩",
+  FORA_DE_JOGO: "🚫",
+  DESARME: "🛡️",
 };
 
 export type EventoTimeline = {

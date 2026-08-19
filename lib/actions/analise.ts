@@ -934,6 +934,11 @@ const EVENTO_TIPOS: Record<TipoEventoJogo, TipoEventoJogo> = {
   DEFESA: "DEFESA",
   GOLO_SOFRIDO: "GOLO_SOFRIDO",
   TIMEOUT: "TIMEOUT",
+  // Futebol (§3.7)
+  REMATE: "REMATE",
+  CANTO: "CANTO",
+  FORA_DE_JOGO: "FORA_DE_JOGO",
+  DESARME: "DESARME",
 };
 
 const SESSAO_TIPOS: Record<TipoSessao, TipoSessao> = {

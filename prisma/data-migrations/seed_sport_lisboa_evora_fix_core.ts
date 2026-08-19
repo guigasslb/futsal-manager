@@ -192,7 +192,10 @@ export async function seedSleFix(prisma: PrismaClient): Promise<ResultadoSeedFix
 
   // Atletas do escalão/época → mapa por nome normalizado.
   const atletasDb = await prisma.atleta.findMany({
-    where: { clubeId: clube.id, epocaId: epoca.id, escalaoId: escalao.id },
+    where: {
+      clubeId: clube.id,
+      participacoes: { some: { epocaId: epoca.id, escalaoId: escalao.id } },
+    },
     select: { id: true, nome: true },
   });
   const atletaIdPorNome = new Map<string, string>();

@@ -20,8 +20,11 @@ export interface ContextoMembro {
   clube: Clube;
   perfil: Perfil;
   capacidades: Capacidade[];
-  ambito: "TODO_CLUBE" | "PROPRIOS_ESCALOES";
+  // 🔁 v7 (§6.3): âmbito SECCAO para o Coordenador de Secção.
+  ambito: "TODO_CLUBE" | "SECCAO" | "PROPRIOS_ESCALOES";
   escaloesAtribuidos: string[];
+  // 🔁 v7 (§6.9): secções coordenadas por este membro (âmbito SECCAO).
+  seccoesCoordenadas: string[];
 }
 
 /** Utilizador autenticado (sem hash). Null se não houver sessão. */
@@ -56,6 +59,8 @@ export async function obterMembroAtual(): Promise<ContextoMembro | null> {
       clube: true,
       perfil: true,
       atribuicoes: { select: { escalaoId: true } },
+      // 🔁 v7 (§6.9): secções coordenadas (âmbito SECCAO).
+      seccoes: { where: { papel: "COORDENADOR" }, select: { seccaoId: true } },
     },
   });
   if (!membro) return null;
@@ -74,6 +79,7 @@ export async function obterMembroAtual(): Promise<ContextoMembro | null> {
     ],
     ambito: membro.perfil.ambito,
     escaloesAtribuidos: membro.atribuicoes.map((a) => a.escalaoId),
+    seccoesCoordenadas: membro.seccoes.map((s) => s.seccaoId),
   };
 }
 
@@ -88,7 +94,40 @@ export type ResultadoPermissao =
   | { ok: false; erro: string };
 
 /**
- * Verifica autenticação → adesão ativa → capacidade → âmbito sobre o escalão (secção 6.6).
+ * Capacidades cujo alcance é limitado pelo âmbito (escalão/secção): dados de
+ * equipa (§6.3) + a gestão de escalões da secção (`SECCAO_ESCALOES_GERIR`, §6.9).
+ * As capacidades de estrutura (`CLUBE_*`, `CATALOGO_*`) são sempre de nível clube
+ * e não são restringidas por escalão/secção.
+ */
+const CAPACIDADES_LIMITADAS_POR_AMBITO = new Set<Capacidade>([
+  ...CAPACIDADES_POR_ESCALAO,
+  "SECCAO_ESCALOES_GERIR",
+]);
+
+/**
+ * Verdadeiro se PELO MENOS UM dos escalões dados pertence a uma secção coordenada
+ * pelo membro (âmbito SECCAO — §6.7/§6.9). Lista vazia ou sem secções → false.
+ */
+async function algumEscalaoNaSeccaoCoordenada(
+  escalaoIds: string[],
+  ctx: ContextoMembro,
+): Promise<boolean> {
+  const ids = [...new Set(escalaoIds)];
+  if (ids.length === 0 || ctx.seccoesCoordenadas.length === 0) return false;
+
+  const escalao = await prisma.escalao.findFirst({
+    where: {
+      id: { in: ids },
+      clubeId: ctx.clube.id,
+      seccaoId: { in: ctx.seccoesCoordenadas },
+    },
+    select: { id: true },
+  });
+  return escalao !== null;
+}
+
+/**
+ * Verifica autenticação → adesão ativa → capacidade → âmbito sobre o escalão (secção 6.7).
  * Usar no início de cada Server Action de escrita.
  */
 export async function exigirCapacidade(
@@ -102,13 +141,17 @@ export async function exigirCapacidade(
     return { ok: false, erro: "Sem permissão" };
   }
 
-  const limitadaPorEscalao =
-    CAPACIDADES_POR_ESCALAO.includes(cap) && ctx.ambito === "PROPRIOS_ESCALOES";
-
-  if (limitadaPorEscalao && escalaoId) {
-    if (!ctx.escaloesAtribuidos.includes(escalaoId)) {
-      return { ok: false, erro: "Sem permissão neste escalão" };
+  if (CAPACIDADES_LIMITADAS_POR_AMBITO.has(cap) && escalaoId) {
+    if (ctx.ambito === "PROPRIOS_ESCALOES") {
+      if (!ctx.escaloesAtribuidos.includes(escalaoId)) {
+        return { ok: false, erro: "Sem permissão neste escalão" };
+      }
+    } else if (ctx.ambito === "SECCAO") {
+      if (!(await algumEscalaoNaSeccaoCoordenada([escalaoId], ctx))) {
+        return { ok: false, erro: "Sem permissão nesta secção" };
+      }
     }
+    // TODO_CLUBE → permitido em qualquer escalão.
   }
 
   return { ok: true, ctx };
@@ -124,6 +167,9 @@ export async function podeLerEscalao(escalaoId: string): Promise<boolean> {
 
   if (ctx.ambito === "TODO_CLUBE") return true;
   if (ctx.escaloesAtribuidos.includes(escalaoId)) return true;
+  // 🔁 v7 (§6.5/§6.9): o Coordenador lê todos os escalões da sua secção.
+  if (ctx.ambito === "SECCAO" && (await algumEscalaoNaSeccaoCoordenada([escalaoId], ctx)))
+    return true;
 
   const escalao = await prisma.escalao.findFirst({
     where: { id: escalaoId, clubeId: ctx.clube.id },
@@ -146,6 +192,9 @@ export async function podeLerAlgumEscalao(escalaoIds: string[]): Promise<boolean
   if (!ctx) return false;
   if (ctx.ambito === "TODO_CLUBE") return true;
   if (ids.some((id) => ctx.escaloesAtribuidos.includes(id))) return true;
+  // 🔁 v7 (§6.5/§6.9): o Coordenador lê todos os escalões da sua secção.
+  if (ctx.ambito === "SECCAO" && (await algumEscalaoNaSeccaoCoordenada(ids, ctx)))
+    return true;
 
   const visivel = await prisma.escalao.findFirst({
     where: {
@@ -174,14 +223,18 @@ export async function exigirCapacidadeEmAlgumEscalao(
     return { ok: false, erro: "Sem permissão" };
   }
 
-  const limitadaPorEscalao =
-    CAPACIDADES_POR_ESCALAO.includes(cap) && ctx.ambito === "PROPRIOS_ESCALOES";
-
-  if (limitadaPorEscalao) {
+  if (CAPACIDADES_LIMITADAS_POR_AMBITO.has(cap)) {
     const ids = [...new Set(escalaoIds)];
-    if (!ids.some((id) => ctx.escaloesAtribuidos.includes(id))) {
-      return { ok: false, erro: "Sem permissão neste escalão" };
+    if (ctx.ambito === "PROPRIOS_ESCALOES") {
+      if (!ids.some((id) => ctx.escaloesAtribuidos.includes(id))) {
+        return { ok: false, erro: "Sem permissão neste escalão" };
+      }
+    } else if (ctx.ambito === "SECCAO") {
+      if (!(await algumEscalaoNaSeccaoCoordenada(ids, ctx))) {
+        return { ok: false, erro: "Sem permissão nesta secção" };
+      }
     }
+    // TODO_CLUBE → permitido em qualquer escalão.
   }
 
   return { ok: true, ctx };
@@ -201,5 +254,21 @@ export async function escaloesLegiveis(): Promise<string[] | "TODOS"> {
     where: { clubeId: ctx.clube.id, visivelOutrosTreinadores: true },
     select: { id: true },
   });
-  return [...new Set([...ctx.escaloesAtribuidos, ...visiveis.map((v) => v.id)])];
+
+  // 🔁 v7 (§6.5/§6.9): o Coordenador lê todos os escalões da(s) sua(s) secção(ões).
+  const daSeccao =
+    ctx.ambito === "SECCAO" && ctx.seccoesCoordenadas.length > 0
+      ? await prisma.escalao.findMany({
+          where: { clubeId: ctx.clube.id, seccaoId: { in: ctx.seccoesCoordenadas } },
+          select: { id: true },
+        })
+      : [];
+
+  return [
+    ...new Set([
+      ...ctx.escaloesAtribuidos,
+      ...visiveis.map((v) => v.id),
+      ...daSeccao.map((v) => v.id),
+    ]),
+  ];
 }

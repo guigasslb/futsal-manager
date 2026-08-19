@@ -307,8 +307,8 @@ export async function criarAtleta(dados: unknown): Promise<Resultado<Atleta>> {
 
   const dataInicio = pessoal.dataIngresso ?? new Date();
 
-  // Dual-write (fase expand): os campos legados do Atleta continuam a ser escritos
-  // até M4 os remover, para permitir rollback de código sem migração.
+  // O vínculo atleta↔escalão vive exclusivamente em AtletaEscalao (os campos
+  // legados escalaoId/epocaId do Atleta foram removidos na fase 25 — contract).
   const atleta = await prisma.$transaction(async (tx) => {
     const criado = await tx.atleta.create({
       data: {
@@ -322,9 +322,6 @@ export async function criarAtleta(dados: unknown): Promise<Resultado<Atleta>> {
         encarregadoNome: pessoal.encarregadoNome ?? null,
         encarregadoContacto: pessoal.encarregadoContacto ?? null,
         encarregadoEmail: pessoal.encarregadoEmail ? pessoal.encarregadoEmail : null,
-        // LEGADO (expand) — remover em M4.
-        escalaoId: participacaoInicial.escalaoId,
-        epocaId: epoca.id,
         numero,
       },
     });

@@ -1,14 +1,41 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { Modalidade } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { obterClubeIdAtual } from "@/lib/epoca-context";
-import { exigirCapacidade } from "@/lib/permissoes";
+import {
+  exigirCapacidade,
+  obterMembroAtual,
+  type ResultadoPermissao,
+} from "@/lib/permissoes";
+import { garantirSeccaoParaModalidade } from "@/lib/actions/seccoes";
 import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
-import { escalaoSchema } from "@/lib/schemas/escalao";
+import { escalaoSchema, criarEscalaoSchema } from "@/lib/schemas/escalao";
 import type { Escalao } from "@prisma/client";
 
 const PATH = "/definicoes/escaloes";
+
+/**
+ * Autoriza uma mutação sobre um escalão existente (§6.9).
+ *
+ * Um Coordenador de Secção tem `SECCAO_ESCALOES_GERIR` (âmbito SECCAO) mas não
+ * `CLUBE_ESCALOES`. Tenta primeiro a capacidade de secção — resolvida por
+ * `exigirCapacidade` contra `escalao.seccaoId ∈ seccoesCoordenadas` — e recai
+ * na capacidade de nível clube. Devolve o erro mais informativo quando ambas
+ * falham (ex.: "Sem permissão nesta secção" tem prioridade sobre "Sem permissão").
+ */
+async function exigirGestaoEscalao(escalaoId: string): Promise<ResultadoPermissao> {
+  const porSeccao = await exigirCapacidade("SECCAO_ESCALOES_GERIR", escalaoId);
+  if (porSeccao.ok) return porSeccao;
+
+  const porClube = await exigirCapacidade("CLUBE_ESCALOES");
+  if (porClube.ok) return porClube;
+
+  // Ambas falharam: prefere o erro de âmbito de secção (mais específico) quando o
+  // membro tem a capacidade de secção mas não o âmbito sobre este escalão.
+  return porSeccao.erro !== "Sem permissão" ? porSeccao : porClube;
+}
 
 export async function listarEscaloes(): Promise<Resultado<Escalao[]>> {
   const clubeId = await obterClubeIdAtual();
@@ -22,12 +49,42 @@ export async function listarEscaloes(): Promise<Resultado<Escalao[]>> {
 }
 
 export async function criarEscalao(dados: unknown): Promise<Resultado<Escalao>> {
-  const perm = await exigirCapacidade("CLUBE_ESCALOES");
-  if (!perm.ok) return erro(perm.erro);
-  const clubeId = perm.ctx.clube.id;
+  // A criação não tem `escalaoId` (ainda não existe): a autorização de âmbito
+  // SECCAO valida-se contra a `seccaoId` alvo do payload (ver abaixo).
+  const ctx = await obterMembroAtual();
+  if (!ctx) return erro("Sem acesso a este clube");
 
-  const parsed = escalaoSchema.safeParse(dados);
+  const temClube = ctx.capacidades.includes("CLUBE_ESCALOES");
+  const temSeccao = ctx.capacidades.includes("SECCAO_ESCALOES_GERIR");
+  if (!temClube && !temSeccao) return erro("Sem permissão");
+
+  const parsed = criarEscalaoSchema.safeParse(dados);
   if (!parsed.success) return erroDeValidacao(parsed.error);
+
+  const clubeId = ctx.clube.id;
+  const { seccaoId: seccaoIdInput, ...dadosEscalao } = parsed.data;
+
+  // Resolver a secção alvo: fornecida pelo cliente (multidesporto) ou, por
+  // omissão, a secção FUTSAL do clube (garantida/criada on-demand — §8.1.1).
+  let seccaoId: string;
+  if (seccaoIdInput) {
+    const seccao = await prisma.seccao.findFirst({
+      where: { id: seccaoIdInput, clubeId },
+      select: { id: true },
+    });
+    if (!seccao) return erro("Secção não encontrada");
+    seccaoId = seccao.id;
+  } else {
+    const res = await garantirSeccaoParaModalidade(Modalidade.FUTSAL);
+    if (!res.sucesso) return erro(res.erro);
+    seccaoId = res.dados.seccaoId;
+  }
+
+  // Âmbito SECCAO: um Coordenador sem `CLUBE_ESCALOES` só cria escalões nas
+  // secções que coordena. Com `CLUBE_ESCALOES` (nível clube) não há restrição.
+  if (!temClube && temSeccao && !ctx.seccoesCoordenadas.includes(seccaoId)) {
+    return erro("Sem permissão nesta secção");
+  }
 
   const ultimo = await prisma.escalao.findFirst({
     where: { clubeId },
@@ -37,14 +94,14 @@ export async function criarEscalao(dados: unknown): Promise<Resultado<Escalao>> 
   const ordem = (ultimo?.ordem ?? -1) + 1;
 
   const escalao = await prisma.escalao.create({
-    data: { ...parsed.data, ordem, clubeId },
+    data: { ...dadosEscalao, ordem, clubeId, seccaoId },
   });
   revalidatePath(PATH);
   return ok(escalao);
 }
 
 export async function atualizarEscalao(id: string, dados: unknown): Promise<Resultado<Escalao>> {
-  const perm = await exigirCapacidade("CLUBE_ESCALOES");
+  const perm = await exigirGestaoEscalao(id);
   if (!perm.ok) return erro(perm.erro);
 
   const parsed = escalaoSchema.safeParse(dados);
@@ -62,7 +119,7 @@ export async function definirVisibilidadeEscalao(
   id: string,
   visivel: boolean,
 ): Promise<Resultado<void>> {
-  const perm = await exigirCapacidade("CLUBE_ESCALOES");
+  const perm = await exigirGestaoEscalao(id);
   if (!perm.ok) return erro(perm.erro);
 
   const existe = await prisma.escalao.findFirst({ where: { id, clubeId: perm.ctx.clube.id } });
@@ -77,7 +134,7 @@ export async function definirVisibilidadeEscalao(
 }
 
 export async function apagarEscalao(id: string): Promise<Resultado<void>> {
-  const perm = await exigirCapacidade("CLUBE_ESCALOES");
+  const perm = await exigirGestaoEscalao(id);
   if (!perm.ok) return erro(perm.erro);
 
   const existe = await prisma.escalao.findFirst({ where: { id, clubeId: perm.ctx.clube.id } });
@@ -116,7 +173,7 @@ export async function moverEscalao(
   id: string,
   direcao: "subir" | "descer",
 ): Promise<Resultado<void>> {
-  const perm = await exigirCapacidade("CLUBE_ESCALOES");
+  const perm = await exigirGestaoEscalao(id);
   if (!perm.ok) return erro(perm.erro);
 
   const todos = await prisma.escalao.findMany({

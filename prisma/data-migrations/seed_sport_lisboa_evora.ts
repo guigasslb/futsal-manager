@@ -270,8 +270,6 @@ async function main() {
         ativo: true,
         dataIngresso: epoca.dataInicio,
         clubeId: clube.id,
-        escalaoId: traquinas.id,
-        epocaId: epoca.id,
         participacoes: {
           create: {
             escalaoId: traquinas.id,

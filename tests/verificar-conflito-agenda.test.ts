@@ -43,6 +43,7 @@ function membro(clubeId = CLUBE) {
     capacidades: ["TREINOS_GERIR"],
     ambito: "TODO_CLUBE",
     escaloesAtribuidos: [],
+    seccoesCoordenadas: [],
   };
 }
 

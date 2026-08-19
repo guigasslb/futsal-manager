@@ -95,7 +95,7 @@ export async function registarRpeAtleta(
     return erro("Sem permissão neste escalão");
 
   const atleta = await prisma.atleta.findFirst({
-    where: { id: atletaId, escalao: { clubeId } },
+    where: { id: atletaId, clubeId },
     select: { id: true },
   });
   if (!atleta) return erro("Atleta não encontrado");

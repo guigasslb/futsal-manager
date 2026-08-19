@@ -20,7 +20,10 @@ datasource db {
 model Clube {
   id            String   @id @default(cuid())
   nome          String
-  corPrimaria   String   @default("#1A2FD4")
+  // 🔁 v7 (§3.1): true = clube técnico invisível que suporta a licença Individual.
+  clubeTecnico  Boolean  @default(false)
+  // §12.1: cor Mister por defeito (contract v6 — default aplica-se só a novos registos).
+  corPrimaria   String   @default("#F0531E")
   corSecundaria String   @default("#FFD700")
   logoUrl       String?
   morada        String?
@@ -34,6 +37,8 @@ model Clube {
   membros       MembroClube[]
   perfis        Perfil[]
   epocas        Epoca[]
+  // 🔁 v7 (§3.1.1): secções (modalidades) do clube.
+  seccoes       Seccao[]
   escaloes      Escalao[]
   exercicios    Exercicio[]
   metricas      MetricaConfig[]
@@ -288,6 +293,8 @@ model MembroClube {
   capacidadesRevogadas String[] @default([])
 
   atribuicoes AtribuicaoEscalao[]
+  // 🔁 v7 (§3.1.1): secções que este membro coordena (scope de secção).
+  seccoes     MembroSeccao[]
 
   @@unique([utilizadorId, clubeId])
   @@index([clubeId])
@@ -320,6 +327,8 @@ model Perfil {
 
 enum AmbitoPerfil {
   TODO_CLUBE
+  // 🔁 v7 (§6.3): todos os escalões de uma secção (Coordenador de Secção).
+  SECCAO
   PROPRIOS_ESCALOES
 }
 
@@ -349,7 +358,6 @@ model Epoca {
   clube      Clube    @relation(fields: [clubeId], references: [id])
   criadoEm   DateTime @default(now())
 
-  atletas       Atleta[]
   sessoes       Sessao[]
   jogos         Jogo[]
   progressos    ProgressoHabilidade[]
@@ -359,6 +367,54 @@ model Epoca {
   modelosJogo   ModeloJogo[]          @relation("ModeloJogoEpoca")
 
   @@index([clubeId])
+}
+
+// ─────────────────────────────────────────────
+// SECÇÕES (multi-desporto — 🔁 v7, §3.1.1)
+// ─────────────────────────────────────────────
+
+// A modalidade de uma secção.
+enum Modalidade {
+  FUTSAL
+  FUTEBOL
+}
+
+// Papel de um membro numa secção (extensível no futuro — §3.1.1).
+enum PapelSeccao {
+  COORDENADOR
+}
+
+// Subdivisão do clube por modalidade. Âncora da modalidade (§1.7.1): cada escalão
+// pertence a uma secção; a modalidade de tudo o resto deriva daí. Um clube tem no
+// máximo UMA secção por modalidade. Criada automaticamente ao criar o primeiro
+// escalão da modalidade (§8.1.1). Backfill: uma secção FUTSAL por clube (Apêndice C).
+model Seccao {
+  id         String     @id @default(cuid())
+  clubeId    String
+  clube      Clube      @relation(fields: [clubeId], references: [id], onDelete: Cascade)
+  modalidade Modalidade
+  nome       String? // "Futsal" | "Futebol" | nome custom; fallback = rótulo da modalidade
+  criadoEm   DateTime   @default(now())
+
+  escaloes Escalao[]
+  membros  MembroSeccao[]
+
+  @@unique([clubeId, modalidade])
+  @@index([clubeId])
+}
+
+// Vínculo membro↔secção com scope de coordenação (Coordenador de Secção — §6.9).
+model MembroSeccao {
+  id            String      @id @default(cuid())
+  seccaoId      String
+  seccao        Seccao      @relation(fields: [seccaoId], references: [id], onDelete: Cascade)
+  membroClubeId String
+  membroClube   MembroClube @relation(fields: [membroClubeId], references: [id], onDelete: Cascade)
+  papel         PapelSeccao @default(COORDENADOR)
+  criadoEm      DateTime    @default(now())
+
+  @@unique([seccaoId, membroClubeId])
+  @@index([membroClubeId])
 }
 
 // ─────────────────────────────────────────────
@@ -374,10 +430,12 @@ model Escalao {
   visivelOutrosTreinadores Boolean  @default(true)
   clubeId                  String
   clube                    Clube    @relation(fields: [clubeId], references: [id])
+  // 🔁 v7 (§3.2): cada escalão pertence a uma secção (modalidade).
+  // Fase expand: nullable; contract (NOT NULL) após backfill (Apêndice C).
+  seccaoId                 String?
+  seccao                   Seccao?  @relation(fields: [seccaoId], references: [id])
   criadoEm                 DateTime @default(now())
 
-  atletas            Atleta[]            @relation("AtletaEscalaoPrincipal")
-  atletasSecundarios Atleta[]            @relation("AtletaEscalaoSecundario")
   sessoes            Sessao[]
   jogos              Jogo[]
   atribuicoes        AtribuicaoEscalao[]
@@ -388,6 +446,7 @@ model Escalao {
   modelosJogo        ModeloJogo[]        @relation("ModeloJogoEscalao")
 
   @@index([clubeId])
+  @@index([seccaoId])
 }
 
 model Atleta {
@@ -406,20 +465,10 @@ model Atleta {
   encarregadoContacto String?
   encarregadoEmail    String?
 
-  // Clube do atleta. Nullable nesta fase (expand); passará a NOT NULL em M4.
-  // Historicamente derivado via escalao.clubeId.
-  clubeId String?
-  clube   Clube?  @relation(fields: [clubeId], references: [id])
-
-  // Um atleta pertence a um escalão principal NUMA época, podendo jogar
-  // também num escalão secundário (opcional).
-  // LEGADO (fase expand): mantido até M4 substituir por AtletaEscalao.
-  escalaoId           String
-  escalao             Escalao  @relation("AtletaEscalaoPrincipal", fields: [escalaoId], references: [id])
-  escalaoSecundarioId String?
-  escalaoSecundario   Escalao? @relation("AtletaEscalaoSecundario", fields: [escalaoSecundarioId], references: [id])
-  epocaId             String
-  epoca               Epoca    @relation(fields: [epocaId], references: [id])
+  // Clube do atleta (contract v6 — §3.2): o atleta pertence ao clube, transversal
+  // às épocas e às modalidades. As participações vivem em AtletaEscalao.
+  clubeId String
+  clube   Clube  @relation(fields: [clubeId], references: [id])
 
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
@@ -436,10 +485,7 @@ model Atleta {
   rpesAtletas    RpeAtleta[]
 
   @@index([clubeId])
-  @@index([escalaoId])
-  @@index([escalaoSecundarioId])
-  @@index([epocaId])
-  @@index([epocaId, escalaoId, ativo])
+  @@index([clubeId, ativo])
 }
 
 // RGPD — consentimento parental para dados de menores (secção 5.5 da bíblia).
@@ -461,12 +507,25 @@ enum TipoConsentimento {
   IMAGEM
 }
 
+// 🔁 v7 (§3.2): posições de FUTSAL + FUTEBOL num único enum.
+// GUARDA_REDES e UNIVERSAL são partilhados pelas duas modalidades.
 enum Posicao {
+  // Partilhados / futsal
   GUARDA_REDES
   FIXO
   ALA
   PIVO
   UNIVERSAL
+  // Futebol 🥅
+  DEFESA_CENTRAL
+  LATERAL_DIREITO
+  LATERAL_ESQUERDO
+  MEDIO_DEFENSIVO
+  MEDIO_CENTRO
+  MEDIO_OFENSIVO
+  EXTREMO_DIREITO
+  EXTREMO_ESQUERDO
+  AVANCADO
 }
 
 // Participação de um atleta num escalão durante uma época.
@@ -529,7 +588,10 @@ model Exercicio {
   clube              Clube                        @relation(fields: [clubeId], references: [id])
   criadorId          String
   criador            Utilizador                   @relation("ExercicioCriador", fields: [criadorId], references: [id])
-  proprietario       PropriedadeConteudo          @default(CLUBE)
+  // Contract v6 (§4.2): exercício criado por um treinador é pessoal por defeito.
+  proprietario       PropriedadeConteudo          @default(TREINADOR)
+  // 🔁 v7 (§3.3): FUTSAL | FUTEBOL | null = genérico (filtro da biblioteca).
+  modalidade         Modalidade?
   origemSeed         Boolean                      @default(false)
   criadoEm           DateTime                     @default(now())
   atualizadoEm       DateTime                     @updatedAt
@@ -604,6 +666,9 @@ model ModeloSessao {
 
   clubeProprietarioId String?
   clubeProprietario   Clube?  @relation(fields: [clubeProprietarioId], references: [id])
+
+  // 🔁 v7 (§3.4): FUTSAL | FUTEBOL | null = genérico.
+  modalidade Modalidade?
 
   origemSeed     Boolean       @default(false) // template da biblioteca curada de arranque
   nome           String // ex: "Pressing defensivo, 60 min, sub-10"
@@ -739,6 +804,8 @@ model Sessao {
   // §8.9.1 (decisão 2026-08-16) — posição do dia na semana no modo ESTRUTURADO (MD-X);
   // opcional, nunca bloqueia a sessão.
   momentoSemana MomentoSemana?
+  // 🔁 v7 (§3.5): null = herda a modalidade da secção do escalão; preenchido = atividade pontual noutra modalidade.
+  modalidadeAtividade Modalidade?
   escalaoId     String
   escalao       Escalao      @relation(fields: [escalaoId], references: [id])
   epocaId       String
@@ -816,9 +883,9 @@ model Presenca {
   atletaId     String
   // P1.3 (RGPD): Cascade — o hard-delete do atleta apaga as suas presenças.
   atleta       Atleta         @relation(fields: [atletaId], references: [id], onDelete: Cascade)
-  // Escalão da presença. Nullable nesta fase (expand); passará a NOT NULL em M4.
-  escalaoId    String?
-  escalao      Escalao?       @relation("PresencaEscalao", fields: [escalaoId], references: [id])
+  // Escalão da presença (contract v6): analytics por escalão. Todos os registos preenchidos.
+  escalaoId    String
+  escalao      Escalao        @relation("PresencaEscalao", fields: [escalaoId], references: [id])
   estado       EstadoPresenca @default(PRESENTE)
   motivo       MotivoFalta?
   justificacao String?
@@ -883,6 +950,10 @@ model Jogo {
   local         String?
   relatorio     String?     @db.Text
   videoUrl      String? // link YouTube (sem armazenamento)
+  // 🔁 v7 (§3.7): FUTSAL_5 | FUTEBOL_* ; default derivado da secção do escalão.
+  formato             FormatoJogo?
+  // 🔁 v7 (§3.5/§3.7): null = herda a modalidade da secção; preenchido = atividade pontual noutra modalidade.
+  modalidadeAtividade Modalidade?
   escalaoId     String
   escalao       Escalao     @relation(fields: [escalaoId], references: [id])
   epocaId       String
@@ -918,6 +989,18 @@ enum TipoJogo {
   AMIGAVEL
 }
 
+// 🔁 v7 (§3.7): formato de jogo (nº de jogadores por equipa). Deriva por defeito da
+// modalidade da secção do escalão; guardado no jogo para o editor de campo e a
+// interpretação das estatísticas. Ver Apêndice B para dimensões.
+enum FormatoJogo {
+  FUTSAL_5
+  FUTEBOL_3_3
+  FUTEBOL_5_5
+  FUTEBOL_7
+  FUTEBOL_9
+  FUTEBOL_11
+}
+
 model Competicao {
   id        String            @id @default(cuid())
   clubeId   String
@@ -931,6 +1014,9 @@ model Competicao {
   tipo      TipoJogo          @default(OFICIAL) // OFICIAL | AMIGAVEL
   // F6 (M16): formato da prova, para o cálculo da classificação (bíblia §3.7).
   formato   FormatoCompeticao @default(LIGA) // LIGA | TORNEIO | TACA
+  // 🔁 v7 (§3.7): formato de jogo por defeito da competição (FUTSAL_5 | FUTEBOL_*).
+  // NÃO confundir com `formato` (LIGA/TORNEIO/TACA).
+  formatoJogo FormatoJogo?
   criadoEm  DateTime          @default(now())
 
   jogos Jogo[]
@@ -999,6 +1085,11 @@ enum TipoEventoJogo {
   DEFESA
   GOLO_SOFRIDO
   TIMEOUT
+  // 🔁 v7 (§3.7): eventos de futebol 🥅.
+  REMATE
+  CANTO
+  FORA_DE_JOGO
+  DESARME
 }
 
 // Scouting do adversário (do clube).
@@ -1081,6 +1172,12 @@ model EstatisticaAtleta {
   golosSofridosGR Int? // golos sofridos com este GR em campo
   faltasCometidas Int? // opcional, útil em futsal (acumulação de faltas)
 
+  // 🔁 v7 (§3.7): núcleo estatístico de FUTEBOL 🥅 (nullable; só em jogos de futebol).
+  remates     Int?
+  cantos      Int?
+  forasDeJogo Int?
+  desarmes    Int?
+
   // Métricas configuráveis
   valoresMetricas ValorMetrica[]
 
@@ -1113,6 +1210,8 @@ model MetricaConfig {
   tipo    TipoMetrica @default(NUMERO)
   ativa   Boolean     @default(true)
   ordem   Int         @default(0)
+  // 🔁 v7 (§3.7): métrica pode ser específica de uma modalidade; null = ambas.
+  modalidade Modalidade?
   clubeId String
   clube   Clube       @relation(fields: [clubeId], references: [id])
 
@@ -1149,6 +1248,8 @@ model Habilidade {
   descricao String?         @db.Text
   nivel     NivelHabilidade @default(BASICO)
   ordem     Int             @default(0)
+  // 🔁 v7 (§3.8): habilidade pode ser específica de uma modalidade; null = ambas.
+  modalidade Modalidade?
   clubeId   String
   clube     Clube           @relation(fields: [clubeId], references: [id])
   criadoEm  DateTime        @default(now())

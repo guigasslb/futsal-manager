@@ -81,6 +81,11 @@ export const LABEL_TIPO_EVENTO: Record<TipoEventoJogo, string> = {
   DEFESA: "Defesa",
   GOLO_SOFRIDO: "Golo sofrido",
   TIMEOUT: "Timeout",
+  // Futebol (§3.7)
+  REMATE: "Remate",
+  CANTO: "Canto",
+  FORA_DE_JOGO: "Fora-de-jogo",
+  DESARME: "Desarme",
 };
 
 /** Alias retrocompatível (usado no registo ao vivo). */

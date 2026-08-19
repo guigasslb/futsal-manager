@@ -9,6 +9,10 @@ vi.mock("@/lib/epoca-context", () => ({
 }));
 vi.mock("@/lib/permissoes", () => ({
   exigirCapacidade: vi.fn(),
+  obterMembroAtual: vi.fn(),
+}));
+vi.mock("@/lib/actions/seccoes", () => ({
+  garantirSeccaoParaModalidade: vi.fn(),
 }));
 vi.mock("@/lib/db", () => ({
   prisma: {
@@ -19,6 +23,7 @@ vi.mock("@/lib/db", () => ({
       update: vi.fn(),
       delete: vi.fn(),
     },
+    seccao: { findFirst: vi.fn() },
     atletaEscalao: { count: vi.fn() },
     sessao: { count: vi.fn() },
     jogo: { count: vi.fn() },
@@ -36,7 +41,8 @@ import {
   moverEscalao,
 } from "@/lib/actions/escaloes";
 import { obterClubeIdAtual } from "@/lib/epoca-context";
-import { exigirCapacidade } from "@/lib/permissoes";
+import { exigirCapacidade, obterMembroAtual } from "@/lib/permissoes";
+import { garantirSeccaoParaModalidade } from "@/lib/actions/seccoes";
 import { prisma } from "@/lib/db";
 
 const mocked = <T,>(fn: T) => fn as unknown as {
@@ -48,6 +54,13 @@ const calls = (fn: unknown) => (fn as { mock: { calls: unknown[][] } }).mock.cal
 
 const PERM_OK = { ok: true, ctx: { clube: { id: "clube1" } } };
 
+// Membro com capacidade de nível clube (âmbito TODO_CLUBE) — pode criar em qualquer secção.
+const MEMBRO_CLUBE = {
+  clube: { id: "clube1" },
+  capacidades: ["CLUBE_ESCALOES"],
+  seccoesCoordenadas: [] as string[],
+};
+
 const ESC1 = { id: "esc1", nome: "Sub-11", ordem: 0, clubeId: "clube1" };
 const ESC2 = { id: "esc2", nome: "Sub-13", ordem: 1, clubeId: "clube1" };
 
@@ -55,10 +68,16 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocked(obterClubeIdAtual).mockResolvedValue("clube1");
   mocked(exigirCapacidade).mockResolvedValue(PERM_OK);
+  mocked(obterMembroAtual).mockResolvedValue(MEMBRO_CLUBE);
+  mocked(garantirSeccaoParaModalidade).mockResolvedValue({
+    sucesso: true,
+    dados: { seccaoId: "sec-futsal" },
+  });
   mocked(prisma.escalao.findMany).mockResolvedValue([ESC1, ESC2]);
   mocked(prisma.escalao.findFirst).mockResolvedValue(ESC1);
   mocked(prisma.escalao.create).mockResolvedValue(ESC1);
   mocked(prisma.escalao.update).mockResolvedValue(ESC1);
+  mocked(prisma.seccao.findFirst).mockResolvedValue({ id: "sec-futsal" });
   mocked(prisma.$transaction).mockImplementation((arg: unknown) =>
     typeof arg === "function"
       ? (arg as (tx: unknown) => unknown)(prisma)
@@ -94,8 +113,8 @@ describe("listarEscaloes", () => {
 // ─── criarEscalao ─────────────────────────────────────────────────────────────
 
 describe("criarEscalao", () => {
-  it("falha sem a capacidade CLUBE_ESCALOES", async () => {
-    mocked(exigirCapacidade).mockResolvedValue({ ok: false, erro: "Sem permissão" });
+  it("falha sem CLUBE_ESCALOES nem SECCAO_ESCALOES_GERIR", async () => {
+    mocked(obterMembroAtual).mockResolvedValue({ ...MEMBRO_CLUBE, capacidades: [] });
     const r = await criarEscalao({ nome: "Sub-11" });
     expect(r.sucesso).toBe(false);
     expect(prisma.escalao.create).not.toHaveBeenCalled();
@@ -120,7 +139,7 @@ describe("criarEscalao", () => {
     if (!r.sucesso) expect(r.camposInvalidos?.idadeMax).toBeTruthy();
   });
 
-  it("cria escalão com clubeId e ordem corretos", async () => {
+  it("cria escalão com clubeId, ordem e secção corretos", async () => {
     // Último escalão tem ordem=1, o novo fica com ordem=2
     mocked(prisma.escalao.findFirst).mockResolvedValue({ ordem: 1 });
     const r = await criarEscalao({ nome: "Sub-15" });
@@ -129,6 +148,8 @@ describe("criarEscalao", () => {
     expect(arg.data.clubeId).toBe("clube1");
     expect(arg.data.ordem).toBe(2);
     expect(arg.data.nome).toBe("Sub-15");
+    // §8.1.1: sem seccaoId no payload, deriva a secção FUTSAL por defeito.
+    expect(arg.data.seccaoId).toBe("sec-futsal");
   });
 
   it("atribui ordem 0 quando não existe nenhum escalão ainda", async () => {
@@ -138,11 +159,37 @@ describe("criarEscalao", () => {
     expect(arg.data.ordem).toBe(0);
   });
 
-  it("exige a capacidade CLUBE_ESCALOES (não outra)", async () => {
+  it("sem seccaoId no payload, garante a secção FUTSAL por defeito (§8.1.1)", async () => {
     mocked(prisma.escalao.findFirst).mockResolvedValue(null);
-    mocked(prisma.escalao.create).mockResolvedValue(ESC1);
     await criarEscalao({ nome: "Sub-11" });
-    expect(calls(exigirCapacidade)[0][0]).toBe("CLUBE_ESCALOES");
+    expect(garantirSeccaoParaModalidade).toHaveBeenCalledWith("FUTSAL");
+  });
+
+  it("Coordenador de Secção cria escalão na sua secção (SECCAO_ESCALOES_GERIR)", async () => {
+    mocked(obterMembroAtual).mockResolvedValue({
+      clube: { id: "clube1" },
+      capacidades: ["SECCAO_ESCALOES_GERIR"],
+      seccoesCoordenadas: ["sec-futebol"],
+    });
+    mocked(prisma.seccao.findFirst).mockResolvedValue({ id: "sec-futebol" });
+    mocked(prisma.escalao.findFirst).mockResolvedValue(null);
+    const r = await criarEscalao({ nome: "Benjamins", seccaoId: "sec-futebol" });
+    expect(r.sucesso).toBe(true);
+    const arg = calls(prisma.escalao.create)[0][0] as { data: { seccaoId: string } };
+    expect(arg.data.seccaoId).toBe("sec-futebol");
+  });
+
+  it("Coordenador não cria escalão numa secção que não coordena", async () => {
+    mocked(obterMembroAtual).mockResolvedValue({
+      clube: { id: "clube1" },
+      capacidades: ["SECCAO_ESCALOES_GERIR"],
+      seccoesCoordenadas: ["sec-futsal"],
+    });
+    mocked(prisma.seccao.findFirst).mockResolvedValue({ id: "sec-futebol" });
+    const r = await criarEscalao({ nome: "Benjamins", seccaoId: "sec-futebol" });
+    expect(r.sucesso).toBe(false);
+    if (!r.sucesso) expect(r.erro).toMatch(/secção/i);
+    expect(prisma.escalao.create).not.toHaveBeenCalled();
   });
 });
 

@@ -471,8 +471,8 @@ describe("criarNovoClube (cenário C)", () => {
     expect(epArgs.data.nome).toMatch(/^\d{4}\/\d{4}$/);
     const escArgs = calls(prisma.escalao.create)[0][0] as { data: { nome: string } };
     expect(escArgs.data.nome).toBe("Seniores");
-    // 4 perfis de arranque + membro admin ATIVO
-    expect(calls(prisma.perfil.create)).toHaveLength(4);
+    // 5 perfis de arranque (inclui Coordenador de Secção — §6.9) + membro admin ATIVO
+    expect(calls(prisma.perfil.create)).toHaveLength(5);
     const membroArgs = calls(prisma.membroClube.create)[0][0] as { data: { estado: string; perfilId: string } };
     expect(membroArgs.data.estado).toBe("ATIVO");
     expect(membroArgs.data.perfilId).toBe("perfil-Administrador");

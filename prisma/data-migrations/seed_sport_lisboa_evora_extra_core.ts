@@ -623,7 +623,10 @@ export async function seedSleExtra(prisma: PrismaClient): Promise<ResultadoSeedE
   });
 
   const atletas = await prisma.atleta.findMany({
-    where: { clubeId: clube.id, epocaId: epoca.id },
+    where: {
+      clubeId: clube.id,
+      participacoes: { some: { epocaId: epoca.id } },
+    },
     orderBy: { numero: "asc" },
   });
 

@@ -10,6 +10,9 @@ export const CAPACIDADES = [
   "CLUBE_PERFIS",
   "CATALOGO_METRICAS",
   "CATALOGO_HABILIDADES",
+  // Secção (âmbito SECCAO — §6.9): gestão de escalões dentro da(s) secção(ões)
+  // coordenada(s), sem conceder o CLUBE_ESCALOES (que é sempre de nível clube).
+  "SECCAO_ESCALOES_GERIR",
   // Dados de equipa (sujeitas ao âmbito do perfil)
   "PLANTEL_GERIR",
   "TREINOS_GERIR",
@@ -80,6 +83,7 @@ export const LABEL_CAPACIDADE: Record<Capacidade, string> = {
   CLUBE_PERFIS: "Gerir perfis",
   CATALOGO_METRICAS: "Gerir métricas",
   CATALOGO_HABILIDADES: "Gerir habilidades",
+  SECCAO_ESCALOES_GERIR: "Gerir escalões da secção",
   PLANTEL_GERIR: "Gerir plantel",
   TREINOS_GERIR: "Gerir treinos",
   PRESENCAS_MARCAR: "Marcar presenças",
@@ -130,7 +134,8 @@ const CAPACIDADES_DADOS_EQUIPA = CAPACIDADES_POR_ESCALAO;
 export type PerfilArranque = {
   nome: string;
   descricao: string;
-  ambito: "TODO_CLUBE" | "PROPRIOS_ESCALOES";
+  // 🔁 v7 (§6.9): âmbito SECCAO para o Coordenador de Secção.
+  ambito: "TODO_CLUBE" | "SECCAO" | "PROPRIOS_ESCALOES";
   capacidades: Capacidade[];
 };
 
@@ -180,5 +185,13 @@ export const PERFIS_ARRANQUE: PerfilArranque[] = [
       "CADERNETA_GERIR",
       "EXERCICIOS_GERIR",
     ],
+  },
+  {
+    // 🔁 v7 (§6.9): gere os escalões da(s) secção(ões) que coordena, via
+    // SECCAO_ESCALOES_GERIR (âmbito SECCAO) — sem acesso ao resto do clube.
+    nome: "Coordenador de Secção",
+    descricao: "Gere os escalões de uma secção do clube.",
+    ambito: "SECCAO",
+    capacidades: ["SECCAO_ESCALOES_GERIR"],
   },
 ];

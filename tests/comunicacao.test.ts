@@ -82,6 +82,7 @@ function permitir(clubeId = CLUBE.id) {
       capacidades: ["COMUNICACOES_GERIR"],
       ambito: "TODO_CLUBE",
       escaloesAtribuidos: [],
+      seccoesCoordenadas: [],
     },
   });
 }

@@ -133,7 +133,7 @@ describe("planoTaticoSchema (F5 — plano de dia de jogo)", () => {
   it("rejeita posição prevista inválida", () => {
     const r = convocatoriaPrevistaSchema.safeParse({
       convocadoId: CUID,
-      posicaoPrevista: "AVANCADO",
+      posicaoPrevista: "LIBERO",
     });
     expect(r.success).toBe(false);
   });

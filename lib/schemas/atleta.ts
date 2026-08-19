@@ -52,17 +52,39 @@ export type AtletaPessoalInput = z.infer<typeof atletaPessoalSchema>;
 export type CriarAtletaInput = z.infer<typeof criarAtletaSchema>;
 
 export const LABEL_POSICAO: Record<Posicao, string> = {
+  // Partilhados / futsal
   GUARDA_REDES: "Guarda-redes",
   FIXO: "Fixo",
   ALA: "Ala",
   PIVO: "Pivô",
   UNIVERSAL: "Universal",
+  // Futebol (§2.3/§3.2)
+  DEFESA_CENTRAL: "Defesa central",
+  LATERAL_DIREITO: "Lateral direito",
+  LATERAL_ESQUERDO: "Lateral esquerdo",
+  MEDIO_DEFENSIVO: "Médio defensivo",
+  MEDIO_CENTRO: "Médio centro",
+  MEDIO_OFENSIVO: "Médio ofensivo",
+  EXTREMO_DIREITO: "Extremo direito",
+  EXTREMO_ESQUERDO: "Extremo esquerdo",
+  AVANCADO: "Avançado",
 };
 
 export const ABREV_POSICAO: Record<Posicao, string> = {
+  // Partilhados / futsal
   GUARDA_REDES: "GR",
   FIXO: "Fixo",
   ALA: "Ala",
   PIVO: "Pivô",
   UNIVERSAL: "Univ.",
+  // Futebol (§2.3/§3.2)
+  DEFESA_CENTRAL: "DC",
+  LATERAL_DIREITO: "LD",
+  LATERAL_ESQUERDO: "LE",
+  MEDIO_DEFENSIVO: "MD",
+  MEDIO_CENTRO: "MC",
+  MEDIO_OFENSIVO: "MO",
+  EXTREMO_DIREITO: "ED",
+  EXTREMO_ESQUERDO: "EE",
+  AVANCADO: "AV",
 };

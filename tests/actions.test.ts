@@ -126,7 +126,7 @@ describe("criarAtleta (F1 — atleta do clube + participação inicial)", () => 
     expect(prisma.atleta.create).toHaveBeenCalled();
   });
 
-  it("cria atleta + participação (dual-write) quando tudo é válido", async () => {
+  it("cria atleta + participação quando tudo é válido", async () => {
     mocked(obterEpocaAtiva).mockResolvedValue({ id: "ep1" });
     mocked(prisma.escalao.findFirst).mockResolvedValue({ id: CUID, clubeId: "clube1" });
     mocked(prisma.atletaEscalao.findFirst).mockResolvedValue(null);
@@ -140,15 +140,16 @@ describe("criarAtleta (F1 — atleta do clube + participação inicial)", () => 
     expect(r.sucesso).toBe(true);
     if (r.sucesso) expect(r.dados.id).toBe("atleta1");
 
-    // Atleta: clube + campos legados (fase expand).
+    // Atleta: só dados do clube/pessoais. O vínculo ao escalão/época vive
+    // exclusivamente em AtletaEscalao (fase 25 — colunas legadas removidas).
     const createAtleta = (prisma.atleta.create as unknown as { mock: { calls: unknown[][] } })
       .mock.calls[0][0] as {
-      data: { clubeId: string; epocaId: string; escalaoId: string; numero: number | null };
+      data: { clubeId: string; numero: number | null } & Record<string, unknown>;
     };
     expect(createAtleta.data.clubeId).toBe("clube1");
-    expect(createAtleta.data.epocaId).toBe("ep1");
-    expect(createAtleta.data.escalaoId).toBe(CUID);
     expect(createAtleta.data.numero).toBe(7);
+    expect(createAtleta.data).not.toHaveProperty("escalaoId");
+    expect(createAtleta.data).not.toHaveProperty("epocaId");
 
     // Participação AtletaEscalao criada na mesma transação.
     const createParticipacao = (
