@@ -11,6 +11,7 @@ import { BarraTopo } from "@/components/layout/BarraTopo";
 import { Navegacao } from "@/components/layout/Navegacao";
 import { ScrollTopo } from "@/components/layout/ScrollTopo";
 import { ServicoIndisponivel } from "@/components/layout/ServicoIndisponivel";
+import { GuardaLicenca } from "@/components/layout/GuardaLicenca";
 
 /** Converte um hex (#rrggbb) para "H S% L%" (formato das CSS vars do shadcn). */
 function hexParaHslVar(hex: string): string | null {
@@ -65,10 +66,15 @@ export default async function AppLayout({
 
     // Guarda de licença (§3.11) — SEPARADA da autenticação: só entra na área da
     // app quem tem subscrição válida (licença do clube OU Individual). Sem
-    // licença válida → paywall. A página /sem-licenca vive fora deste grupo de
-    // rotas, pelo que não reentra nesta guarda (sem ciclo de redirect).
+    // licença válida → paywall (/sem-licenca), que vive fora deste grupo de
+    // rotas (sem ciclo de redirect).
+    //
+    // A validade é avaliada AQUI (server-side), mas a DECISÃO de bloquear é
+    // aplicada no cliente por <GuardaLicenca> (abaixo), porque depende da rota
+    // atual: o fluxo de /onboarding fica acessível sem licença para o utilizador
+    // concluir o setup antes do paywall. O pathname não está disponível de forma
+    // limpa num layout server-side sem alterar o middleware (intocável).
     const licencaOk = await temLicencaValida(membro.clube.id, membro.utilizadorId);
-    if (!licencaOk) redirect("/sem-licenca");
 
     const [epocasResult, epocaAtiva, seccoesResult] = await Promise.all([
       listarEpocas(),
@@ -132,46 +138,48 @@ export default async function AppLayout({
     } as React.CSSProperties;
 
     return (
-      <div className="flex min-h-screen flex-col" style={estiloClube}>
-        <BarraTopo
-          nomeUtilizador={session.user.name ?? "Utilizador"}
-          epocas={epocas}
-          epocaAtivaId={epocaAtiva?.id ?? null}
-          seccoes={seccoes}
-          seccaoAtivaId={seccaoAtivaId}
-          eventoHoje={eventoHoje}
-        />
-
-        <div className="flex flex-1 overflow-hidden">
-          <Navegacao
-            mostrarComecar={plantelVazio}
-            // Agenda visível a todos os treinadores autenticados: obterAgendaClube
-            // já faz o scoping pelos escalões legíveis de cada membro (§6.4).
-            mostrarAgenda={true}
+      <GuardaLicenca licencaOk={licencaOk}>
+        <div className="flex min-h-screen flex-col" style={estiloClube}>
+          <BarraTopo
+            nomeUtilizador={session.user.name ?? "Utilizador"}
+            epocas={epocas}
+            epocaAtivaId={epocaAtiva?.id ?? null}
+            seccoes={seccoes}
+            seccaoAtivaId={seccaoAtivaId}
+            eventoHoje={eventoHoje}
           />
 
-          <ScrollTopo />
-          <main className="app-surface flex-1 overflow-y-auto p-4 pb-20 md:pb-8 md:p-8">
-            {/* Marca de água do clube (logótipo), visível em todos os tamanhos */}
-            {clube.logoUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={clube.logoUrl} alt="" aria-hidden className="club-watermark" />
-            )}
-            <div className="app-content animar-entrada mx-auto max-w-[1200px]">
-              {!epocaAtiva && (
-                <div className="mb-4 rounded-md border border-ambar-500/30 bg-ambar-500/10 px-4 py-3 text-corpo text-cinza-900">
-                  Nenhuma época ativa —{" "}
-                  <a href="/definicoes/epocas" className="font-medium underline">
-                    define uma nas Definições
-                  </a>
-                  .
-                </div>
+          <div className="flex flex-1 overflow-hidden">
+            <Navegacao
+              mostrarComecar={plantelVazio}
+              // Agenda visível a todos os treinadores autenticados: obterAgendaClube
+              // já faz o scoping pelos escalões legíveis de cada membro (§6.4).
+              mostrarAgenda={true}
+            />
+
+            <ScrollTopo />
+            <main className="app-surface flex-1 overflow-y-auto p-4 pb-20 md:pb-8 md:p-8">
+              {/* Marca de água do clube (logótipo), visível em todos os tamanhos */}
+              {clube.logoUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={clube.logoUrl} alt="" aria-hidden className="club-watermark" />
               )}
-              {children}
-            </div>
-          </main>
+              <div className="app-content animar-entrada mx-auto max-w-[1200px]">
+                {!epocaAtiva && (
+                  <div className="mb-4 rounded-md border border-ambar-500/30 bg-ambar-500/10 px-4 py-3 text-corpo text-cinza-900">
+                    Nenhuma época ativa —{" "}
+                    <a href="/definicoes/epocas" className="font-medium underline">
+                      define uma nas Definições
+                    </a>
+                    .
+                  </div>
+                )}
+                {children}
+              </div>
+            </main>
+          </div>
         </div>
-      </div>
+      </GuardaLicenca>
     );
   } catch (err) {
     // Re-lança erros de controlo do Next (redirect/notFound) — mantém o fluxo

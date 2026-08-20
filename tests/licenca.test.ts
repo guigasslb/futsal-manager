@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { licencaValida, type LicencaAvaliavel } from "@/lib/licenca";
+import { deveBloquearPorLicenca } from "@/lib/guarda-licenca";
 
 // §3.11 — validade de licença (guarda de acesso à plataforma). Função pura.
 
@@ -39,5 +40,38 @@ describe("licencaValida (§3.11)", () => {
     expect(licencaValida(lic({ estado: "ATIVA", dataFim: new Date(AGORA) }), AGORA)).toBe(
       true,
     );
+  });
+});
+
+// §3.11 / §8.1 — decisão da guarda dependente da rota. O onboarding fica sempre
+// acessível (mesmo sem licença) para o utilizador concluir o setup antes do paywall.
+describe("deveBloquearPorLicenca (§3.11 / §8.1)", () => {
+  it("licença válida → nunca bloqueia (independente da rota)", () => {
+    expect(deveBloquearPorLicenca(true, "/dashboard")).toBe(false);
+    expect(deveBloquearPorLicenca(true, "/onboarding")).toBe(false);
+    expect(deveBloquearPorLicenca(true, null)).toBe(false);
+  });
+
+  it("sem licença + rota protegida → bloqueia", () => {
+    expect(deveBloquearPorLicenca(false, "/dashboard")).toBe(true);
+    expect(deveBloquearPorLicenca(false, "/plantel")).toBe(true);
+    expect(deveBloquearPorLicenca(false, "/")).toBe(true);
+  });
+
+  it("sem licença + /onboarding (exato) → não bloqueia", () => {
+    expect(deveBloquearPorLicenca(false, "/onboarding")).toBe(false);
+  });
+
+  it("sem licença + sub-rota de /onboarding → não bloqueia", () => {
+    expect(deveBloquearPorLicenca(false, "/onboarding/escaloes")).toBe(false);
+  });
+
+  it("sem licença + rota que só começa por 'onboarding' (falso positivo) → bloqueia", () => {
+    expect(deveBloquearPorLicenca(false, "/onboarding-extra")).toBe(true);
+  });
+
+  it("sem licença + pathname null/undefined (SSR) → bloqueia (fail-safe)", () => {
+    expect(deveBloquearPorLicenca(false, null)).toBe(true);
+    expect(deveBloquearPorLicenca(false, undefined)).toBe(true);
   });
 });
