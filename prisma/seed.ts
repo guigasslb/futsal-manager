@@ -17,9 +17,24 @@ if (process.env.NODE_ENV === "production" && (!process.env.SEED_PASS_GONCALO || 
 
 const PASS_GONCALO = process.env.SEED_PASS_GONCALO || "futsal2026";
 const PASS_ADJUNTO = process.env.SEED_PASS_ADJUNTO || "futsal2026";
+const PASS_ADMIN = process.env.SEED_PASS_ADMIN || "M!st3r@Adm1n#2026";
 const BCRYPT_COST = 12;
 
 async function main() {
+  // Utilizador admin de plataforma (backoffice /admin via allowlist ADMIN_EMAILS,
+  // independente de qualquer papel de clube). Upsert idempotente: corre sempre,
+  // mesmo quando o restante seed do clube já foi aplicado.
+  await prisma.utilizador.upsert({
+    where: { email: "admin@mister.app" },
+    update: {},
+    create: {
+      nome: "Admin",
+      email: "admin@mister.app",
+      passwordHash: await bcrypt.hash(PASS_ADMIN, BCRYPT_COST),
+    },
+  });
+  console.log(`Admin de plataforma pronto: admin@mister.app / ${PASS_ADMIN}`);
+
   const jaExiste = await prisma.clube.findFirst({
     where: { nome: "Juventude Sport Clube" },
   });

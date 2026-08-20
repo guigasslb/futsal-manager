@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   apagarCompeticao,
-  apagarResultadoExterno,
   type CompeticaoDetalhe as CompeticaoDetalheTipo,
   type LinhaClassificacao,
 } from "@/lib/actions/competicoes";
@@ -31,6 +30,7 @@ import { formatarDataCurta } from "@/lib/comunicacao-utils";
 import { CompeticaoForm } from "@/components/competicoes/CompeticaoForm";
 import { ResultadoExternoForm } from "@/components/competicoes/ResultadoExternoForm";
 import { TabelaClassificacao } from "@/components/competicoes/TabelaClassificacao";
+import { QuadroAgendamento } from "@/components/competicoes/QuadroAgendamento";
 
 type EscalaoBasico = { id: string; nome: string };
 type EpocaBasica = { id: string; nome: string; ativa: boolean };
@@ -55,18 +55,6 @@ export function CompeticaoDetalhe({
       if (res.sucesso) {
         toast.success("Competição apagada");
         router.push("/jogos/competicoes");
-        router.refresh();
-      } else {
-        toast.error(res.erro);
-      }
-    });
-  }
-
-  function apagarResultado(id: string) {
-    startTransition(async () => {
-      const res = await apagarResultadoExterno(id);
-      if (res.sucesso) {
-        toast.success("Resultado removido");
         router.refresh();
       } else {
         toast.error(res.erro);
@@ -166,58 +154,20 @@ export function CompeticaoDetalhe({
           <div className="flex justify-end">
             <ResultadoExternoForm competicaoId={competicao.id} />
           </div>
-          {competicao.resultados.length === 0 ? (
-            <p className="rounded-md border border-dashed border-cinza-300 p-6 text-center text-corpo-sec text-cinza-500">
-              Sem resultados externos. Adiciona resultados de outras equipas para completar a
-              classificação.
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {competicao.resultados.map((r) => (
-                <li
-                  key={r.id}
-                  className="flex items-center gap-3 rounded-md border border-cinza-200 bg-white p-3 shadow-card"
-                >
-                  <div className="flex-1">
-                    <p className="text-corpo text-cinza-900">
-                      <span className="font-medium">{r.equipaCasa}</span>{" "}
-                      <span className="font-semibold tabular-nums">
-                        {r.golosCasa} — {r.golosFora}
-                      </span>{" "}
-                      <span className="font-medium">{r.equipaFora}</span>
-                    </p>
-                    {r.data && (
-                      <p className="text-legenda text-cinza-500">{formatarDataCurta(r.data)}</p>
-                    )}
-                  </div>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="icon" aria-label="Remover resultado" disabled={pending}>
-                        <Trash2 className="h-4 w-4 text-vermelho-600" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Remover resultado?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          {r.equipaCasa} {r.golosCasa} — {r.golosFora} {r.equipaFora}
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => apagarResultado(r.id)}
-                          className="bg-vermelho-600 hover:bg-vermelho-600/90 text-white"
-                        >
-                          Remover
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </li>
-              ))}
-            </ul>
-          )}
+          <QuadroAgendamento
+            resultados={competicao.resultados.map((r) => ({
+              id: r.id,
+              equipaCasa: r.equipaCasa,
+              equipaFora: r.equipaFora,
+              golosCasa: r.golosCasa,
+              golosFora: r.golosFora,
+              ronda: r.ronda,
+              data: r.data,
+              dataHora: r.dataHora,
+              estado: r.estado,
+            }))}
+            formato={competicao.formato}
+          />
         </TabsContent>
 
         <TabsContent value="jogos" className="space-y-2">
