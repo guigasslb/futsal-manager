@@ -1050,9 +1050,10 @@ export async function obterAnaliticoClubeEpoca(
       where: filtroEpocaEscaloes,
       select: { escalaoId: true, golosMarcados: true, golosSofridos: true },
     }),
-    prisma.sessao.findMany({
+    prisma.sessao.groupBy({
+      by: ["escalaoId"],
       where: filtroEpocaEscaloes,
-      select: { escalaoId: true },
+      _count: { _all: true },
     }),
     prisma.atletaEscalao.groupBy({
       by: ["escalaoId"],
@@ -1064,27 +1065,26 @@ export async function obterAnaliticoClubeEpoca(
       },
       _count: { _all: true },
     }),
-    prisma.presenca.findMany({
+    prisma.presenca.groupBy({
+      by: ["escalaoId"],
       where: {
         escalaoId: { in: escalaoIds },
         estado: { in: [...ESTADOS_PRESENTE] },
         sessao: { epocaId: epoca.id },
       },
-      select: { escalaoId: true },
+      _count: { _all: true },
     }),
   ]);
 
   const nAtletasPorEscalao = new Map<string, number>(
     participacoes.map((p) => [p.escalaoId, p._count._all]),
   );
-  const sessoesPorEscalao = new Map<string, number>();
-  for (const s of sessoes)
-    sessoesPorEscalao.set(s.escalaoId, (sessoesPorEscalao.get(s.escalaoId) ?? 0) + 1);
-  const presencasPorEscalao = new Map<string, number>();
-  for (const p of presencas) {
-    if (!p.escalaoId) continue;
-    presencasPorEscalao.set(p.escalaoId, (presencasPorEscalao.get(p.escalaoId) ?? 0) + 1);
-  }
+  const sessoesPorEscalao = new Map<string, number>(
+    sessoes.map((s) => [s.escalaoId, s._count._all]),
+  );
+  const presencasPorEscalao = new Map<string, number>(
+    presencas.map((p) => [p.escalaoId, p._count._all]),
+  );
 
   interface Acc {
     jogos: number;

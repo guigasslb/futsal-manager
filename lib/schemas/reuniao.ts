@@ -9,6 +9,7 @@ export const reuniaoSchema = z
     participantes: z.string().max(1000).optional(),
     ordemTrabalhos: z.string().max(3000).optional(),
     ata: z.string().max(10000).optional(),
+    afixada: z.boolean().optional().default(false),
   })
   .refine((d) => d.ambito !== "ESCALAO" || !!d.escalaoId, {
     message: "Seleciona o escalão para uma reunião de escalão",

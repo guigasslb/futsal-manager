@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/select";
 import { criarSessao, atualizarSessao } from "@/lib/actions/treinos";
 import { verificarConflitoAgenda } from "@/lib/actions/agenda";
+import { DialogoAlcance } from "@/components/treinos/DialogoAlcance";
+import type { Alcance } from "@/lib/schemas/planoSemanal";
 import type { ConflitoAgenda } from "@/lib/utils/agenda-conflitos";
 import {
   TIPOS_SESSAO,
@@ -51,7 +53,20 @@ type SessaoParaEdicao = Pick<
   | "objetivo"
   | "local"
   | "notas"
+  | "planoSemanalId"
 >;
+
+/** Payload de agendamento/conteúdo enviado a criar/atualizar sessão. */
+type DadosSessao = {
+  data: string;
+  escalaoId: string | undefined;
+  tipoSessao: TipoSessao;
+  momentoSemana: MomentoSemana | undefined;
+  duracaoMin: number | undefined;
+  objetivo: string | undefined;
+  local: string | undefined;
+  notas: string | undefined;
+};
 
 export function SessaoForm({
   escaloes,
@@ -121,6 +136,50 @@ export function SessaoForm({
     };
   }, [dataValor, localValor, duracaoValor, escalaoId, sessao?.id]);
 
+  // §8.8.1: ao editar uma sessão ligada a um plano, escolher o alcance da alteração.
+  const ligadaAoPlano = !!sessao && sessao.planoSemanalId !== null;
+  const [dialogoAberto, setDialogoAberto] = useState(false);
+  const [dadosPendentes, setDadosPendentes] = useState<DadosSessao | null>(null);
+
+  function submeter(dados: DadosSessao, alcance?: Alcance) {
+    startTransition(async () => {
+      if (sessao) {
+        const res = await atualizarSessao(sessao.id, dados, alcance);
+        if (res.sucesso) {
+          const prop = res.dados.propagacao;
+          if (prop) {
+            toast.success(
+              `${prop.atualizadas} sessão(ões) atualizada(s)` +
+                (prop.personalizadasMantidas > 0
+                  ? ` · ${prop.personalizadasMantidas} personalizada(s) mantida(s)`
+                  : ""),
+            );
+          } else {
+            toast.success("Sessão atualizada");
+          }
+          setDialogoAberto(false);
+          router.push(`/treinos/${res.dados.id}`);
+          router.refresh();
+        } else {
+          setDialogoAberto(false);
+          setErroGeral(res.erro);
+          if (res.camposInvalidos) setErros(res.camposInvalidos);
+        }
+        return;
+      }
+
+      const res = await criarSessao(dados);
+      if (res.sucesso) {
+        toast.success("Sessão criada");
+        router.push(`/treinos/${res.dados.id}`);
+        router.refresh();
+      } else {
+        setErroGeral(res.erro);
+        if (res.camposInvalidos) setErros(res.camposInvalidos);
+      }
+    });
+  }
+
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -129,7 +188,7 @@ export function SessaoForm({
 
     const duracaoRaw = String(fd.get("duracaoMin") ?? "").trim();
 
-    const dados = {
+    const dados: DadosSessao = {
       data: String(fd.get("data")),
       escalaoId: escalaoId || undefined,
       tipoSessao,
@@ -145,19 +204,14 @@ export function SessaoForm({
       notas: String(fd.get("notas") ?? "").trim() || undefined,
     };
 
-    startTransition(async () => {
-      const res = sessao
-        ? await atualizarSessao(sessao.id, dados)
-        : await criarSessao(dados);
-      if (res.sucesso) {
-        toast.success(sessao ? "Sessão atualizada" : "Sessão criada");
-        router.push(`/treinos/${res.dados.id}`);
-        router.refresh();
-      } else {
-        setErroGeral(res.erro);
-        if (res.camposInvalidos) setErros(res.camposInvalidos);
-      }
-    });
+    // §8.8.1: sessão ligada a um plano → perguntar o alcance antes de guardar.
+    if (ligadaAoPlano) {
+      setDadosPendentes(dados);
+      setDialogoAberto(true);
+      return;
+    }
+
+    submeter(dados);
   }
 
   return (
@@ -314,6 +368,19 @@ export function SessaoForm({
           Cancelar
         </Button>
       </div>
+
+      {ligadaAoPlano && (
+        <DialogoAlcance
+          aberto={dialogoAberto}
+          onOpenChange={(v) => {
+            if (!pending) setDialogoAberto(v);
+          }}
+          pendente={pending}
+          onConfirmar={(alcance) => {
+            if (dadosPendentes) submeter(dadosPendentes, alcance);
+          }}
+        />
+      )}
     </form>
   );
 }

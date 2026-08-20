@@ -32,6 +32,14 @@ const securityHeaders = [
 
 const nextConfig = {
   reactStrictMode: true,
+  experimental: {
+    optimizePackageImports: ["lucide-react"],
+  },
+  images: {
+    remotePatterns: [{ protocol: "https", hostname: "**" }],
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 3600,
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

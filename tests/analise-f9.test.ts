@@ -24,8 +24,8 @@ vi.mock("@/lib/db", () => ({
     atletaEscalao: { count: vi.fn(), groupBy: vi.fn() },
     convocatoria: { count: vi.fn() },
     estatisticaAtleta: { findMany: vi.fn() },
-    sessao: { findMany: vi.fn(), count: vi.fn() },
-    presenca: { findMany: vi.fn(), count: vi.fn() },
+    sessao: { findMany: vi.fn(), count: vi.fn(), groupBy: vi.fn() },
+    presenca: { findMany: vi.fn(), count: vi.fn(), groupBy: vi.fn() },
     eventoJogo: { findMany: vi.fn() },
     jogo: { findMany: vi.fn() },
     competicao: { findMany: vi.fn() },
@@ -491,15 +491,17 @@ describe("obterAnaliticoClubeEpoca", () => {
       { escalaoId: ESCALAO, golosMarcados: 3, golosSofridos: 1 },
       { escalaoId: "esc2", golosMarcados: 0, golosSofridos: 2 },
     ]);
-    p.sessao.findMany.mockResolvedValue([
-      { escalaoId: ESCALAO }, { escalaoId: ESCALAO }, { escalaoId: "esc2" },
+    p.sessao.groupBy.mockResolvedValue([
+      { escalaoId: ESCALAO, _count: { _all: 2 } },
+      { escalaoId: "esc2", _count: { _all: 1 } },
     ]);
     p.atletaEscalao.groupBy.mockResolvedValue([
       { escalaoId: ESCALAO, _count: { _all: 10 } },
       { escalaoId: "esc2", _count: { _all: 8 } },
     ]);
-    p.presenca.findMany.mockResolvedValue([
-      { escalaoId: ESCALAO }, { escalaoId: ESCALAO }, { escalaoId: "esc2" },
+    p.presenca.groupBy.mockResolvedValue([
+      { escalaoId: ESCALAO, _count: { _all: 2 } },
+      { escalaoId: "esc2", _count: { _all: 1 } },
     ]);
 
     const r = await obterAnaliticoClubeEpoca();
@@ -533,9 +535,9 @@ describe("relatório partilhável (token + snapshot)", () => {
     // Dados para o analítico de clube (chamado internamente).
     p.escalao.findMany.mockResolvedValue([{ id: ESCALAO, nome: "Sub-13", ordem: 0 }]);
     p.jogo.findMany.mockResolvedValue([{ escalaoId: ESCALAO, golosMarcados: 2, golosSofridos: 0 }]);
-    p.sessao.findMany.mockResolvedValue([{ escalaoId: ESCALAO }]);
+    p.sessao.groupBy.mockResolvedValue([{ escalaoId: ESCALAO, _count: { _all: 1 } }]);
     p.atletaEscalao.groupBy.mockResolvedValue([{ escalaoId: ESCALAO, _count: { _all: 5 } }]);
-    p.presenca.findMany.mockResolvedValue([{ escalaoId: ESCALAO }]);
+    p.presenca.groupBy.mockResolvedValue([{ escalaoId: ESCALAO, _count: { _all: 1 } }]);
 
     let snapshotGuardado: unknown = null;
     p.relatorioPartilhado.create.mockImplementation(

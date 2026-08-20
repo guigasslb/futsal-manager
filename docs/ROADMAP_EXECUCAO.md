@@ -1,6 +1,6 @@
 # Mister — Roadmap de Execução (features de auditoria QA + personas)
 
-> **Fonte de verdade do produto:** `docs/FutsalManager_Spec_v7.md` (secção 8 = analytics, secção 16 = ordem de desenvolvimento).
+> **Fonte de verdade do produto:** `docs/Mister_Spec_v7.md` (secção 8 = analytics, secção 16 = ordem de desenvolvimento).
 > **Regra inquebrável:** nenhuma alteração de código sem atualizar a bíblia no mesmo passo (changelog na secção 19).
 > **Definição de pronto (por task):** conforme a bíblia · validação Zod + `Resultado<T>` · `auth()` + `obterEpocaAtiva()` + filtro por clube/época no servidor · estados loading/vazio/erro · responsivo (alvos ≥44px) · `npm run typecheck` + `npm run lint` + `npm run test` limpos (910 testes verdes) · secção da bíblia atualizada.
 
@@ -214,7 +214,7 @@ F5 (audit)  ── por último ── converge com EXECUTION_PLAN.md P3.3 (decid
 
 ## 3. Regras transversais (não negociáveis)
 
-1. **Bíblia primeiro:** cada feature fecha com `docs/FutsalManager_Spec_v7.md` (secção relevante + changelog §19) atualizada **no mesmo passo** do código.
+1. **Bíblia primeiro:** cada feature fecha com `docs/Mister_Spec_v7.md` (secção relevante + changelog §19) atualizada **no mesmo passo** do código.
 2. **Auth intocável:** nenhuma destas 5 features toca login/sessão/middleware/SDK de identidade. F4 usa Supabase **Storage** (serviço distinto do Auth.js) — se surgir qualquer dúvida de fronteira com auth, **parar e perguntar** (Regra Sagrada Nº 3).
 3. **Gate de conclusão:** nada é "pronto" sem `typecheck` + `lint` + `test` (910 verdes) e zero stubs/TODOs (Regra Sagrada Nº 1). Tasks de UI/tema exigem **validação visual** adicional (memória `feedback_visual_validation.md`).
 4. **Auto-revisão à primeira (Regra Nº 6):** sem *scope creep* (F5 instrumenta actions com diff mínimo), sem *dead code* (F4 remove o placeholder "em breve"), formatos validados contra a fonte real (F1 CSV comparado contra a estrutura analítica, não contra o próprio teste).
@@ -223,4 +223,4 @@ F5 (audit)  ── por último ── converge com EXECUTION_PLAN.md P3.3 (decid
 
 ---
 
-*Documento gerado a 2026-08-13. Fonte de verdade permanece `docs/FutsalManager_Spec_v7.md`. Este roadmap é um plano de execução — não altera a bíblia; cada task, ao ser executada, atualiza a bíblia no mesmo passo.*
+*Documento gerado a 2026-08-13. Fonte de verdade permanece `docs/Mister_Spec_v7.md`. Este roadmap é um plano de execução — não altera a bíblia; cada task, ao ser executada, atualiza a bíblia no mesmo passo.*

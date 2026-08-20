@@ -15,6 +15,8 @@ import {
   type PresencaInicial,
 } from "@/components/treinos/MarcadorPresencas";
 import { RegistoRpeSessao } from "@/components/treinos/RegistoRpeSessao";
+import { IniciarTreinoBotao } from "@/components/treinos/IniciarTreinoBotao";
+import { NotasSessao } from "@/components/treinos/NotasSessao";
 
 function formatarDataHora(data: Date): string {
   return new Date(data).toLocaleString("pt-PT", {
@@ -50,10 +52,32 @@ export default async function DetalheSessaoPage({
 
   const presencasIniciais: Record<string, PresencaInicial> = {};
   for (const p of s.presencas)
-    presencasIniciais[p.atletaId] = { estado: p.estado, motivo: p.motivo };
+    presencasIniciais[p.atletaId] = {
+      estado: p.estado,
+      motivo: p.motivo,
+      justificacao: p.justificacao,
+    };
 
   const foraDaEpoca =
     epoca && (new Date(s.data) < epoca.dataInicio || new Date(s.data) > epoca.dataFim);
+
+  // §4.2.1: fallback ao snapshot quando o exercício original já não é visível (o
+  // treinador saiu com o master editável) — sem "buracos". Resolvido uma vez e
+  // partilhado entre o gestor de exercícios e o modo treino.
+  const exerciciosResolvidos = s.exercicios.map((se) => {
+    const r = resolverExercicioSessao(se);
+    return {
+      id: se.id,
+      ordem: se.ordem,
+      duracaoMin: se.duracaoMin,
+      nome: r.nome,
+      exercicioId: r.id ?? "",
+      categoriaPrincipal: r.categoriaPrincipal,
+      descricao: r.descricao,
+      objetivo: r.objetivo,
+      diagrama: r.diagrama,
+    };
+  });
 
   return (
     <div className="space-y-6">
@@ -104,59 +128,63 @@ export default async function DetalheSessaoPage({
         )}
       </div>
 
-      {/* Duas colunas. Em mobile as presenças vêm primeiro (tarefa mais frequente
-          no arranque do treino); em desktop mantém-se exercícios à esquerda. */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="order-2 lg:order-1">
-          <GestorExercicios
-            sessaoId={s.id}
-            exercicios={s.exercicios.map((se) => {
-              // §4.2.1: fallback ao snapshot quando o exercício original já não é
-              // visível (o treinador saiu com o master editável) — sem "buracos".
-              const r = resolverExercicioSessao(se);
-              return {
-                id: se.id,
-                ordem: se.ordem,
-                duracaoMin: se.duracaoMin,
-                exercicio: {
-                  id: r.id ?? "",
-                  nome: r.nome,
-                  categoriaPrincipal: r.categoriaPrincipal,
-                },
-              };
-            })}
-            biblioteca={biblioteca.map((b) => ({
-              id: b.id,
-              nome: b.nome,
-              categoriaPrincipal: b.categoriaPrincipal,
-              duracaoMin: b.duracaoMin,
-            }))}
-          />
-        </div>
+      {/* Melhoria 3/4.2 — arranque do modo treino (condução em campo). */}
+      <IniciarTreinoBotao
+        exercicios={exerciciosResolvidos.map((e) => ({
+          id: e.id,
+          nome: e.nome,
+          categoriaPrincipal: e.categoriaPrincipal,
+          objetivo: e.objetivo,
+          descricao: e.descricao,
+          duracaoMin: e.duracaoMin,
+          diagrama: e.diagrama,
+        }))}
+      />
 
-        <div className="order-1 lg:order-2">
-          <MarcadorPresencas
-            sessaoId={s.id}
-            atletas={atletas.map((a) => ({
-              id: a.id,
-              nome: a.nome,
-              // Número da participação neste escalão (F1).
-              numero: a.participacaoContexto?.numero ?? s.numeroPorAtleta[a.id] ?? null,
-            }))}
-            presencasIniciais={presencasIniciais}
-          />
-        </div>
+      {/* Melhoria 4.3 — presenças primeiro (primeira ação antes do treino). */}
+      <MarcadorPresencas
+        sessaoId={s.id}
+        atletas={atletas.map((a) => ({
+          id: a.id,
+          nome: a.nome,
+          // Número da participação neste escalão (F1).
+          numero: a.participacaoContexto?.numero ?? s.numeroPorAtleta[a.id] ?? null,
+        }))}
+        presencasIniciais={presencasIniciais}
+      />
+
+      {/* Melhoria 1/4.4 — plano de exercícios com conteúdo (diagrama, objetivo, descrição). */}
+      <GestorExercicios
+        sessaoId={s.id}
+        exercicios={exerciciosResolvidos.map((e) => ({
+          id: e.id,
+          ordem: e.ordem,
+          duracaoMin: e.duracaoMin,
+          exercicio: {
+            id: e.exercicioId,
+            nome: e.nome,
+            categoriaPrincipal: e.categoriaPrincipal,
+            descricao: e.descricao,
+            objetivo: e.objetivo,
+            diagrama: e.diagrama,
+          },
+        }))}
+        biblioteca={biblioteca.map((b) => ({
+          id: b.id,
+          nome: b.nome,
+          categoriaPrincipal: b.categoriaPrincipal,
+          duracaoMin: b.duracaoMin,
+        }))}
+      />
+
+      {/* P4.8 (§8.20): RPE da sessão — alimenta a análise de carga/ACWR do escalão.
+          `id` serve de âncora ao foco automático após terminar o modo treino. */}
+      <div id="carga-sessao">
+        <RegistoRpeSessao sessaoId={s.id} rpeInicial={s.rpeSessao} />
       </div>
 
-      {/* P4.8 (§8.20): RPE da sessão — alimenta a análise de carga/ACWR do escalão. */}
-      <RegistoRpeSessao sessaoId={s.id} rpeInicial={s.rpeSessao} />
-
-      {s.notas && (
-        <div className="rounded-lg border border-cinza-200 bg-white p-5 shadow-card">
-          <p className="text-legenda font-medium uppercase tracking-wide text-cinza-500">Notas</p>
-          <p className="mt-1 text-corpo text-cinza-900 whitespace-pre-wrap">{s.notas}</p>
-        </div>
-      )}
+      {/* Melhoria 4.6 — notas sempre visíveis e editáveis inline. */}
+      <NotasSessao sessaoId={s.id} notasIniciais={s.notas} />
     </div>
   );
 }

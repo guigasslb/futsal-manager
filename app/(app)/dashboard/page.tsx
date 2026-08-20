@@ -13,6 +13,8 @@ import {
   ArrowRight,
   CalendarClock,
   Sparkles,
+  Users2,
+  Pin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
@@ -20,6 +22,7 @@ import { prisma } from "@/lib/db";
 import { obterEpocaAtiva, obterClubeIdAtual } from "@/lib/epoca-context";
 import { obterClubeAtivo, obterMembroAtual } from "@/lib/permissoes";
 import { obterSeccoes } from "@/lib/actions/seccoes";
+import { obterReunioesParaDashboard } from "@/lib/actions/reunioes";
 import { EstadoVazio } from "@/components/layout/EstadosUI";
 import { BadgeModalidade } from "@/components/plantel/BadgeModalidade";
 import {
@@ -181,6 +184,11 @@ export default async function DashboardPage() {
   const seccoes = resSeccoes.sucesso ? resSeccoes.dados : [];
   const multiSeccao = seccoes.length > 1;
   const seccaoPorId = new Map(seccoes.map((s) => [s.id, s]));
+
+  // Reuniões para o dashboard (futuras + afixadas) — §reuniões.
+  const resReunioes = await obterReunioesParaDashboard();
+  const reunioesDashboard = resReunioes.sucesso ? resReunioes.dados : [];
+  const nomePorEscalao = new Map(escaloesContagem.map((e) => [e.id, e.nome]));
 
   // Lembretes in-app: treino/jogo hoje (usa os dados existentes; sem push).
   const sessoesHojeLite: EventoLite[] = sessoesHoje.map((s) => ({
@@ -423,6 +431,49 @@ export default async function DashboardPage() {
           </div>
         ))}
         </>
+      )}
+
+      {/* Próximas reuniões (futuras + afixadas) */}
+      {reunioesDashboard.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-legenda font-semibold uppercase tracking-wide text-cinza-400">
+            Próximas reuniões
+          </p>
+          <div className="animar-cascata grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {reunioesDashboard.map((r) => (
+              <Link
+                key={r.id}
+                href="/reunioes"
+                className="card-base card-hover group flex items-center gap-3 p-4"
+              >
+                <span className="chip-clube flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl">
+                  <Users2 className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-1.5 text-corpo font-semibold text-cinza-900">
+                    {r.afixada && (
+                      <Pin className="h-3.5 w-3.5 flex-shrink-0 fill-primary text-primary" />
+                    )}
+                    <span className="truncate">{r.titulo}</span>
+                  </p>
+                  <p className="text-legenda text-cinza-500">
+                    {new Date(r.data).toLocaleString("pt-PT", {
+                      day: "2-digit",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                    {" · "}
+                    {r.ambito === "CLUBE"
+                      ? "Clube"
+                      : nomePorEscalao.get(r.escalaoId ?? "") ?? "Escalão"}
+                  </p>
+                </div>
+                <ChevronRight className="h-4 w-4 flex-shrink-0 text-cinza-300 transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Ações rápidas */}

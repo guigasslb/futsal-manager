@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import {
@@ -28,7 +29,7 @@ export interface ContextoMembro {
 }
 
 /** Utilizador autenticado (sem hash). Null se não houver sessão. */
-export async function obterUtilizadorAtual(): Promise<UtilizadorSemHash | null> {
+export const obterUtilizadorAtual = cache(async (): Promise<UtilizadorSemHash | null> => {
   const session = await auth();
   if (!session?.user?.id) return null;
   const u = await prisma.utilizador.findUnique({
@@ -43,13 +44,13 @@ export async function obterUtilizadorAtual(): Promise<UtilizadorSemHash | null> 
     },
   });
   return u;
-}
+});
 
 /**
  * Contexto do membro na adesão de clube ATIVA (secção 5.4).
  * Null se não autenticado ou sem clube (modo individual).
  */
-export async function obterMembroAtual(): Promise<ContextoMembro | null> {
+export const obterMembroAtual = cache(async (): Promise<ContextoMembro | null> => {
   const session = await auth();
   if (!session?.user?.id) return null;
 
@@ -81,13 +82,13 @@ export async function obterMembroAtual(): Promise<ContextoMembro | null> {
     escaloesAtribuidos: membro.atribuicoes.map((a) => a.escalaoId),
     seccoesCoordenadas: membro.seccoes.map((s) => s.seccaoId),
   };
-}
+});
 
 /** Clube ativo do utilizador (ou null no modo individual). */
-export async function obterClubeAtivo(): Promise<Clube | null> {
+export const obterClubeAtivo = cache(async (): Promise<Clube | null> => {
   const ctx = await obterMembroAtual();
   return ctx?.clube ?? null;
-}
+});
 
 export type ResultadoPermissao =
   | { ok: true; ctx: ContextoMembro }
@@ -245,7 +246,7 @@ export async function exigirCapacidadeEmAlgumEscalao(
  * Devolve "TODOS" quando o âmbito é todo o clube (sem restrição).
  * Devolve [] se não houver membro ativo.
  */
-export async function escaloesLegiveis(): Promise<string[] | "TODOS"> {
+export const escaloesLegiveis = cache(async (): Promise<string[] | "TODOS"> => {
   const ctx = await obterMembroAtual();
   if (!ctx) return [];
   if (ctx.ambito === "TODO_CLUBE") return "TODOS";
@@ -271,4 +272,4 @@ export async function escaloesLegiveis(): Promise<string[] | "TODOS"> {
       ...daSeccao.map((v) => v.id),
     ]),
   ];
-}
+});

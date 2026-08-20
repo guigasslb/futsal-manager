@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { cookies } from "next/headers";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { auth } from "@/lib/auth";
@@ -74,9 +75,8 @@ export default async function AppLayout({
     // atual: o fluxo de /onboarding fica acessível sem licença para o utilizador
     // concluir o setup antes do paywall. O pathname não está disponível de forma
     // limpa num layout server-side sem alterar o middleware (intocável).
-    const licencaOk = await temLicencaValida(membro.clube.id, membro.utilizadorId);
-
-    const [epocasResult, epocaAtiva, seccoesResult] = await Promise.all([
+    const [licencaOk, epocasResult, epocaAtiva, seccoesResult] = await Promise.all([
+      temLicencaValida(membro.clube.id, membro.utilizadorId),
       listarEpocas(),
       obterEpocaAtiva(),
       obterSeccoes(),
@@ -161,8 +161,14 @@ export default async function AppLayout({
             <main className="app-surface flex-1 overflow-y-auto p-4 pb-20 md:pb-8 md:p-8">
               {/* Marca de água do clube (logótipo), visível em todos os tamanhos */}
               {clube.logoUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={clube.logoUrl} alt="" aria-hidden className="club-watermark" />
+                <Image
+                  src={clube.logoUrl}
+                  alt=""
+                  aria-hidden={true}
+                  fill
+                  sizes="100vw"
+                  className="club-watermark"
+                />
               )}
               <div className="app-content animar-entrada mx-auto max-w-[1200px]">
                 {!epocaAtiva && (

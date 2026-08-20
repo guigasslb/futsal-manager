@@ -6,8 +6,10 @@ import { auth } from "@/lib/auth";
 import { obterEpocaAtiva, obterClubeIdAtual } from "@/lib/epoca-context";
 import { exigirCapacidade, podeLerEscalao, escaloesLegiveis } from "@/lib/permissoes";
 import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
-import { sessaoSchema, marcarPresencasSchema } from "@/lib/schemas/treino";
+import { sessaoSchema, marcarPresencasSchema, notasSessaoSchema } from "@/lib/schemas/treino";
+import { alcanceSchema } from "@/lib/schemas/planoSemanal";
 import { construirSnapshotExercicio } from "@/lib/snapshot-exercicio";
+import { combinarDataHora, duracaoEntreHoras, horaDeData, somarMinutos } from "@/lib/plano-semanal";
 import { Prisma, type Epoca, type Sessao } from "@prisma/client";
 
 const PATH = "/treinos";
@@ -218,12 +220,33 @@ export async function criarSessao(dados: unknown): Promise<Resultado<Sessao>> {
   return ok(sessao);
 }
 
-export async function atualizarSessao(id: string, dados: unknown): Promise<Resultado<Sessao>> {
+/**
+ * Sessão atualizada. Quando o alcance é ESTA_E_FUTURAS, inclui a contagem da
+ * propagação (§8.8.1) para a UI reportar "N atualizadas; M personalizadas mantidas".
+ */
+export type SessaoAtualizada = Sessao & {
+  propagacao?: { atualizadas: number; personalizadasMantidas: number };
+};
+
+/**
+ * §8.8.1 — `alcance` controla o âmbito da edição de uma sessão ligada a um plano:
+ *  - SO_ESTA (default): altera só esta; marca `personalizada` se ligada a um plano.
+ *  - ESTA_E_FUTURAS: atualiza o baseline do dia e propaga o AGENDAMENTO (hora,
+ *    duração, local, tipo) às sessões futuras não-personalizadas do mesmo dia.
+ *    Nunca toca no passado nem no conteúdo (exercícios/presenças/notas/objetivo/RPE).
+ */
+export async function atualizarSessao(
+  id: string,
+  dados: unknown,
+  alcance?: unknown,
+): Promise<Resultado<SessaoAtualizada>> {
   const clubeId = await obterClubeIdAtual();
   if (!clubeId) return erro("Não autenticado");
 
   const parsed = sessaoSchema.safeParse(dados);
   if (!parsed.success) return erroDeValidacao(parsed.error);
+
+  const alcanceParsed = alcanceSchema.catch("SO_ESTA").parse(alcance ?? "SO_ESTA");
 
   // Guarda de dupla validação: só treinos NORMAL podem ligar a periodização.
   if (parsed.data.tipoSessao !== "NORMAL" && parsed.data.planeamentoId) {
@@ -263,6 +286,13 @@ export async function atualizarSessao(id: string, dados: unknown): Promise<Resul
     );
   }
 
+  // §8.8.1: "só esta" numa sessão ligada a um plano marca-a como personalizada
+  // (fica protegida de futuras propagações). "Esta e futuras" mantém-na como
+  // parte do plano (não personalizada).
+  const ligadaAoPlano = existe.planoSemanalId !== null;
+  const personalizada =
+    ligadaAoPlano && alcanceParsed === "SO_ESTA" ? true : undefined;
+
   const sessao = await prisma.sessao.update({
     where: { id },
     data: {
@@ -275,11 +305,93 @@ export async function atualizarSessao(id: string, dados: unknown): Promise<Resul
       objetivo: parsed.data.objetivo ?? null,
       local: parsed.data.local ?? null,
       notas: parsed.data.notas ?? null,
+      ...(personalizada !== undefined ? { personalizada } : {}),
     },
   });
+
+  let propagacao: SessaoAtualizada["propagacao"];
+  if (alcanceParsed === "ESTA_E_FUTURAS" && existe.planoSemanalDiaId) {
+    propagacao = await propagarAgendamento(existe.planoSemanalDiaId, id, {
+      data: parsed.data.data,
+      duracaoMin: parsed.data.duracaoMin ?? null,
+      local: parsed.data.local ?? null,
+      tipoSessao: parsed.data.tipoSessao,
+    });
+  }
+
   revalidatePath(PATH);
   revalidatePath(`${PATH}/${id}`);
-  return ok(sessao);
+  return ok({ ...sessao, propagacao });
+}
+
+/**
+ * §8.8.1 — Propaga o AGENDAMENTO de uma sessão-âncora ao baseline do dia e às
+ * sessões FUTURAS não-personalizadas do mesmo `planoSemanalDiaId` (exceto a
+ * âncora, já atualizada). Só campos de agendamento; nunca o passado nem o
+ * conteúdo. Devolve os contadores para a UI.
+ */
+async function propagarAgendamento(
+  planoSemanalDiaId: string,
+  ancoraId: string,
+  campos: { data: Date; duracaoMin: number | null; local: string | null; tipoSessao: Sessao["tipoSessao"] },
+): Promise<{ atualizadas: number; personalizadasMantidas: number }> {
+  const agora = new Date();
+  const horaInicio = horaDeData(campos.data);
+
+  // Atualiza o baseline do dia (hora/local/tipo; hora de fim a partir da duração).
+  const dia = await prisma.planoSemanalDia.findUnique({
+    where: { id: planoSemanalDiaId },
+    select: { horaInicio: true, horaFim: true },
+  });
+  if (dia) {
+    const duracaoMin =
+      campos.duracaoMin ?? duracaoEntreHoras(dia.horaInicio, dia.horaFim);
+    await prisma.planoSemanalDia.update({
+      where: { id: planoSemanalDiaId },
+      data: {
+        horaInicio,
+        horaFim: somarMinutos(horaInicio, duracaoMin),
+        local: campos.local,
+        tipoSessao: campos.tipoSessao,
+      },
+    });
+  }
+
+  const alvo = await prisma.sessao.findMany({
+    where: {
+      planoSemanalDiaId,
+      personalizada: false,
+      data: { gte: agora },
+      id: { not: ancoraId },
+    },
+    select: { id: true, data: true },
+  });
+
+  await prisma.$transaction(
+    alvo.map((s) =>
+      prisma.sessao.update({
+        where: { id: s.id },
+        data: {
+          data: combinarDataHora(s.data, horaInicio),
+          duracaoMin: campos.duracaoMin,
+          local: campos.local,
+          tipoSessao: campos.tipoSessao,
+        },
+      }),
+    ),
+  );
+
+  const personalizadasMantidas = await prisma.sessao.count({
+    where: {
+      planoSemanalDiaId,
+      personalizada: true,
+      data: { gte: agora },
+      id: { not: ancoraId },
+    },
+  });
+
+  // +1 pela âncora (sempre atualizada).
+  return { atualizadas: alvo.length + 1, personalizadasMantidas };
 }
 
 export async function apagarSessao(id: string): Promise<Resultado<void>> {
@@ -294,6 +406,35 @@ export async function apagarSessao(id: string): Promise<Resultado<void>> {
 
   await prisma.sessao.delete({ where: { id } });
   revalidatePath(PATH);
+  return ok(undefined);
+}
+
+/**
+ * Melhoria 4.6 — Atualiza apenas as notas da sessão (edição inline no detalhe,
+ * sem passar pelo formulário completo). Mantém as restrições habituais: clube do
+ * utilizador + capacidade TREINOS_GERIR no escalão da sessão.
+ */
+export async function atualizarNotasSessao(
+  sessaoId: string,
+  notas: unknown,
+): Promise<Resultado<void>> {
+  const clubeId = await obterClubeIdAtual();
+  if (!clubeId) return erro("Não autenticado");
+
+  const sessao = await prisma.sessao.findFirst({ where: { id: sessaoId, escalao: { clubeId } } });
+  if (!sessao) return erro("Sessão não encontrada");
+
+  const perm = await exigirCapacidade("TREINOS_GERIR", sessao.escalaoId);
+  if (!perm.ok) return erro(perm.erro);
+
+  const parsed = notasSessaoSchema.safeParse({ notas });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
+
+  await prisma.sessao.update({
+    where: { id: sessaoId },
+    data: { notas: parsed.data.notas.trim() === "" ? null : parsed.data.notas },
+  });
+  revalidatePath(`${PATH}/${sessaoId}`);
   return ok(undefined);
 }
 

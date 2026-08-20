@@ -29,6 +29,7 @@ import { ExportarCsvBotao } from "@/components/analiticos/ExportarCsvBotao";
 import { GerarRelatorioBotao } from "@/components/relatorios/GerarRelatorioBotao";
 import { EstadoVazio } from "@/components/layout/EstadosUI";
 import { ApagarAtletaDefinitivamenteButton } from "@/components/plantel/ApagarAtletaDefinitivamenteButton";
+import { ToggleAtivoAtleta } from "@/components/plantel/ToggleAtivoAtleta";
 import { LABEL_POSICAO } from "@/lib/schemas/atleta";
 
 function calcularIdade(dataNascimento: Date): number {
@@ -263,6 +264,13 @@ export default async function PerfilAtletaPage({
         </TabsContent>
 
         <TabsContent value="dados" className="space-y-4">
+          {/* Estado do atleta no plantel (secção 8). Gerível por quem gere o plantel. */}
+          {podeGerirPlantel && (
+            <div className="rounded-lg border border-cinza-200 bg-white p-5 shadow-card">
+              <ToggleAtivoAtleta atletaId={a.id} ativoInicial={a.ativo} />
+            </div>
+          )}
+
           {a.dataNascimento || a.observacoes ? (
             <div className="rounded-lg border border-cinza-200 bg-white p-5 shadow-card space-y-4">
               {a.dataNascimento && (

@@ -14,6 +14,7 @@ import {
   actualizarEventoCalendario,
   eventoParaSessao,
   eventoParaJogo,
+  eventoParaReuniao,
 } from "@/lib/google-calendar";
 import type { IntegracaoCalendario } from "@prisma/client";
 
@@ -73,7 +74,7 @@ export async function desconectarGoogleCalendar(): Promise<Resultado<void>> {
  * engolido. Idempotente via `googleEventId`.
  */
 export async function sincronizarComCalendario(
-  tipo: "SESSAO" | "JOGO",
+  tipo: "SESSAO" | "JOGO" | "REUNIAO",
   id: string,
 ): Promise<void> {
   try {
@@ -119,6 +120,37 @@ export async function sincronizarComCalendario(
       } else {
         const eventId = await criarEventoCalendario(client, calendarId, evento);
         await prisma.sessao.update({ where: { id: sessao.id }, data: { googleEventId: eventId } });
+      }
+      return;
+    }
+
+    if (tipo === "REUNIAO") {
+      const reuniao = await prisma.reuniao.findFirst({
+        where: { id, clubeId },
+        select: {
+          id: true,
+          data: true,
+          titulo: true,
+          ordemTrabalhos: true,
+          googleEventId: true,
+        },
+      });
+      if (!reuniao) return;
+
+      const evento = eventoParaReuniao({
+        titulo: reuniao.titulo,
+        data: reuniao.data,
+        ordemTrabalhos: reuniao.ordemTrabalhos ?? undefined,
+      });
+
+      if (reuniao.googleEventId) {
+        await actualizarEventoCalendario(client, calendarId, reuniao.googleEventId, evento);
+      } else {
+        const eventId = await criarEventoCalendario(client, calendarId, evento);
+        await prisma.reuniao.update({
+          where: { id: reuniao.id },
+          data: { googleEventId: eventId },
+        });
       }
       return;
     }

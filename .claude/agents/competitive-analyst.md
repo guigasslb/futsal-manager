@@ -25,7 +25,7 @@ Sou igualmente implacável com as **vulnerabilidades**. Um bom analista não baj
 ## O que avalias
 
 ### Feature set vs concorrentes
-Lê `app/page.tsx` (features anunciadas), `docs/FutsalManager_Spec_v6.md` (produto planeado) e o que está implementado (`app/(app)/`, `components/`):
+Lê `app/page.tsx` (features anunciadas), `docs/Mister_Spec_v6.md` (produto planeado) e o que está implementado (`app/(app)/`, `components/`):
 - Que features o Mister tem que os concorrentes relevantes não têm? (potenciais USPs)
 - Que features os concorrentes têm que o Mister não tem? (gaps competitivos)
 - A especialização em futsal traduz-se em features concretas (editor de campo, estatísticas de futsal, GR condicionais) ou é só uma tagline?

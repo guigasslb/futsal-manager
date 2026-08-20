@@ -8,6 +8,7 @@ import {
   List,
   CalendarDays,
   CalendarRange,
+  CalendarClock,
   LayoutTemplate,
   ChevronRight,
   CalendarPlus,
@@ -16,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { listarSessoes, type SessaoLista } from "@/lib/actions/treinos";
 import { listarEscaloes } from "@/lib/actions/escaloes";
 import { listarPlaneamentos } from "@/lib/actions/periodizacao";
+import { listarReunioes } from "@/lib/actions/reunioes";
 import { obterEpocaAtiva } from "@/lib/epoca-context";
 import { segundaFeira, domingo, numeroSemana, semanaSobrepoePlaneamento } from "@/lib/semana";
 import { LABEL_MOMENTO_SEMANA, type MomentoSemana } from "@/lib/schemas/treino";
@@ -75,10 +77,11 @@ export default async function TreinosPage({
   const { escalaoId, vista, mes } = await searchParams;
   const ehCalendario = vista === "calendario";
 
-  const [resEscaloes, resSessoes, resPlan, epoca] = await Promise.all([
+  const [resEscaloes, resSessoes, resPlan, resReunioes, epoca] = await Promise.all([
     listarEscaloes(),
     listarSessoes(escalaoId),
     listarPlaneamentos(escalaoId),
+    listarReunioes(),
     obterEpocaAtiva(),
   ]);
 
@@ -88,6 +91,12 @@ export default async function TreinosPage({
   const escaloes = resEscaloes.dados;
   const sessoes = resSessoes.dados;
   const planeamentos = resPlan.sucesso ? resPlan.dados : [];
+
+  // Reuniões futuras para o calendário (§8.9.1 — eventos adicionais na vista mensal).
+  const agoraReunioes = new Date();
+  const reunioesFuturas = (resReunioes.sucesso ? resReunioes.dados : [])
+    .filter((r) => new Date(r.data) >= agoraReunioes)
+    .map((r) => ({ id: r.id, data: r.data, titulo: r.titulo }));
 
   // Mês a mostrar no calendário (default: mês atual)
   const agora = new Date();
@@ -164,6 +173,12 @@ export default async function TreinosPage({
               Periodização
             </Link>
           </Button>
+          <Button asChild variant="outline">
+            <Link href="/treinos/planos">
+              <CalendarClock className="h-4 w-4" />
+              Planos semanais
+            </Link>
+          </Button>
           <Button asChild>
             <Link href="/treinos/novo">
               <Plus className="h-4 w-4" />
@@ -224,7 +239,7 @@ export default async function TreinosPage({
       </div>
 
       {ehCalendario ? (
-        sessoes.length === 0 ? (
+        sessoes.length === 0 && reunioesFuturas.length === 0 ? (
           <EstadoVazio
             titulo="Sem sessões nesta época"
             descricao="Cria a primeira sessão de treino — do zero ou a partir de um template."
@@ -244,6 +259,7 @@ export default async function TreinosPage({
               data: s.data,
               escalaoNome: s.escalao.nome,
             }))}
+            reunioes={reunioesFuturas}
             ano={anoCal}
             mes={mesCal}
             hrefBase={hrefCalendario}

@@ -1,6 +1,6 @@
 # Mister — Plano de Execução
 
-> **Fonte de verdade do produto:** `docs/FutsalManager_Spec_v7.md` (secção 16 = ordem de desenvolvimento).
+> **Fonte de verdade do produto:** `docs/Mister_Spec_v7.md` (secção 16 = ordem de desenvolvimento).
 > **Regra inquebrável:** nenhuma alteração de código sem atualizar a bíblia no mesmo passo (changelog na secção 19).
 > **Definição de pronto (por task):** conforme a bíblia · validação Zod + `Resultado<T>` · permissões verificadas no servidor · estados loading/vazio/erro · responsivo · `npm run typecheck` + `npm run lint` + `npm run test` limpos · secção da bíblia atualizada.
 
@@ -310,7 +310,7 @@ Objetivo: reduzir fricção diária, desbloquear monetização self-service e fe
 - **Caminho crítico de release (bloqueia venda):** P0 completa → P1 completa (exceto 🔒, que dependem do supervisor). Só depois se abre a captação comercial séria; Phase 2 aprofunda o valor do tier Clube; Phase 4 desbloqueia cobrança e crescimento orgânico.
 
 ### Regras transversais (não negociáveis)
-1. **Bíblia primeiro:** cada task fecha com `docs/FutsalManager_Spec_v7.md` (secção + changelog §19) atualizado no mesmo passo.
+1. **Bíblia primeiro:** cada task fecha com `docs/Mister_Spec_v7.md` (secção + changelog §19) atualizado no mesmo passo.
 2. **Auth intocável:** qualquer item que roce login/middleware/sessão/SDK de identidade (P1.10, P1.11) **pára e pede autorização explícita** ao supervisor (Regra Sagrada Nº 3). Marcado 🔒.
 3. **Gate de conclusão:** nada é "pronto" sem `typecheck` + `lint` + `test` verdes e zero stubs/TODOs (Regra Sagrada Nº 1).
 4. **Auto-revisão à primeira:** sem scope creep, sem dead code, diff mínimo (Regra Sagrada Nº 6). P2.8 (`visivelOutrosTreinadores`) existe precisamente para não deixar campo morto.

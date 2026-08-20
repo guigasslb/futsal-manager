@@ -1,7 +1,15 @@
+import dynamic from "next/dynamic";
 import type { EstatisticasAgregadas } from "@/lib/actions/atletas";
 import type { JogoDadosAtleta, PresencaMensal } from "@/lib/actions/analise";
-import { GraficoLinhas } from "@/components/graficos/GraficoLinhas";
-import { GraficoBarrasV } from "@/components/graficos/GraficoBarrasV";
+
+const GraficoLinhas = dynamic(
+  () => import("@/components/graficos/GraficoLinhas").then((m) => ({ default: m.GraficoLinhas })),
+  { ssr: false },
+);
+const GraficoBarrasV = dynamic(
+  () => import("@/components/graficos/GraficoBarrasV").then((m) => ({ default: m.GraficoBarrasV })),
+  { ssr: false },
+);
 
 function Cartao({ valor, label }: { valor: string | number; label: string }) {
   return (

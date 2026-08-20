@@ -15,6 +15,7 @@ import {
   criarAtletaSchema,
   atualizarAtletaSchema,
   apagarAtletaDefinitivamenteSchema,
+  toggleAtivoAtletaSchema,
   posicoesPorModalidade,
   LABEL_POSICAO,
 } from "@/lib/schemas/atleta";
@@ -176,9 +177,14 @@ export async function listarAtletas(
   escalaoId?: string,
   epocaId?: string,
   seccaoId?: string,
+  incluirInativos = false,
 ): Promise<Resultado<AtletaComParticipacao[]>> {
   const clubeId = await obterClubeIdAtual();
   if (!clubeId) return erro("Não autenticado");
+
+  // Por defeito o plantel mostra só atletas ativos; `incluirInativos` inclui os
+  // que saíram ou estão em período experimental (ativo=false).
+  const filtroAtivo = incluirInativos ? {} : { ativo: true };
 
   const epoca = await resolverEpoca(clubeId, epocaId);
   if (!epoca) return erro("Nenhuma época ativa");
@@ -192,7 +198,7 @@ export async function listarAtletas(
         escalaoId,
         epocaId: epoca.id,
         estado: "ATIVO",
-        atleta: { ativo: true, clubeId },
+        atleta: { ...filtroAtivo, clubeId },
       },
       include: {
         ...INCLUDE_ESCALAO_NOME,
@@ -233,7 +239,7 @@ export async function listarAtletas(
   const atletas = await prisma.atleta.findMany({
     where: {
       clubeId,
-      ativo: true,
+      ...filtroAtivo,
       participacoes: {
         some: {
           epocaId: epoca.id,
@@ -374,6 +380,9 @@ export async function criarAtleta(dados: unknown): Promise<Resultado<Atleta>> {
         encarregadoNome: pessoal.encarregadoNome ?? null,
         encarregadoContacto: pessoal.encarregadoContacto ?? null,
         encarregadoEmail: pessoal.encarregadoEmail ? pessoal.encarregadoEmail : null,
+        // Default explícito: um atleta nasce ativo salvo indicação em contrário
+        // (ex.: criado logo como experimental/inativo).
+        ativo: pessoal.ativo ?? true,
         numero,
       },
     });
@@ -458,6 +467,10 @@ export async function atualizarAtleta(
       encarregadoNome: parsed.data.encarregadoNome ?? null,
       encarregadoContacto: parsed.data.encarregadoContacto ?? null,
       encarregadoEmail: parsed.data.encarregadoEmail ? parsed.data.encarregadoEmail : null,
+      // Só escreve `ativo` quando explicitamente fornecido: a edição dos dados
+      // pessoais não deve reativar/desativar um atleta de forma implícita
+      // (o estado é gerido por `toggleAtivoAtleta`/`apagarAtleta`).
+      ...(parsed.data.ativo !== undefined ? { ativo: parsed.data.ativo } : {}),
     },
   });
   revalidatePath(PATH);
@@ -487,6 +500,51 @@ export async function apagarAtleta(id: string): Promise<Resultado<void>> {
   await prisma.atleta.update({ where: { id }, data: { ativo: false } });
   revalidatePath(PATH);
   revalidatePath(`${PATH}/${id}`);
+  revalidatePath(PATH_DASHBOARD);
+  return ok(undefined);
+}
+
+/**
+ * Alterna o estado `ativo` do atleta (secção 8 — plantel).
+ *
+ * Usado para distinguir atletas do plantel de quem saiu ou ainda está em
+ * período experimental. Ao contrário de `apagarAtleta` (que força ativo=false),
+ * esta ação faz toggle: reativa um atleta inativo ou desativa um ativo.
+ *
+ * A verificação de permissão usa TODAS as participações do atleta (não só as
+ * ATIVAS): um atleta inativo pode já não ter participações ativas, mas quem gere
+ * o plantel desses escalões deve poder reativá-lo.
+ */
+export async function toggleAtivoAtleta(atletaId: string): Promise<Resultado<void>> {
+  const parsed = toggleAtivoAtletaSchema.safeParse({ atletaId });
+  if (!parsed.success) return erroDeValidacao(parsed.error);
+
+  const clubeId = await obterClubeIdAtual();
+  if (!clubeId) return erro("Não autenticado");
+
+  const existe = await prisma.atleta.findFirst({
+    where: { id: parsed.data.atletaId, clubeId },
+    select: {
+      id: true,
+      ativo: true,
+      participacoes: { select: { escalaoId: true } },
+    },
+  });
+  if (!existe) return erro("Atleta não encontrado");
+
+  const perm = await exigirCapacidadeEmAlgumEscalao(
+    "PLANTEL_GERIR",
+    existe.participacoes.map((p) => p.escalaoId),
+  );
+  if (!perm.ok) return erro(perm.erro);
+
+  await prisma.atleta.update({
+    where: { id: parsed.data.atletaId },
+    data: { ativo: !existe.ativo },
+  });
+
+  revalidatePath(PATH);
+  revalidatePath(`${PATH}/${parsed.data.atletaId}`);
   revalidatePath(PATH_DASHBOARD);
   return ok(undefined);
 }

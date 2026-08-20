@@ -30,6 +30,7 @@ const ESTILO_ESTADO: Record<EstadoLicenca, string> = {
   EXPIRADA: "bg-vermelho-600 text-white",
   CANCELADA: "bg-cinza-200 text-cinza-600",
   SUSPENSA: "bg-ambar-600 text-white",
+  PENDENTE: "bg-ambar-600 text-white",
 };
 
 function Detalhe({ rotulo, valor }: { rotulo: string; valor: React.ReactNode }) {

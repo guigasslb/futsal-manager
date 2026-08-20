@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -30,7 +31,10 @@ import {
   LABEL_CATEGORIA_PRINCIPAL,
   CATEGORIAS_PRINCIPAIS,
 } from "@/lib/schemas/subcategoria";
-import { EditorCampo } from "@/components/campo/EditorCampo";
+const EditorCampo = dynamic(
+  () => import("@/components/campo/EditorCampo").then((m) => ({ default: m.EditorCampo })),
+  { ssr: false, loading: () => <div className="h-64 animate-pulse rounded-md bg-muted" /> },
+);
 import { ToggleBiblioteca } from "@/components/exercicios/ToggleBiblioteca";
 import type { CategoriaExercicioPrincipal, Exercicio, SubcategoriaExercicio } from "@prisma/client";
 

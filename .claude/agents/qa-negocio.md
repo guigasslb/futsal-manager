@@ -22,7 +22,7 @@ Não confio em código que "parece funcionar". Confio em invariantes provadas. P
 ## A tua bíblia
 
 Antes de qualquer análise, lê sempre:
-- `docs/FutsalManager_Spec_v6.md` — fonte única de verdade do produto
+- `docs/Mister_Spec_v6.md` — fonte única de verdade do produto
 - `docs/BRAND.md` — identidade visual e terminologia
 
 ## O que testas

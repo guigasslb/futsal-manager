@@ -12,6 +12,7 @@ import { CampoPesquisa } from "@/components/layout/CampoPesquisa";
 import { AvatarAtleta } from "@/components/plantel/AvatarAtleta";
 import { BadgeTipoParticipacao } from "@/components/plantel/BadgesParticipacao";
 import { BadgeModalidade } from "@/components/plantel/BadgeModalidade";
+import { FiltroInativos } from "@/components/plantel/FiltroInativos";
 import { ABREV_POSICAO } from "@/lib/schemas/atleta";
 import { mapaModalidadePorEscalao } from "@/lib/modalidade-escalao";
 
@@ -31,19 +32,32 @@ const CLS_TAB_INATIVO =
 export default async function PlantelPage({
   searchParams,
 }: {
-  searchParams: Promise<{ escalaoId?: string; seccaoId?: string; q?: string }>;
+  searchParams: Promise<{
+    escalaoId?: string;
+    seccaoId?: string;
+    q?: string;
+    incluirInativos?: string;
+  }>;
 }) {
-  const { escalaoId: escalaoIdRaw, seccaoId: seccaoIdRaw, q } = await searchParams;
+  const {
+    escalaoId: escalaoIdRaw,
+    seccaoId: seccaoIdRaw,
+    q,
+    incluirInativos: incluirInativosRaw,
+  } = await searchParams;
   // Query params não confiáveis: valida como CUID; inválido/ausente → sem filtro.
   const escParse = z.string().cuid().safeParse(escalaoIdRaw);
   const escalaoId = escParse.success ? escParse.data : undefined;
   const secParse = z.string().cuid().safeParse(seccaoIdRaw);
   const seccaoIdParam = secParse.success ? secParse.data : undefined;
+  // Por defeito o plantel mostra só ativos; `?incluirInativos=1` inclui os que
+  // saíram ou estão em período experimental (secção 8 — plantel).
+  const incluirInativos = incluirInativosRaw === "1";
 
   const [resEscaloes, resSeccoes, resAtletas] = await Promise.all([
     listarEscaloes(),
     obterSeccoes(),
-    listarAtletas(escalaoId),
+    listarAtletas(escalaoId, undefined, undefined, incluirInativos),
   ]);
 
   if (!resEscaloes.sucesso) return <EstadoErro mensagem={resEscaloes.erro} />;
@@ -195,7 +209,10 @@ export default async function PlantelPage({
         </div>
       )}
 
-      <CampoPesquisa placeholder="Pesquisar atleta por nome…" />
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <CampoPesquisa placeholder="Pesquisar atleta por nome…" />
+        <FiltroInativos />
+      </div>
 
       {atletas.length === 0 ? (
         <EstadoVazio
@@ -233,11 +250,18 @@ export default async function PlantelPage({
               <Link
                 key={a.id}
                 href={`/plantel/${a.id}`}
-                className="flex flex-col items-center gap-3 rounded-lg border border-cinza-200 bg-white p-4 text-center shadow-card transition-all hover:border-azul-300 hover:shadow-md"
+                className={`flex flex-col items-center gap-3 rounded-lg border border-cinza-200 bg-white p-4 text-center shadow-card transition-all hover:border-azul-300 hover:shadow-md ${
+                  a.ativo ? "" : "opacity-60"
+                }`}
               >
                 <AvatarAtleta nome={a.nome} tamanho="lg" fotoUrl={a.fotoUrl} />
                 <div className="w-full">
                   <p className="truncate text-corpo font-semibold text-cinza-900">{a.nome}</p>
+                  {!a.ativo && (
+                    <span className="mt-1 inline-flex items-center rounded-full border border-cinza-300 bg-cinza-100 px-2 py-0.5 text-legenda font-medium text-cinza-600">
+                      Inativo
+                    </span>
+                  )}
                   <p className="text-legenda text-cinza-600">
                     {numero != null && (
                       <span className={dup ? "font-semibold text-ambar-600" : ""}>

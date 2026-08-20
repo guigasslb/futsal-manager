@@ -27,7 +27,6 @@ import {
 import { apagarCompeticao, type CompeticaoComRelacoes } from "@/lib/actions/competicoes";
 import { LABEL_FORMATO_COMPETICAO } from "@/lib/schemas/competicao";
 import { LABEL_TIPO_JOGO } from "@/lib/schemas/jogo";
-import { CompeticaoForm } from "@/components/competicoes/CompeticaoForm";
 
 type EscalaoBasico = { id: string; nome: string };
 type EpocaBasica = { id: string; nome: string; ativa: boolean };
@@ -74,16 +73,12 @@ export function CompeticoesLista({
           <h1>Competições</h1>
           <p className="mt-1 text-corpo-sec text-cinza-600">Provas em disputa nesta época.</p>
         </div>
-        <CompeticaoForm
-          escaloes={escaloes}
-          epocas={epocas}
-          trigger={
-            <Button>
-              <Plus className="h-4 w-4" />
-              Nova competição
-            </Button>
-          }
-        />
+        <Button asChild>
+          <Link href="/jogos/competicoes/nova">
+            <Plus className="h-4 w-4" />
+            Nova competição
+          </Link>
+        </Button>
       </div>
 
       {escaloes.length > 0 && (

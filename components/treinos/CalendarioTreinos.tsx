@@ -7,6 +7,12 @@ type SessaoCalendario = {
   escalaoNome: string;
 };
 
+type ReuniaoCalendario = {
+  id: string;
+  data: Date;
+  titulo: string;
+};
+
 const DIAS_SEMANA = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 const MESES = [
   "janeiro",
@@ -34,11 +40,13 @@ function indiceSemana(date: Date): number {
 
 export function CalendarioTreinos({
   sessoes,
+  reunioes = [],
   ano,
   mes,
   hrefBase,
 }: {
   sessoes: SessaoCalendario[];
+  reunioes?: ReuniaoCalendario[];
   ano: number;
   mes: number; // 0-11
   hrefBase: string; // ex: "/treinos?vista=calendario"
@@ -56,6 +64,18 @@ export function CalendarioTreinos({
       const lista = porDia.get(dia) ?? [];
       lista.push(s);
       porDia.set(dia, lista);
+    }
+  }
+
+  // Agrupa reuniões por dia do mês corrente
+  const reunioesPorDia = new Map<number, ReuniaoCalendario[]>();
+  for (const r of reunioes) {
+    const d = new Date(r.data);
+    if (d.getFullYear() === ano && d.getMonth() === mes) {
+      const dia = d.getDate();
+      const lista = reunioesPorDia.get(dia) ?? [];
+      lista.push(r);
+      reunioesPorDia.set(dia, lista);
     }
   }
 
@@ -103,6 +123,7 @@ export function CalendarioTreinos({
         {celulas.map((dia, i) => {
           if (dia === null) return <div key={`v-${i}`} />;
           const doDia = porDia.get(dia) ?? [];
+          const reunioesDoDia = reunioesPorDia.get(dia) ?? [];
           return (
             <div
               key={dia}
@@ -124,6 +145,20 @@ export function CalendarioTreinos({
                       minute: "2-digit",
                     })}{" "}
                     {s.escalaoNome}
+                  </Link>
+                ))}
+                {reunioesDoDia.map((r) => (
+                  <Link
+                    key={r.id}
+                    href="/reunioes"
+                    className="block truncate rounded bg-verde-600 px-1 py-0.5 text-legenda text-white hover:opacity-90"
+                    title={`Reunião · ${r.titulo}`}
+                  >
+                    {new Date(r.data).toLocaleTimeString("pt-PT", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}{" "}
+                    Reunião
                   </Link>
                 ))}
               </div>

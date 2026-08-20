@@ -4,42 +4,34 @@ import { useCallback, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Check, ListChecks, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { marcarPresencas } from "@/lib/actions/treinos";
-import {
-  ESTADOS_PRESENCA,
-  LABEL_MOTIVO_FALTA,
-  LABEL_PRESENCA,
-  MOTIVOS_FALTA,
-} from "@/lib/schemas/treino";
 import type { EstadoPresenca, MotivoFalta } from "@prisma/client";
 
 type Atleta = { id: string; nome: string; numero: number | null };
 
-/** Estado de presença + motivo da falta (F1 — secção 8.5). */
+/** Estado de presença + motivo/justificação da falta (F1 — secção 8.5). */
 export type PresencaInicial = {
   estado: EstadoPresenca;
   motivo: MotivoFalta | null;
+  justificacao: string | null;
 };
 
 const PRESENTES = new Set<EstadoPresenca>(["PRESENTE", "ATRASADO"]);
 
-/** Estados em que faz sentido indicar o motivo da falta. */
-const AUSENCIAS = new Set<EstadoPresenca>([
-  "FALTA",
-  "FALTA_JUSTIFICADA",
-  "LESIONADO",
-]);
+/** Estados em que faz sentido registar uma justificação livre. */
+const COM_JUSTIFICACAO = new Set<EstadoPresenca>(["FALTA", "FALTA_JUSTIFICADA"]);
 
-/** Radix Select não aceita valor vazio — sentinela para «motivo não indicado». */
-const SEM_MOTIVO = "SEM_MOTIVO";
+/**
+ * Controlo segmentado de 1 toque (Melhoria 2). Cada segmento fixa o estado
+ * diretamente — sem abrir/escolher num Select. Cores garantem contraste AA.
+ */
+const SEGMENTOS: { estado: EstadoPresenca; label: string; cor: string }[] = [
+  { estado: "PRESENTE", label: "Presente", cor: "#1E9E5A" },
+  { estado: "FALTA", label: "Falta", cor: "#D33A3A" },
+  { estado: "LESIONADO", label: "Lesionado", cor: "#C7430F" },
+  { estado: "FALTA_JUSTIFICADA", label: "Just.", cor: "#2C6BB0" },
+];
 
 export function MarcadorPresencas({
   sessaoId,
@@ -56,7 +48,11 @@ export function MarcadorPresencas({
   const construirInicial = useCallback((): Record<string, PresencaInicial> => {
     const inicial: Record<string, PresencaInicial> = {};
     for (const a of atletas) {
-      inicial[a.id] = presencasIniciais[a.id] ?? { estado: "PRESENTE", motivo: null };
+      inicial[a.id] = presencasIniciais[a.id] ?? {
+        estado: "PRESENTE",
+        motivo: null,
+        justificacao: null,
+      };
     }
     return inicial;
   }, [atletas, presencasIniciais]);
@@ -70,26 +66,28 @@ export function MarcadorPresencas({
   function mudarEstado(atletaId: string, estado: EstadoPresenca) {
     setRegistos((prev) => ({
       ...prev,
-      // O motivo só se aplica a ausências — volta a null quando o atleta está presente.
-      [atletaId]: { estado, motivo: AUSENCIAS.has(estado) ? prev[atletaId].motivo : null },
-    }));
-  }
-
-  function mudarMotivo(atletaId: string, valor: string) {
-    setRegistos((prev) => ({
-      ...prev,
       [atletaId]: {
-        ...prev[atletaId],
-        motivo: valor === SEM_MOTIVO ? null : (valor as MotivoFalta),
+        estado,
+        // Motivo/justificação só se aplicam a ausências — limpam quando presente.
+        motivo: COM_JUSTIFICACAO.has(estado) ? prev[atletaId].motivo : null,
+        justificacao: COM_JUSTIFICACAO.has(estado) ? prev[atletaId].justificacao : null,
       },
     }));
   }
 
-  /** Marca todos os atletas como PRESENTE (limpa motivos de falta). */
+  function mudarJustificacao(atletaId: string, valor: string) {
+    setRegistos((prev) => ({
+      ...prev,
+      [atletaId]: { ...prev[atletaId], justificacao: valor },
+    }));
+  }
+
+  /** Marca todos os atletas como PRESENTE (limpa motivos/justificações). */
   function marcarTodosPresentes() {
     setRegistos((prev) => {
       const proximo: Record<string, PresencaInicial> = {};
-      for (const id of Object.keys(prev)) proximo[id] = { estado: "PRESENTE", motivo: null };
+      for (const id of Object.keys(prev))
+        proximo[id] = { estado: "PRESENTE", motivo: null, justificacao: null };
       return proximo;
     });
   }
@@ -104,6 +102,7 @@ export function MarcadorPresencas({
       atletaId: a.id,
       estado: registos[a.id].estado,
       motivo: registos[a.id].motivo,
+      justificacao: registos[a.id].justificacao?.trim() ? registos[a.id].justificacao : undefined,
     }));
     startTransition(async () => {
       const res = await marcarPresencas(sessaoId, payload);
@@ -114,17 +113,17 @@ export function MarcadorPresencas({
 
   if (atletas.length === 0) {
     return (
-      <div className="space-y-3">
+      <section className="space-y-3">
         <h2 className="text-subtitulo text-cinza-900">Presenças</h2>
         <p className="rounded-md border border-dashed border-cinza-300 p-4 text-center text-corpo-sec text-cinza-500">
           Não há atletas neste escalão nesta época.
         </p>
-      </div>
+      </section>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <section className="space-y-3">
       <h2 className="text-subtitulo text-cinza-900">Presenças</h2>
 
       {/* Controlo rápido (P4.1) — atalhos client-side, não submetem o formulário. */}
@@ -142,68 +141,62 @@ export function MarcadorPresencas({
       <ul className="space-y-2">
         {atletas.map((a) => {
           const registo = registos[a.id];
-          const ausente = AUSENCIAS.has(registo.estado);
+          const comJustificacao = COM_JUSTIFICACAO.has(registo.estado);
           return (
             <li
               key={a.id}
               className="rounded-md border border-cinza-200 bg-white p-2.5 shadow-card"
             >
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="min-w-0 flex-1 truncate text-corpo text-cinza-900">
+              <div className="min-h-[44px] items-center gap-2 sm:flex">
+                <span className="mb-2 block min-w-0 flex-1 truncate text-corpo font-medium text-cinza-900 sm:mb-0">
                   {a.numero != null && (
                     <span className="mr-1 text-cinza-400">#{a.numero}</span>
                   )}
                   {a.nome}
                 </span>
-                <Select
-                  value={registo.estado}
-                  onValueChange={(v) => mudarEstado(a.id, v as EstadoPresenca)}
+                <div
+                  role="group"
+                  aria-label={`Estado de presença de ${a.nome}`}
+                  className="grid grid-cols-4 gap-1 sm:w-auto sm:flex-shrink-0"
                 >
-                  <SelectTrigger
-                    id={`estado-${a.id}`}
-                    aria-label={`Estado de presença de ${a.nome}`}
-                    className="h-11 w-full sm:w-44"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ESTADOS_PRESENCA.map((e) => (
-                      <SelectItem key={e} value={e}>
-                        {LABEL_PRESENCA[e]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  {SEGMENTOS.map((seg) => {
+                    const ativo = registo.estado === seg.estado;
+                    return (
+                      <button
+                        key={seg.estado}
+                        type="button"
+                        aria-pressed={ativo}
+                        onClick={() => mudarEstado(a.id, seg.estado)}
+                        className="flex h-11 items-center justify-center rounded-md border px-1 text-legenda font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 sm:w-20"
+                        style={
+                          ativo
+                            ? { background: seg.cor, borderColor: seg.cor, color: "#fff" }
+                            : { borderColor: "#E4E1DB", color: "#6B6B6B" }
+                        }
+                      >
+                        {seg.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              {ausente && (
-                <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-cinza-100 pt-2">
-                  <Label
+              {comJustificacao && (
+                <div className="mt-2 border-t border-cinza-100 pt-2">
+                  <label
                     htmlFor={`motivo-${a.id}`}
-                    className="text-legenda text-cinza-500"
+                    className="mb-1 block text-legenda text-cinza-500"
                   >
-                    Motivo
-                  </Label>
-                  <Select
-                    value={registo.motivo ?? SEM_MOTIVO}
-                    onValueChange={(v) => mudarMotivo(a.id, v)}
-                  >
-                    <SelectTrigger
-                      id={`motivo-${a.id}`}
-                      aria-label={`Motivo da falta de ${a.nome}`}
-                      className="h-11 w-full sm:ms-auto sm:w-44"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={SEM_MOTIVO}>Não indicado</SelectItem>
-                      {MOTIVOS_FALTA.map((m) => (
-                        <SelectItem key={m} value={m}>
-                          {LABEL_MOTIVO_FALTA[m]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    Motivo (opcional)
+                  </label>
+                  <Input
+                    id={`motivo-${a.id}`}
+                    value={registo.justificacao ?? ""}
+                    onChange={(ev) => mudarJustificacao(a.id, ev.target.value)}
+                    maxLength={300}
+                    placeholder="Ex.: consulta médica, viagem…"
+                    className="h-11"
+                  />
                 </div>
               )}
             </li>
@@ -224,6 +217,6 @@ export function MarcadorPresencas({
           {pending ? "A guardar…" : "Guardar presenças"}
         </Button>
       </div>
-    </div>
+    </section>
   );
 }

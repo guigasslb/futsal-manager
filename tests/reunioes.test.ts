@@ -12,6 +12,11 @@ vi.mock("@/lib/permissoes", () => ({
   podeLerEscalao: vi.fn(),
   escaloesLegiveis: vi.fn(),
 }));
+// A sincronização com o Google Calendar é fire-and-forget e testada em
+// tests/integracao-calendario.test.ts — aqui isolamos a dependência.
+vi.mock("@/lib/actions/integracao", () => ({
+  sincronizarComCalendario: vi.fn(),
+}));
 vi.mock("@/lib/db", () => ({
   prisma: {
     reuniao: {
@@ -28,10 +33,13 @@ import {
   criarReuniao,
   atualizarReuniao,
   apagarReuniao,
+  alternarAfixadaReuniao,
+  obterReunioesParaDashboard,
 } from "@/lib/actions/reunioes";
 import { auth } from "@/lib/auth";
 import { obterClubeIdAtual } from "@/lib/epoca-context";
-import { exigirCapacidade } from "@/lib/permissoes";
+import { exigirCapacidade, escaloesLegiveis } from "@/lib/permissoes";
+import { sincronizarComCalendario } from "@/lib/actions/integracao";
 import { prisma } from "@/lib/db";
 
 const REUNIAO_ID = "ckv9v0z1w0000abcd1234efga";
@@ -46,7 +54,23 @@ const calls = (fn: unknown) => (fn as { mock: { calls: unknown[][] } }).mock.cal
 
 const PERM_OK = { ok: true, ctx: { clube: { id: "clube1" } } };
 
-const REUNIAO_BD = { id: REUNIAO_ID, titulo: "Reunião Mensal", clubeId: "clube1", ambito: "CLUBE", escalaoId: null };
+// Linha realista tal como o Prisma a devolve (create/update/findFirst retornam
+// sempre a row completa) — inclui `data`, `googleEventId` e `afixada`.
+const REUNIAO_BD = {
+  id: REUNIAO_ID,
+  titulo: "Reunião Mensal",
+  clubeId: "clube1",
+  ambito: "CLUBE",
+  escalaoId: null,
+  data: new Date("2026-09-15T00:00:00.000Z"),
+  participantes: null,
+  ordemTrabalhos: null,
+  ata: null,
+  afixada: false,
+  googleEventId: null,
+  criadorId: "user1",
+  criadoEm: new Date("2026-08-01T00:00:00.000Z"),
+};
 
 const ENTRADA_CLUBE = {
   titulo: "Reunião Mensal",
@@ -66,6 +90,7 @@ beforeEach(() => {
   mocked(auth).mockResolvedValue({ user: { id: "user1" } });
   mocked(obterClubeIdAtual).mockResolvedValue("clube1");
   mocked(exigirCapacidade).mockResolvedValue(PERM_OK);
+  mocked(escaloesLegiveis).mockResolvedValue("TODOS");
   mocked(prisma.reuniao.findFirst).mockResolvedValue(REUNIAO_BD);
   mocked(prisma.reuniao.create).mockResolvedValue(REUNIAO_BD);
   mocked(prisma.reuniao.update).mockResolvedValue(REUNIAO_BD);
@@ -121,6 +146,53 @@ describe("criarReuniao", () => {
     expect(arg.data.ambito).toBe("ESCALAO");
     expect(arg.data.escalaoId).toBe(ESC_ID);
   });
+
+  it("persiste afixada quando fornecida", async () => {
+    const r = await criarReuniao({ ...ENTRADA_CLUBE, afixada: true });
+    expect(r.sucesso).toBe(true);
+    const arg = calls(prisma.reuniao.create)[0][0] as { data: Record<string, unknown> };
+    expect(arg.data.afixada).toBe(true);
+  });
+
+  it("assume afixada=false por omissão", async () => {
+    const r = await criarReuniao(ENTRADA_CLUBE);
+    expect(r.sucesso).toBe(true);
+    const arg = calls(prisma.reuniao.create)[0][0] as { data: Record<string, unknown> };
+    expect(arg.data.afixada).toBe(false);
+  });
+
+  it("sincroniza com o Google Calendar uma reunião futura sem googleEventId", async () => {
+    mocked(prisma.reuniao.create).mockResolvedValue({
+      ...REUNIAO_BD,
+      data: new Date(Date.now() + 86_400_000),
+      googleEventId: null,
+    });
+    const r = await criarReuniao(ENTRADA_CLUBE);
+    expect(r.sucesso).toBe(true);
+    expect(sincronizarComCalendario).toHaveBeenCalledWith("REUNIAO", REUNIAO_ID);
+  });
+
+  it("não sincroniza uma reunião passada", async () => {
+    mocked(prisma.reuniao.create).mockResolvedValue({
+      ...REUNIAO_BD,
+      data: new Date(Date.now() - 86_400_000),
+      googleEventId: null,
+    });
+    const r = await criarReuniao(ENTRADA_CLUBE);
+    expect(r.sucesso).toBe(true);
+    expect(sincronizarComCalendario).not.toHaveBeenCalled();
+  });
+
+  it("não re-sincroniza uma reunião que já tem googleEventId", async () => {
+    mocked(prisma.reuniao.create).mockResolvedValue({
+      ...REUNIAO_BD,
+      data: new Date(Date.now() + 86_400_000),
+      googleEventId: "evt-existente",
+    });
+    const r = await criarReuniao(ENTRADA_CLUBE);
+    expect(r.sucesso).toBe(true);
+    expect(sincronizarComCalendario).not.toHaveBeenCalled();
+  });
 });
 
 // ─── atualizarReuniao ─────────────────────────────────────────────────────────
@@ -147,6 +219,91 @@ describe("atualizarReuniao", () => {
     expect(r.sucesso).toBe(true);
     const arg = calls(prisma.reuniao.update)[0][0] as { data: Record<string, unknown> };
     expect(arg.data.titulo).toBe("Novo Título");
+  });
+
+  it("persiste afixada na atualização", async () => {
+    const r = await atualizarReuniao(REUNIAO_ID, { ...ENTRADA_CLUBE, afixada: true });
+    expect(r.sucesso).toBe(true);
+    const arg = calls(prisma.reuniao.update)[0][0] as { data: Record<string, unknown> };
+    expect(arg.data.afixada).toBe(true);
+  });
+});
+
+// ─── alternarAfixadaReuniao ───────────────────────────────────────────────────
+
+describe("alternarAfixadaReuniao", () => {
+  it("falha sem clube ativo", async () => {
+    mocked(obterClubeIdAtual).mockResolvedValue(null);
+    const r = await alternarAfixadaReuniao(REUNIAO_ID);
+    expect(r.sucesso).toBe(false);
+    expect(prisma.reuniao.update).not.toHaveBeenCalled();
+  });
+
+  it("falha se a reunião não pertence ao clube", async () => {
+    mocked(prisma.reuniao.findFirst).mockResolvedValue(null);
+    const r = await alternarAfixadaReuniao(REUNIAO_ID);
+    expect(r.sucesso).toBe(false);
+    if (!r.sucesso) expect(r.erro).toMatch(/não encontrada/i);
+    expect(prisma.reuniao.update).not.toHaveBeenCalled();
+  });
+
+  it("inverte afixada: false → true", async () => {
+    mocked(prisma.reuniao.findFirst).mockResolvedValue({ ...REUNIAO_BD, afixada: false });
+    const r = await alternarAfixadaReuniao(REUNIAO_ID);
+    expect(r.sucesso).toBe(true);
+    const arg = calls(prisma.reuniao.update)[0][0] as { data: Record<string, unknown> };
+    expect(arg.data.afixada).toBe(true);
+  });
+
+  it("inverte afixada: true → false", async () => {
+    mocked(prisma.reuniao.findFirst).mockResolvedValue({ ...REUNIAO_BD, afixada: true });
+    const r = await alternarAfixadaReuniao(REUNIAO_ID);
+    expect(r.sucesso).toBe(true);
+    const arg = calls(prisma.reuniao.update)[0][0] as { data: Record<string, unknown> };
+    expect(arg.data.afixada).toBe(false);
+  });
+});
+
+// ─── obterReunioesParaDashboard ───────────────────────────────────────────────
+
+describe("obterReunioesParaDashboard", () => {
+  it("falha sem clube ativo", async () => {
+    mocked(obterClubeIdAtual).mockResolvedValue(null);
+    const r = await obterReunioesParaDashboard();
+    expect(r.sucesso).toBe(false);
+    expect(prisma.reuniao.findMany).not.toHaveBeenCalled();
+  });
+
+  it("filtra por clube, futuras OU afixadas, limita a 5 e ordena por data", async () => {
+    mocked(prisma.reuniao.findMany).mockResolvedValue([REUNIAO_BD]);
+    const r = await obterReunioesParaDashboard();
+    expect(r.sucesso).toBe(true);
+    const arg = calls(prisma.reuniao.findMany)[0][0] as {
+      where: { clubeId: string; AND: Array<{ OR: unknown[] }> };
+      orderBy: { data: string };
+      take: number;
+    };
+    expect(arg.where.clubeId).toBe("clube1");
+    expect(arg.take).toBe(5);
+    expect(arg.orderBy.data).toBe("asc");
+    // Segundo bloco AND = (data futura OU afixada).
+    const orDataAfixada = arg.where.AND[1].OR as Array<Record<string, unknown>>;
+    expect(orDataAfixada).toContainEqual({ afixada: true });
+    expect(orDataAfixada.some((c) => "data" in c)).toBe(true);
+  });
+
+  it("respeita a legibilidade por escalão (âmbito restrito)", async () => {
+    mocked(escaloesLegiveis).mockResolvedValue([ESC_ID]);
+    mocked(prisma.reuniao.findMany).mockResolvedValue([]);
+    const r = await obterReunioesParaDashboard();
+    expect(r.sucesso).toBe(true);
+    const arg = calls(prisma.reuniao.findMany)[0][0] as {
+      where: { AND: Array<{ OR: Array<Record<string, unknown>> }> };
+    };
+    // Primeiro bloco AND = (ambito CLUBE OU escalão legível).
+    const orAmbito = arg.where.AND[0].OR;
+    expect(orAmbito).toContainEqual({ ambito: "CLUBE" });
+    expect(orAmbito).toContainEqual({ escalaoId: { in: [ESC_ID] } });
   });
 });
 

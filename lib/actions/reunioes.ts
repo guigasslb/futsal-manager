@@ -7,6 +7,7 @@ import { obterClubeIdAtual } from "@/lib/epoca-context";
 import { exigirCapacidade, podeLerEscalao, escaloesLegiveis } from "@/lib/permissoes";
 import { ok, erro, erroDeValidacao, type Resultado } from "@/lib/utils";
 import { reuniaoSchema } from "@/lib/schemas/reuniao";
+import { sincronizarComCalendario } from "@/lib/actions/integracao";
 import type { Reuniao } from "@prisma/client";
 
 const PATH = "/reunioes";
@@ -64,9 +65,18 @@ export async function criarReuniao(dados: unknown): Promise<Resultado<Reuniao>> 
       participantes: parsed.data.participantes ?? null,
       ordemTrabalhos: parsed.data.ordemTrabalhos ?? null,
       ata: parsed.data.ata ?? null,
+      afixada: parsed.data.afixada,
       criadorId: session.user.id,
     },
   });
+
+  // F8 (§3.12): reuniões futuras entram no Google Calendar do treinador na
+  // criação (se ainda sem googleEventId). Fire-and-forget: não bloqueia nem
+  // faz falhar a criação da reunião. Reuniões passadas não são sincronizadas.
+  if (!reuniao.googleEventId && reuniao.data.getTime() >= Date.now()) {
+    await sincronizarComCalendario("REUNIAO", reuniao.id);
+  }
+
   revalidatePath(PATH);
   return ok(reuniao);
 }
@@ -95,6 +105,7 @@ export async function atualizarReuniao(id: string, dados: unknown): Promise<Resu
       participantes: parsed.data.participantes ?? null,
       ordemTrabalhos: parsed.data.ordemTrabalhos ?? null,
       ata: parsed.data.ata ?? null,
+      afixada: parsed.data.afixada,
     },
   });
   revalidatePath(PATH);
@@ -115,4 +126,65 @@ export async function apagarReuniao(id: string): Promise<Resultado<void>> {
   await prisma.reuniao.delete({ where: { id } });
   revalidatePath(PATH);
   return ok(undefined);
+}
+
+/**
+ * Alterna (toggle) a afixação de uma reunião no Dashboard. Uma reunião afixada
+ * aparece no painel de arranque independentemente da data (ver
+ * `obterReunioesParaDashboard`). Requer capacidade de gestão de reuniões.
+ */
+export async function alternarAfixadaReuniao(reuniaoId: string): Promise<Resultado<void>> {
+  const clubeId = await obterClubeIdAtual();
+  if (!clubeId) return erro("Não autenticado");
+
+  const existe = await prisma.reuniao.findFirst({ where: { id: reuniaoId, clubeId } });
+  if (!existe) return erro("Reunião não encontrada");
+
+  const perm = await exigirCapacidade("REUNIOES_GERIR", existe.escalaoId ?? undefined);
+  if (!perm.ok) return erro(perm.erro);
+
+  await prisma.reuniao.update({
+    where: { id: reuniaoId },
+    data: { afixada: !existe.afixada },
+  });
+  revalidatePath(PATH);
+  revalidatePath(`${PATH}/${reuniaoId}`);
+  revalidatePath("/dashboard");
+  return ok(undefined);
+}
+
+/**
+ * Reuniões a mostrar no Dashboard/Início: as futuras (data >= hoje, mostradas
+ * automaticamente) e as afixadas manualmente (`afixada = true`, independentes
+ * da data). Filtra sempre pelo clube do utilizador autenticado e respeita a
+ * legibilidade por escalão (igual a `listarReunioes`). Máximo 5, por data.
+ */
+export async function obterReunioesParaDashboard(): Promise<Resultado<Reuniao[]>> {
+  const clubeId = await obterClubeIdAtual();
+  if (!clubeId) return erro("Não autenticado");
+
+  // Início do dia de hoje (hora local) — "futuras" inclui as de hoje.
+  const inicioHoje = new Date();
+  inicioHoje.setHours(0, 0, 0, 0);
+
+  const legiveis = await escaloesLegiveis();
+  const reunioes = await prisma.reuniao.findMany({
+    where: {
+      clubeId,
+      AND: [
+        {
+          OR: [
+            { ambito: "CLUBE" },
+            legiveis === "TODOS" ? { ambito: "ESCALAO" } : { escalaoId: { in: legiveis } },
+          ],
+        },
+        {
+          OR: [{ data: { gte: inicioHoje } }, { afixada: true }],
+        },
+      ],
+    },
+    orderBy: { data: "asc" },
+    take: 5,
+  });
+  return ok(reunioes);
 }

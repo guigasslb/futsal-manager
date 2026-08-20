@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Users2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Users2, Pin, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,7 +32,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { criarReuniao, atualizarReuniao, apagarReuniao } from "@/lib/actions/reunioes";
+import {
+  criarReuniao,
+  atualizarReuniao,
+  apagarReuniao,
+  alternarAfixadaReuniao,
+} from "@/lib/actions/reunioes";
 import { LABEL_AMBITO_REUNIAO } from "@/lib/schemas/reuniao";
 import type { Reuniao } from "@prisma/client";
 
@@ -135,6 +140,24 @@ function Form({
   );
 }
 
+/** Secção colapsável (disclosure) de um campo de texto de reunião. */
+function SeccaoColapsavel({ titulo, conteudo }: { titulo: string; conteudo: string | null }) {
+  const temConteudo = !!conteudo?.trim();
+  return (
+    <details open={temConteudo} className="group">
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 py-1 text-corpo-sec font-semibold text-cinza-700 [&::-webkit-details-marker]:hidden">
+        <ChevronRight className="h-4 w-4 flex-shrink-0 text-cinza-400 transition-transform group-open:rotate-90" />
+        {titulo}
+      </summary>
+      {temConteudo ? (
+        <p className="mt-1 whitespace-pre-wrap pl-5 text-corpo-sec text-cinza-700">{conteudo}</p>
+      ) : (
+        <p className="mt-1 pl-5 text-corpo-sec italic text-cinza-400">Sem registo.</p>
+      )}
+    </details>
+  );
+}
+
 export function ReunioesLista({
   reunioes,
   escaloes,
@@ -152,6 +175,14 @@ export function ReunioesLista({
     startTransition(async () => {
       const res = await apagarReuniao(id);
       if (res.sucesso) toast.success("Reunião apagada");
+      else toast.error(res.erro);
+    });
+  }
+
+  function afixar(r: Reuniao) {
+    startTransition(async () => {
+      const res = await alternarAfixadaReuniao(r.id);
+      if (res.sucesso) toast.success(r.afixada ? "Reunião removida do início" : "Reunião afixada no início");
       else toast.error(res.erro);
     });
   }
@@ -192,6 +223,18 @@ export function ReunioesLista({
                     {r.ambito === "CLUBE" ? LABEL_AMBITO_REUNIAO.CLUBE : nomeEscalao(r.escalaoId)}
                   </p>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={r.afixada ? "Remover do início" : "Afixar no início"}
+                  aria-pressed={r.afixada}
+                  disabled={pending}
+                  onClick={() => afixar(r)}
+                >
+                  <Pin
+                    className={`h-4 w-4 ${r.afixada ? "fill-primary text-primary" : "text-cinza-500"}`}
+                  />
+                </Button>
                 <Button variant="ghost" size="icon" aria-label="Editar" onClick={() => setEditar(r)}>
                   <Pencil className="h-4 w-4" />
                 </Button>
@@ -213,9 +256,10 @@ export function ReunioesLista({
                   </AlertDialogContent>
                 </AlertDialog>
               </div>
-              {r.ata && (
-                <p className="mt-3 whitespace-pre-wrap border-t border-cinza-100 pt-3 text-corpo-sec text-cinza-700">{r.ata}</p>
-              )}
+              <div className="mt-3 space-y-1 border-t border-cinza-100 pt-3">
+                <SeccaoColapsavel titulo="Ordem de trabalhos" conteudo={r.ordemTrabalhos} />
+                <SeccaoColapsavel titulo="Ata" conteudo={r.ata} />
+              </div>
             </li>
           ))}
         </ul>

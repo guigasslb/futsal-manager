@@ -15,8 +15,16 @@ import {
   Percent,
 } from "lucide-react";
 import type { AnaliticoEscalao, CompeticaoOpcao } from "@/lib/actions/analise";
-import { GraficoBarrasH } from "@/components/graficos/GraficoBarrasH";
-import { GraficoBarrasV } from "@/components/graficos/GraficoBarrasV";
+import dynamic from "next/dynamic";
+
+const GraficoBarrasH = dynamic(
+  () => import("@/components/graficos/GraficoBarrasH").then((m) => ({ default: m.GraficoBarrasH })),
+  { ssr: false },
+);
+const GraficoBarrasV = dynamic(
+  () => import("@/components/graficos/GraficoBarrasV").then((m) => ({ default: m.GraficoBarrasV })),
+  { ssr: false },
+);
 import { FiltroCompeticao } from "./FiltroCompeticao";
 import { RankingsMetricas } from "./RankingsMetricas";
 import { RankingAssiduidade } from "./RankingAssiduidade";

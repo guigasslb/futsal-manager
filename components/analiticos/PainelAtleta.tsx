@@ -14,8 +14,16 @@ import {
 } from "lucide-react";
 import type { AnaliticoAtleta } from "@/lib/actions/analise";
 import { LABEL_POSICAO } from "@/lib/schemas/atleta";
-import { GraficoLinhas } from "@/components/graficos/GraficoLinhas";
-import { GraficoBarrasV } from "@/components/graficos/GraficoBarrasV";
+import dynamic from "next/dynamic";
+
+const GraficoLinhas = dynamic(
+  () => import("@/components/graficos/GraficoLinhas").then((m) => ({ default: m.GraficoLinhas })),
+  { ssr: false },
+);
+const GraficoBarrasV = dynamic(
+  () => import("@/components/graficos/GraficoBarrasV").then((m) => ({ default: m.GraficoBarrasV })),
+  { ssr: false },
+);
 import { CartaoKpi, corTaxa } from "./CartaoKpi";
 import { pct, n1 } from "./Cartao";
 

@@ -93,6 +93,11 @@ export const presencaSchema = z.object({
 
 export const marcarPresencasSchema = z.array(presencaSchema);
 
+/** Notas livres da sessão, editáveis inline no detalhe do treino (Melhoria 4.6). */
+export const notasSessaoSchema = z.object({
+  notas: z.string().max(2000, "Máximo de 2000 caracteres"),
+});
+
 export const LABEL_PRESENCA: Record<(typeof ESTADOS_PRESENCA)[number], string> = {
   PRESENTE: "Presente",
   FALTA: "Falta",

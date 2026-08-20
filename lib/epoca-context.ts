@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
@@ -10,7 +11,7 @@ export const COOKIE_EPOCA = "epoca_ativa";
  * Mantém a assinatura usada pelas actions existentes (compatibilidade).
  * Devolve null se não houver sessão ou adesão ativa (modo individual sem clube).
  */
-export async function obterClubeIdAtual(): Promise<string | null> {
+export const obterClubeIdAtual = cache(async (): Promise<string | null> => {
   const session = await auth();
   if (!session?.user?.id) return null;
 
@@ -19,7 +20,7 @@ export async function obterClubeIdAtual(): Promise<string | null> {
     select: { clubeId: true },
   });
   return membro?.clubeId ?? null;
-}
+});
 
 /**
  * Resolve a época ativa (secção 5.4):
@@ -27,7 +28,7 @@ export async function obterClubeIdAtual(): Promise<string | null> {
  *  2. Época marcada como `ativa: true` na BD.
  * Devolve null se não houver época ativa definida.
  */
-export async function obterEpocaAtiva(): Promise<Epoca | null> {
+export const obterEpocaAtiva = cache(async (): Promise<Epoca | null> => {
   const clubeId = await obterClubeIdAtual();
   if (!clubeId) return null;
 
@@ -45,4 +46,4 @@ export async function obterEpocaAtiva(): Promise<Epoca | null> {
   return prisma.epoca.findFirst({
     where: { clubeId, ativa: true },
   });
-}
+});

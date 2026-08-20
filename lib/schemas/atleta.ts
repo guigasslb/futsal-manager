@@ -23,6 +23,13 @@ export const atletaPessoalSchema = z.object({
   posicoes: z.array(posicaoEnum).default([]),
   observacoes: z.string().max(1000).optional(),
   fotoUrl: z.string().url("URL inválido").max(500).optional().or(z.literal("")),
+  // Estado no plantel (secção 8): distingue quem está ativo de quem saiu ou
+  // ainda está em período experimental. Opcional e SEM default de propósito: a
+  // edição de dados pessoais (`atualizarAtleta`) não deve fazer reset do estado
+  // — o ciclo de vida do `ativo` é gerido por ações dedicadas
+  // (`toggleAtivoAtleta`, `apagarAtleta`). Na criação, o default `true` é
+  // aplicado explicitamente em `criarAtleta`.
+  ativo: z.boolean().optional(),
   encarregadoNome: z.string().max(100).optional(),
   encarregadoContacto: z.string().max(40).optional(),
   encarregadoEmail: z.string().email("Email inválido").optional().or(z.literal("")),
@@ -50,6 +57,11 @@ export const criarAtletaSchema = atletaPessoalSchema.extend({
  * O id é um cuid (convenção de IDs do projeto), não um uuid.
  */
 export const apagarAtletaDefinitivamenteSchema = z.object({
+  atletaId: z.string().cuid("Atleta inválido"),
+});
+
+/** Toggle do estado `ativo` do atleta (secção 8 — período experimental/saída). */
+export const toggleAtivoAtletaSchema = z.object({
   atletaId: z.string().cuid("Atleta inválido"),
 });
 

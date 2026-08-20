@@ -1,6 +1,6 @@
 # Avaliação de Produto — Ricardo Faria (Product Owner)
 
-> Data: 2026-08-11 · Base: `docs/FutsalManager_Spec_v6.md` (bíblia), `CLAUDE.md`, `docs/EXECUTION_PLAN.md` e verificação directa no código (rotas `app/(app)`, `lib/actions`, `prisma/schema.prisma`).
+> Data: 2026-08-11 · Base: `docs/Mister_Spec_v6.md` (bíblia), `CLAUDE.md`, `docs/EXECUTION_PLAN.md` e verificação directa no código (rotas `app/(app)`, `lib/actions`, `prisma/schema.prisma`).
 > Método: cruzei cada módulo funcional da spec (§8) com a rota real + Server Action real. Não avaliei "está no changelog"; avaliei "existe rota + action + modelo".
 
 ---

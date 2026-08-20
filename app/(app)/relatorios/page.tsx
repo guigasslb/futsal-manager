@@ -5,7 +5,12 @@ import { listarAtletas } from "@/lib/actions/atletas";
 import { obterRelatorioEquipa } from "@/lib/actions/relatorios";
 import { BotaoImprimir } from "@/components/relatorios/BotaoImprimir";
 import { EstadoErro } from "@/components/layout/EstadosUI";
-import { GraficoBarrasH } from "@/components/graficos/GraficoBarrasH";
+import dynamic from "next/dynamic";
+
+const GraficoBarrasH = dynamic(
+  () => import("@/components/graficos/GraficoBarrasH").then((m) => ({ default: m.GraficoBarrasH })),
+  { ssr: false },
+);
 
 function Cartao({ valor, label }: { valor: string | number; label: string }) {
   return (

@@ -159,6 +159,25 @@ export function eventoParaSessao(sessao: {
   };
 }
 
+/** Formata uma reunião como evento do Google Calendar. */
+export function eventoParaReuniao(reuniao: {
+  titulo?: string;
+  data: Date;
+  ordemTrabalhos?: string;
+  duracaoMinutos?: number;
+}): EventoGoogle {
+  const duracao =
+    reuniao.duracaoMinutos && reuniao.duracaoMinutos > 0 ? reuniao.duracaoMinutos : 60;
+  const inicio = reuniao.data;
+  const fim = new Date(inicio.getTime() + duracao * 60_000);
+  return {
+    titulo: reuniao.titulo?.trim() ? reuniao.titulo.trim() : "Reunião",
+    descricao: reuniao.ordemTrabalhos?.trim() ? reuniao.ordemTrabalhos.trim() : undefined,
+    inicio,
+    fim,
+  };
+}
+
 /** Formata um jogo como evento do Google Calendar. */
 export function eventoParaJogo(jogo: {
   adversario: string;

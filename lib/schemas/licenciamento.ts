@@ -36,6 +36,7 @@ export const LABEL_ESTADO_LICENCA: Record<EstadoLicenca, string> = {
   EXPIRADA: "Expirada",
   CANCELADA: "Cancelada",
   SUSPENSA: "Suspensa",
+  PENDENTE: "Pendente",
 };
 
 export const LABEL_CICLO: Record<CicloFaturacao, string> = {

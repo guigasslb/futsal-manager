@@ -1,6 +1,6 @@
 # Guia de deploy — Mister
 
-Complemento operacional da bíblia (`FutsalManager_Spec_v7.md`, secção 15). Passos para colocar a app em produção.
+Complemento operacional da bíblia (`Mister_Spec_v7.md`, secção 15). Passos para colocar a app em produção.
 
 ## 0. Deploy rápido no Vercel (recomendado)
 

@@ -2,7 +2,7 @@
 
 **Data:** 2026-08-11 | **Agentes:** 22 (8 QA técnica + 6 personas + 8 produto/marketing/crescimento)
 **Produto:** Mister — SaaS de gestão de treino de futsal, mercado português (PT-PT)
-**Base:** `docs/FutsalManager_Spec_v6.md` (bíblia) + verificação directa no código
+**Base:** `docs/Mister_Spec_v6.md` (bíblia) + verificação directa no código
 **Estado:** Consolidação executiva dos 22 relatórios individuais
 
 > **Nota de cobertura:** este master consolida os 11 relatórios com ficheiro em `docs/audit/` (8 de produto/marketing/crescimento + 3 personas) e os achados sintetizados dos restantes agentes da sessão anterior (5 de QA técnica + 3 personas), transmitidos sem ficheiro próprio. Onde um número ou linha de código é citado, provém do agente que fez a inspecção directa da fonte.

@@ -9,7 +9,15 @@ import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
 import { PainelEscalao } from "@/components/analiticos/PainelEscalao";
 import { ExportarCsvBotao } from "@/components/analiticos/ExportarCsvBotao";
 import { TabelaAcwrAtletas } from "@/components/analiticos/TabelaAcwrAtletas";
-import { CurvaCargaSemanal } from "@/components/graficos/CurvaCargaSemanal";
+import dynamic from "next/dynamic";
+
+const CurvaCargaSemanal = dynamic(
+  () =>
+    import("@/components/graficos/CurvaCargaSemanal").then((m) => ({
+      default: m.CurvaCargaSemanal,
+    })),
+  { ssr: false },
+);
 import { GerarRelatorioBotao } from "@/components/relatorios/GerarRelatorioBotao";
 import { BotaoPartilhaRanking } from "@/components/social/BotaoPartilhaRanking";
 import { EstadoVazio } from "@/components/layout/EstadosUI";

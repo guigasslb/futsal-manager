@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, CalendarPlus, CalendarRange } from "lucide-react";
 import { listarEscaloes } from "@/lib/actions/escaloes";
 import { SessaoForm } from "@/components/treinos/SessaoForm";
+import { PlanoSemanalForm } from "@/components/treinos/PlanoSemanalForm";
 import { EstadoErro } from "@/components/layout/EstadosUI";
 
 export const metadata: Metadata = { title: "Novo treino" };
@@ -17,11 +18,17 @@ function dataInicialDe(data?: string): Date | undefined {
 export default async function NovaSessaoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ data?: string; escalaoId?: string }>;
+  searchParams: Promise<{ data?: string; escalaoId?: string; modo?: string }>;
 }) {
-  const { data, escalaoId } = await searchParams;
+  const { data, escalaoId, modo } = await searchParams;
+  const ehPlano = modo === "plano";
+
   const resEscaloes = await listarEscaloes();
   if (!resEscaloes.sucesso) return <EstadoErro mensagem={resEscaloes.erro} />;
+
+  const qs = escalaoId ? `escalaoId=${escalaoId}&` : "";
+  const hrefAvulso = `/treinos/novo?${qs}modo=avulso`;
+  const hrefPlano = `/treinos/novo?${qs}modo=plano`;
 
   return (
     <div className="space-y-6">
@@ -35,13 +42,39 @@ export default async function NovaSessaoPage({
         </Link>
       </div>
 
-      <h1>Nova sessão</h1>
+      <h1>{ehPlano ? "Novo plano semanal" : "Nova sessão"}</h1>
 
-      <SessaoForm
-        escaloes={resEscaloes.dados}
-        escalaoIdInicial={escalaoId}
-        dataInicial={dataInicialDe(data)}
-      />
+      {/* Toggle de modo (§8.8.1) */}
+      <div className="flex gap-1 rounded-md border border-cinza-200 p-1 w-fit">
+        <Link
+          href={hrefAvulso}
+          className={`flex min-h-[44px] items-center gap-1.5 rounded px-3 py-1.5 text-corpo-sec font-medium transition-colors ${
+            !ehPlano ? "bg-primary text-white" : "text-cinza-600 hover:bg-cinza-50"
+          }`}
+        >
+          <CalendarPlus className="h-4 w-4" />
+          Treino avulso
+        </Link>
+        <Link
+          href={hrefPlano}
+          className={`flex min-h-[44px] items-center gap-1.5 rounded px-3 py-1.5 text-corpo-sec font-medium transition-colors ${
+            ehPlano ? "bg-primary text-white" : "text-cinza-600 hover:bg-cinza-50"
+          }`}
+        >
+          <CalendarRange className="h-4 w-4" />
+          Plano semanal
+        </Link>
+      </div>
+
+      {ehPlano ? (
+        <PlanoSemanalForm escaloes={resEscaloes.dados} escalaoIdInicial={escalaoId} />
+      ) : (
+        <SessaoForm
+          escaloes={resEscaloes.dados}
+          escalaoIdInicial={escalaoId}
+          dataInicial={dataInicialDe(data)}
+        />
+      )}
     </div>
   );
 }
