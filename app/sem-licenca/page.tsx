@@ -34,10 +34,10 @@ const MAILTO = `mailto:${EMAIL_CONTACTO}?subject=${encodeURIComponent(
   "Subscrição Mister",
 )}`;
 
-// Dados de pagamento por transferência bancária. Placeholders substituídos
-// depois pelos valores reais (IBAN e email de receção do comprovativo).
-const IBAN = "IBAN_PLACEHOLDER";
-const EMAIL_COMPROVATIVO = "EMAIL_PLACEHOLDER";
+// Dados de pagamento por transferência bancária. O IBAN ainda está por
+// definir — enquanto estiver vazio, a linha do IBAN é ocultada da UI.
+const IBAN = "";
+const EMAIL_COMPROVATIVO = "goncalo.pereira.1992@gmail.com";
 
 // Tabela de preços da licença de Clube (§3.11 / §17.1 da bíblia). Tiers por
 // número total de escalões (transversal às secções).
@@ -176,12 +176,14 @@ export default async function SemLicencaPage() {
             </div>
 
             <dl className="space-y-3 rounded-md border border-cinza-200 p-4">
-              <div>
-                <dt className="text-corpo-sec text-cinza-600">IBAN</dt>
-                <dd className="mt-0.5 select-all break-all font-mono text-corpo text-cinza-900">
-                  {IBAN}
-                </dd>
-              </div>
+              {IBAN ? (
+                <div>
+                  <dt className="text-corpo-sec text-cinza-600">IBAN</dt>
+                  <dd className="mt-0.5 select-all break-all font-mono text-corpo text-cinza-900">
+                    {IBAN}
+                  </dd>
+                </div>
+              ) : null}
               <div>
                 <dt className="text-corpo-sec text-cinza-600">Referência</dt>
                 <dd className="mt-0.5 break-words text-corpo text-cinza-900">
