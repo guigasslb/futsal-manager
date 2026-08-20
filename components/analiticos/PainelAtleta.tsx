@@ -1,6 +1,7 @@
 // Painel de analíticos do atleta (Nível 1 — bíblia §8.15 / §10.1).
 // Presentacional: recebe o AnaliticoAtleta já calculado (Server Action) e
 // desenha os tiles, a comparação com a equipa, a caderneta e os gráficos.
+"use client";
 
 import {
   Hand,

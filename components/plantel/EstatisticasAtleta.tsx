@@ -1,3 +1,5 @@
+"use client";
+
 import dynamic from "next/dynamic";
 import type { EstatisticasAgregadas } from "@/lib/actions/atletas";
 import type { JogoDadosAtleta, PresencaMensal } from "@/lib/actions/analise";

@@ -1,5 +1,6 @@
 // Painel de analíticos da equipa/escalão (Nível 2 — bíblia §8.15 / §10.2).
 // Presentacional: recebe o AnaliticoEscalao já calculado (Server Action).
+"use client";
 
 import type { TipoSessao } from "@prisma/client";
 import {
