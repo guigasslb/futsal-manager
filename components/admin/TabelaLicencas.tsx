@@ -95,8 +95,21 @@ export function TabelaLicencas({ licencas }: { licencas: LicencaAdmin[] }) {
                 key={l.id}
                 className="border-b border-cinza-100 last:border-0 align-middle"
               >
-                <td className="px-4 py-3 font-medium text-cinza-900">
-                  {titularDe(l)}
+                <td className="px-4 py-3">
+                  {l.tipo === "CLUBE" ? (
+                    <div className="flex flex-col">
+                      <span className="font-medium text-cinza-900">
+                        {l.clube?.nome ?? "Clube sem nome"}
+                      </span>
+                      <span className="text-legenda text-cinza-500">
+                        {l.clube?.adminEmail ?? "Sem administrador"}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="font-medium text-cinza-900">
+                      {l.utilizador?.email ?? "Utilizador sem email"}
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <span className="inline-flex items-center rounded-full border border-cinza-200 bg-cinza-50 px-2.5 py-0.5 text-legenda font-semibold text-cinza-700">
