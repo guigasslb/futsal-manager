@@ -1,6 +1,6 @@
 # Mister — Especificação do Produto Final (v7)
 
-> **Estatuto:** Bíblia do produto. Fonte única de verdade. **v7 (2026-08-19)** — sucede à `FutsalManager_Spec_v6.md` (mantida **intacta como histórico**, à semelhança do que a v6 fez à v5) e ao `FutsalManager_Spec_v4_MVP_historico.md` (arquivado).
+> **Estatuto:** Bíblia do produto. Fonte única de verdade. **v7 (2026-08-19)** — sucede à `Mister_Spec_v6.md` (mantida **intacta como histórico**, à semelhança do que a v6 fez à v5) e ao `Mister_Spec_v4_MVP_historico.md` (arquivado).
 > **Marca comercial:** o produto é distribuído sob a marca **Mister** (guia visual em `docs/BRAND.md`); "Mister" mantém-se como nome técnico/histórico do projeto.
 > **Regra de ouro:** nenhuma alteração de código sem a atualização correspondente neste documento, no mesmo passo. Toda a modificação é registada no **changelog (secção 19)** com data e descrição. Se o código se perder, este documento tem de permitir recriar tudo do zero a 100%.
 > **Convenções:** **DEVE** = obrigatório · **DEVERIA** = recomendado · **FUTURO** = fora do âmbito da versão atual do produto final.
@@ -59,6 +59,7 @@ A **v7** expande o Mister de plataforma dedicada ao **futsal** para plataforma *
 18. [Roadmap futuro](#18-roadmap-futuro)
 19. [Changelog da documentação](#19-changelog-da-documentação)
 20. [Arquitetura multi-desporto e extensibilidade](#20-arquitetura-multi-desporto-e-extensibilidade)
+21. [Backoffice Interno (Admin)](#21-backoffice-interno-admin)
 - [Apêndice A — Configuração de Futsal](#apêndice-a--configuração-de-futsal)
 - [Apêndice B — Configuração de Futebol (todos os formatos)](#apêndice-b--configuração-de-futebol-todos-os-formatos)
 - [Apêndice C — Matriz de migração v6→v7](#apêndice-c--matriz-de-migração-v6v7)
@@ -465,7 +466,7 @@ model Atleta {
   posicoes            Posicao[] // um atleta pode ter VÁRIAS posições (futsal e/ou futebol)
   observacoes         String?
   fotoUrl             String?   // por URL (upload Supabase é follow-up)
-  ativo               Boolean   @default(true) // soft delete
+  ativo               Boolean   @default(true) // estado no plantel: ativo vs saiu/experimental (§8.5) + soft delete
   dataIngresso        DateTime? // para taxa de presença (secção 10); default = criadoEm
   // Encarregado de educação (RGPD — minimização)
   encarregadoNome     String?
@@ -676,6 +677,51 @@ enum TipoPlaneamento { SEMANAL MENSAL }
 enum PeriodoEpoca { PREPARATORIO COMPETITIVO TRANSICAO }
 enum ModoSemana { ESTRUTURADO TEXTO_LIVRE }
 
+// ── Plano semanal de treinos (§8.8.1) — 🔁 novo 2026-08-20 ──────────────────
+// Horário RECORRENTE de treino de um escalão numa época. A partir dos dias da
+// semana configurados, o sistema GERA automaticamente as sessões da época (8.8.1).
+// As sessões geradas ligam-se ao plano (`Sessao.planoSemanalId`) e ao dia
+// (`Sessao.planoSemanalDiaId`) para a propagação "esta e todas as futuras" funcionar.
+// NÃO confundir com `Planeamento` (periodização/carga por semana — MD-X, microciclo)
+// nem com `ModeloSessao` (conteúdo reutilizável): o plano semanal só AGENDA
+// (data/hora/local/tipo); o CONTEÚDO (exercícios/presenças) vive na `Sessao`.
+// No máximo UM plano `ativo` por (escalaoId, epocaId) — validado na aplicação.
+model PlanoSemanal {
+  id           String   @id @default(cuid())
+  clubeId      String   // scope multi-tenant (todas as queries filtram por clube)
+  escalaoId    String
+  epocaId      String
+  nome         String?  // livre; fallback = nome do escalão
+  ativo        Boolean  @default(true)
+  criadorId    String
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  dias    PlanoSemanalDia[]
+  sessoes Sessao[]
+
+  @@index([epocaId, escalaoId])
+  @@index([clubeId])
+}
+
+// Configuração de UM dia da semana. É o BASELINE (hora/local/tipo) usado na
+// GERAÇÃO e na PROPAGAÇÃO: editar o baseline propaga a "esta e todas as futuras".
+model PlanoSemanalDia {
+  id             String       @id @default(cuid())
+  planoSemanalId String
+  planoSemanal   PlanoSemanal @relation(fields: [planoSemanalId], references: [id], onDelete: Cascade)
+  diaSemana      Int          // ISO-8601: 1=segunda … 7=domingo
+  horaInicio     String       // "HH:MM" (hora local)
+  horaFim        String       // "HH:MM" (> horaInicio)
+  local          String?
+  tipoSessao     TipoSessao   @default(NORMAL)
+
+  sessoes Sessao[]
+
+  @@unique([planoSemanalId, diaSemana])
+  @@index([planoSemanalId])
+}
+
 model Sessao {
   id            String     @id @default(cuid())
   clubeId       String
@@ -697,6 +743,13 @@ model Sessao {
   volume        Int?
   googleEventId String?  // sincronização Google Calendar (secção 8.16)
   modalidadeAtividade  Modalidade?  // 🔁 v7: null = herda da secção do escalão; preenchido = actividade pontual noutra modalidade
+  // §8.8.1 — ligação ao plano semanal (null = treino avulso). SetNull: apagar o
+  // plano não apaga as sessões (só as desvincula). `personalizada = true` quando a
+  // sessão foi editada individualmente ("só esta"): a propagação "esta e futuras"
+  // não sobrescreve os seus campos de agendamento.
+  planoSemanalId    String?
+  planoSemanalDiaId String?
+  personalizada     Boolean @default(false)
   criadorId     String
   criadoEm      DateTime @default(now())
   atualizadoEm  DateTime @updatedAt
@@ -810,6 +863,8 @@ enum TipoQuadroTatico { GERAL BOLA_PARADA }
 
 > **🔁 Alteração v7:** `Jogo` ganha **`formato FormatoJogo`** e `Competicao` ganha **`formatoJogo FormatoJogo?`** (ver enum). ⚠️ Em `Competicao` o campo chama-se **`formatoJogo`** (não `formato`) para não colidir com o campo já existente `formato FormatoCompeticao` (LIGA/TORNEIO/TACA). `EstatisticaAtleta` ganha o **núcleo estatístico de futebol** (remates, cantos, foras-de-jogo, desarmes). Os campos `Jogo.faltas1aParte`/`faltas2aParte` **só se aplicam a futsal** (ocultos na UI de futebol). O núcleo estatístico é sempre acompanhado das **métricas configuráveis** (`MetricaConfig`) — mesmo princípio nas duas modalidades (secção 10.8).
 
+> **🔁 Alteração 2026-08-20 (equipas + quadro competitivo + agendamento — Fase 32):** a competição deixa de ter as equipas como texto livre disperso pelos resultados e ganha a entidade **`EquipaCompeticao`** (equipas participantes com seed/cabeça-de-série). `ResultadoCompeticao` ganha **`ronda`** (jornada de LIGA ou fase de TORNEIO/TAÇA), **`dataHora`** (agendamento, `null` = "por definir") e **`estado EstadoResultado`** (`AGENDADO`/`REALIZADO`), passando `golosCasa`/`golosFora` a serem **nullable** (jogo agendado ainda sem resultado). Isto permite **gerar o quadro competitivo** (todos-contra-todos para LIGA; bracket eliminatório para TORNEIO/TAÇA) e **agendar** os jogos na própria criação da competição (§8.11). Os campos são **aditivos** e retrocompatíveis: resultados legados têm `ronda=null`, `dataHora=null` e assumem `estado=REALIZADO` (ver Apêndice C / backfill).
+
 ```prisma
 model Competicao {
   id        String       @id @default(cuid())
@@ -824,11 +879,29 @@ model Competicao {
 
   jogos      Jogo[]
   resultados ResultadoCompeticao[] // resultados de outras equipas (para a classificação)
+  equipas    EquipaCompeticao[]    // 🔁 2026-08-20: equipas participantes (entidade, já não texto livre)
 }
 
 enum TipoJogo { OFICIAL AMIGAVEL }
 enum CasaFora { CASA FORA }
 enum FormatoCompeticao { LIGA TORNEIO TACA }
+// 🔁 2026-08-20: estado do jogo da competição. AGENDADO = ainda sem resultado; REALIZADO = resultado inserido.
+enum EstadoResultado { AGENDADO REALIZADO }
+
+// 🔁 2026-08-20: equipa participante numa competição (seed para o bracket / identidade estável).
+//   Substitui o uso de texto livre disperso pelos ResultadoCompeticao.
+model EquipaCompeticao {
+  id           String     @id @default(cuid())
+  competicaoId String
+  nome         String     // texto livre, trim obrigatório
+  posicao      Int?       // seed/cabeça-de-série para o bracket (ordem de introdução)
+  criadoEm     DateTime   @default(now())
+
+  competicao   Competicao @relation(fields: [competicaoId], references: [id], onDelete: Cascade)
+
+  @@unique([competicaoId, nome]) // unicidade case-sensitive; display compara case-insensitive
+  @@index([competicaoId])
+}
 
 // 🔁 v7: formato de jogo (nº de jogadores por equipa). Deriva por defeito da modalidade da secção
 //   do escalão; guardado no jogo para o editor de campo e a interpretação das estatísticas.
@@ -848,8 +921,12 @@ model ResultadoCompeticao {
   data         DateTime?
   equipaCasa   String
   equipaFora   String
-  golosCasa    Int
-  golosFora    Int
+  golosCasa    Int?       // 🔁 2026-08-20: nullable — null enquanto AGENDADO (jogo por realizar)
+  golosFora    Int?       // 🔁 2026-08-20: nullable — idem
+  // 🔁 2026-08-20: quadro competitivo + agendamento
+  ronda        Int?       // LIGA: nº da jornada · TORNEIO/TAÇA: fase (1=final, 2=meias, 4=quartos, 8=oitavos…)
+  dataHora     DateTime?  // data e hora do jogo; null = "por definir"
+  estado       EstadoResultado @default(AGENDADO) // AGENDADO até ter resultado; REALIZADO ao inserir
   criadoEm     DateTime   @default(now())
 
   @@index([competicaoId])
@@ -1036,7 +1113,7 @@ enum EstadoHabilidade { NAO_INICIADO EM_PROGRESSO DESBLOQUEADO }
 ```
 
 ### 3.9 Reuniões e comunicação (🏛️ clube)
-Sem alteração de modelo na v7. `Reuniao` (com `ambito CLUBE | ESCALAO`, `googleEventId`, criador `SetNull`), `ModeloComunicacao` (7 tipos, globais via `clubeId = null` + variante do clube), placeholders `{{campo}}` e `gerarTextoComunicacao` — conforme v6 §3.9. (Os placeholders de `RESULTADO`/`CONVOCATORIA` são agnósticos à modalidade; ver 8.12.)
+`Reuniao` (com `ambito CLUBE | ESCALAO`, `ordemTrabalhos`, `ata`, `googleEventId`, criador `SetNull`), `ModeloComunicacao` (7 tipos, globais via `clubeId = null` + variante do clube), placeholders `{{campo}}` e `gerarTextoComunicacao` — conforme v6 §3.9. (Os placeholders de `RESULTADO`/`CONVOCATORIA` são agnósticos à modalidade; ver 8.12.) **🔁 v7 — `Reuniao` ganha `afixada Boolean @default(false)`** — indica se a reunião está afixada no dashboard/Início; controla a apresentação descrita em §8.13 (afixadas surgem sempre no dashboard, independentemente da data). Alteração **aditiva** (default `false`).
 
 ### 3.10 Relatório de época partilhável (🏛️ clube)
 Sem alteração de modelo na v7. `RelatorioPartilhado` (`token @unique`, `tipo TipoRelatorio`, `dadosSnapshot Json?` imutável, `expiraEm?`) — conforme v6 §3.10. O snapshot passa a poder conter dados segmentados por modalidade (secção 10.8), mas o modelo é o mesmo.
@@ -1044,7 +1121,9 @@ Sem alteração de modelo na v7. `RelatorioPartilhado` (`token @unique`, `tipo T
 ### 3.11 Licenciamento, subscrição e carteira
 Modelo desenhado para suportar Paddle. O **billing** (checkout, webhooks, pagamentos via Paddle) mantém-se **deferido**; a arquitetura de dados fica pronta. **🔁 v7:** `Licenca` ganha os campos multi-secção necessários ao pricing por secção (secção 17.1) e o registo da modalidade Individual.
 
-**Guarda de acesso à plataforma (ativa).** Distinta do billing e da **autenticação** (Auth.js, intocável): uma **guarda de licença** protege toda a área autenticada da app (grupo de rotas `app/(app)/`). Após a autenticação e a verificação de adesão a clube, o layout (`app/(app)/layout.tsx`) chama `temLicencaValida(clubeId, utilizadorId)` (`lib/licenca.ts`); sem licença **válida** o utilizador é redirecionado para o **paywall** `/sem-licenca` (fora do grupo `(app)`, sem ciclo de redirect). Regras (função pura `licencaValida`, testável): uma licença dá acesso quando está **`ATIVA`** e (não tem `dataFim`, ou essa data ainda não passou — cobre períodos experimentais, já que o enum `EstadoLicenca` não tem estado `TRIAL`; um trial é uma licença `ATIVA` com `dataFim` futura). Vale a licença de **Clube** (`Licenca.clubeId`) **ou** a **Individual** (`Licenca.utilizadorId` — clube técnico invisível, §3.1). A guarda **não** processa pagamentos: a criação/renovação de licenças (e a transição automática `ATIVA→EXPIRADA`) entra com o billing Paddle.
+**Guarda de acesso à plataforma (ativa).** Distinta do billing e da **autenticação** (Auth.js, intocável): uma **guarda de licença** protege toda a área autenticada da app (grupo de rotas `app/(app)/`). Após a autenticação e a verificação de adesão a clube, o layout (`app/(app)/layout.tsx`) chama `temLicencaValida(clubeId, utilizadorId)` (`lib/licenca.ts`); sem licença **válida** o utilizador é redirecionado para o **paywall** `/sem-licenca` (fora do grupo `(app)`, sem ciclo de redirect). Regras (função pura `licencaValida`, testável): uma licença dá acesso quando está **`ATIVA`** e (não tem `dataFim`, ou essa data ainda não passou — cobre períodos experimentais, já que o enum `EstadoLicenca` não tem estado `TRIAL`; um trial é uma licença `ATIVA` com `dataFim` futura). Vale a licença de **Clube** (`Licenca.clubeId`) **ou** a **Individual** (`Licenca.utilizadorId` — clube técnico invisível, §3.1). Uma licença **`PENDENTE`** (criada no registo, à espera de confirmação de pagamento — ver abaixo) **não** é válida: a guarda trata o titular como sem acesso e redireciona-o para o paywall `/sem-licenca`. A guarda **não** processa pagamentos: a criação/renovação de licenças (e a transição automática `ATIVA→EXPIRADA`) entra com o billing Paddle.
+
+**🔁 Escolha de plano no onboarding + licença `PENDENTE` (fluxo interino, ativo).** O **wizard de onboarding** (§8.1) inclui, **antes do submit final**, um **passo de escolha de plano** (tier): o utilizador seleciona o plano pretendido (Individual, ou Clube por tier de escalões — §17.1). Ao **criar o clube**, é criada uma `Licenca` com **`estado: PENDENTE`** e o **tier escolhido** (e `ciclo`/`precoCentimos` correspondentes). Como `PENDENTE` não concede acesso, ao concluir o onboarding o utilizador é encaminhado para o paywall `/sem-licenca`. Aí, em vez da **tabela completa de planos**, o ecrã mostra **o plano escolhido e o valor exato a transferir**, com as instruções de transferência bancária (IBAN + referência + email de comprovativo — §17.5). A ativação (`PENDENTE → ATIVA`) é feita **manualmente pelo admin no backoffice** (§21.2) após receção do comprovativo.
 
 ```prisma
 // Licença ativa de um utilizador (Individual) OU de um clube (Clube).
@@ -1053,7 +1132,7 @@ model Licenca {
   id            String         @id @default(cuid())
   tipo          TipoLicenca    // INDIVIDUAL | CLUBE
   tier          TierClube?     // só se tipo=CLUBE: PEQUENO | MEDIO | GRANDE | PARCEIRO
-  estado        EstadoLicenca  @default(ATIVA) // ATIVA | EXPIRADA | CANCELADA | SUSPENSA
+  estado        EstadoLicenca  @default(ATIVA) // PENDENTE | ATIVA | EXPIRADA | CANCELADA | SUSPENSA
   ciclo         CicloFaturacao // MENSAL | ANUAL
   precoCentimos Int?           // preço praticado (cêntimos) — já com acréscimo multi-secção
 
@@ -1083,7 +1162,7 @@ model Licenca {
 
 enum TipoLicenca { INDIVIDUAL CLUBE }
 enum TierClube { PEQUENO MEDIO GRANDE PARCEIRO }
-enum EstadoLicenca { ATIVA EXPIRADA CANCELADA SUSPENSA }
+enum EstadoLicenca { PENDENTE ATIVA EXPIRADA CANCELADA SUSPENSA }
 enum CicloFaturacao { MENSAL ANUAL }
 
 // Carteira (wallet) do treinador — crédito de absorção usado em compras futuras.
@@ -1113,6 +1192,14 @@ enum TipoMovimento { CREDITO_ABSORCAO DEBITO_COMPRA REEMBOLSO AJUSTE }
 ```
 
 > **🔁 v7 — modalidade na licença Individual (DEVERIA):** a licença Individual regista a **modalidade contratada** em `Licenca.modalidade` (a secção única do clube técnico determina-a; o campo torna explícito o produto vendido). A licença de Clube **não** fixa modalidade (o clube tem as secções que tiver); o pricing escala por secção via `numSeccoes` (secção 17.1). ⚠️ decidir na implementação se `Licenca.modalidade` é a fonte de verdade ou derivado da secção do clube técnico.
+
+> **🔁 Estados da licença (`EstadoLicenca`):**
+> - **`PENDENTE`** — licença **criada aquando do registo** (com o tier escolhido no onboarding), **aguarda confirmação de pagamento**. **Não concede acesso** (a guarda trata-a como sem licença). É o estado inicial no fluxo interino por transferência bancária (§17.5); transita para `ATIVA` quando o admin confirma o comprovativo (§21.2).
+> - **`ATIVA`** — licença válida; concede acesso enquanto não tiver `dataFim` no passado (um trial é uma `ATIVA` com `dataFim` futura).
+> - **`EXPIRADA`** — `dataFim` ultrapassada; transição automática (entra com o billing).
+> - **`CANCELADA`** — subscrição cancelada; sem acesso.
+> - **`SUSPENSA`** — suspensa administrativamente; sem acesso.
+> - **Nota:** o `@default(ATIVA)` do schema mantém-se (usado por criação administrativa/absorção); o onboarding (`criarClube`) **grava `PENDENTE` explicitamente**.
 
 ### 3.12 Integração com calendário externo (Google Calendar)
 Sem alteração na v7. `IntegracaoCalendario` (OAuth Google, `refreshToken` encriptado at-rest), `googleEventId` em `Sessao`/`Jogo`/`Reuniao` — conforme v6 §3.12.
@@ -1387,7 +1474,8 @@ criarHabilidade({ ..., modalidade? })/atualizarHabilidade/apagarHabilidade/mover
 **Plantel e participações** (`atletas.ts`, `participacoes.ts`) — `PLANTEL_GERIR`, `PROMOVER_ATLETAS`
 ```
 criarAtleta/atualizarAtleta/apagarAtleta(soft)/apagarAtletaDefinitivamente/obterAtleta
-listarAtletas(escalaoId?, epocaId?) // por participação ativa
+toggleAtivoAtleta(atletaId) // alterna ativo↔inativo (período experimental/saída — §8.5)
+listarAtletas(escalaoId?, epocaId?, seccaoId?, incluirInativos?=false) // participação ativa; só ativos por defeito
 criarAtletasEmMassa(lista[{nome, numero}]) // onboarding
 associarAEscalao(atletaId, escalaoId, tipo, numero) // PLANTEL_GERIR no escalão (invariante principal por modalidade — §9)
 transferirEscalao(atletaId, deEscalao, paraEscalao, permanente?)
@@ -1414,6 +1502,13 @@ adicionarExercicioSessao/removerExercicioSessao/reordenarExercicios
 marcarPresencas(sessaoId, presencas[]) // upsert em lote; inclui motivo de falta
 criarPlaneamento/atualizarPlaneamento/apagarPlaneamento/listarPlaneamentos/sugerirPlaneamento
 registarRpeSessao(sessaoId, rpe)/registarRpeAtleta(sessaoId, atletaId, rpe)/obterCargaSemanal(escalaoId)
+// §8.8.1 — Plano semanal de treinos
+preverPlanoSemanal(dados)            // dry-run: nº de sessões, intervalo, dias já ocupados; não persiste
+criarPlanoSemanal(dados)             // gera as sessões da época em transação; devolve { planoId, geradas, ignoradas }
+listarPlanosSemanais(escalaoId?)/obterPlanoSemanal(id)
+atualizarPlanoSemanal(id, dados)     // add/remover dias, renomear, ativo; propaga baseline às futuras
+apagarPlanoSemanal(id, { modo })     // modo: DESVINCULAR | APAGAR_FUTURAS_VAZIAS
+atualizarSessao(id, dados, { alcance? }) // alcance: SO_ESTA (default) | ESTA_E_FUTURAS (só p/ sessões com planoSemanalId)
 ```
 
 **Modelo de jogo / quadro tático** (`modeloJogo.ts`) — `MODELO_JOGO_GERIR`
@@ -1434,6 +1529,13 @@ guardarRelatorio/definirVideo
 obterVistaDiaDeJogo(jogoId)
 criarCompeticao/atualizarCompeticao/apagarCompeticao/listarCompeticoes // COMPETICOES_GERIR
 registarResultadoExterno(competicaoId, dados)/obterClassificacao(competicaoId)
+// 🔁 2026-08-20: equipas, quadro competitivo e agendamento (COMPETICOES_GERIR)
+adicionarEquipaCompeticao(competicaoId, nome) -> EquipaCompeticao
+removerEquipaCompeticao(equipaCompeticaoId)   // bloqueia se a equipa já tem jogos REALIZADOS
+obterEquipasCompeticao(competicaoId) -> EquipaCompeticao[]
+gerarQuadroCompeticao(competicaoId, { duasMaos: boolean }) -> ResultadoCompeticao[] // falha se já há quadro (confirmação no UI)
+criarCompeticaoCompleta(dados, equipas, jogos) -> Competicao // transação única do wizard (§8.11)
+atualizarAgendamentoJogo(resultadoId, dataHora: Date | null)
 criarObservacaoAdversario(jogoId?, dados)/listarObservacoes // SCOUTING_GERIR
 ```
 
@@ -1496,6 +1598,7 @@ Cada módulo define **conteúdo**, **ações**, **estado vazio** e **regras**. E
 - **Gating de UI (6.7):** associar/transferir só com `PLANTEL_GERIR`; terminar só com `PROMOVER_ATLETAS`. Os escalões oferecidos limitam-se aos **geríveis** (todos se `TODO_CLUBE`; da secção se `SECCAO`; os atribuídos se `PROPRIOS_ESCALOES`).
 - **Perfil do atleta:** cabeçalho + abas **Estatísticas** (vista conjunta na época **segmentada por modalidade/secção** 🔁 + vista por escalão), **Caderneta**, **Carreira** (percurso, com modalidade), **Dados** (+ consentimentos), **Participações** (histórico de escalões, indicando modalidade).
 - **Novo/Editar:** nome (obrigatório), posições (filtradas pela modalidade do contexto, mas o atleta pode acumular de ambas), data de nascimento, foto (URL), encarregado de educação; **escalão + número** na participação.
+- **Estado no plantel (`ativo`) 🔁 novo 2026-08-20:** o atleta tem um campo booleano **`ativo`** (default `true`) que distingue quem está **no plantel** de quem **saiu** ou ainda está em **período experimental** (nos primeiros treinos aparecem atletas a experimentar — são criados e as suas presenças registadas antes de se saber se ficam). A **lista do plantel só mostra atletas ativos por defeito** (`listarAtletas` filtra `ativo:true`); um parâmetro opcional **`incluirInativos`** mostra todos. A ação **`toggleAtivoAtleta`** alterna o estado (verifica `PLANTEL_GERIR` num escalão do atleta); ao contrário de `apagarAtleta` (que força `ativo:false`), faz toggle — reativa um inativo ou desativa um ativo. A **edição de dados pessoais não altera `ativo`** (só as ações dedicadas o fazem). As **queries de histórico** (estatísticas, presenças e convocatórias passadas em `obterEstatisticasAtleta`) **não** filtram por `ativo` — um atleta inativo mantém o histórico válido.
 - **Apagar:** soft-delete; hard-delete só por RGPD (5.5) — remove participações em todas as secções.
 - **Estado vazio:** "Ainda não há atletas neste escalão." + atalho de criação em massa.
 
@@ -1514,10 +1617,71 @@ Cada módulo define **conteúdo**, **ações**, **estado vazio** e **regras**. E
 
 ### 8.8 Treinos (`TREINOS_GERIR`, `PRESENCAS_MARCAR`)
 - **Lista/Calendário:** **agrupamento por secção quando >1** 🔁, tabs por escalão; alternância lista ⇄ calendário mensal; agrupamento automático por **semana** (8.9).
-- **Detalhe:** cabeçalho + **Exercícios** (picker filtra pela modalidade do escalão) e **Presenças** (motivo de falta quando aplicável). Notas de treino. **RPE da sessão** (§8.20).
-- **Novo/Editar:** data/hora, escalão, duração, objetivo, local, notas, ligação a semana (opcional), criar a partir de template, **modalidade da actividade** (opcional) 🔁.
+- **Detalhe (`/treinos/[id]`):** ecrã redesenhado orientado à **condução do treino** — cabeçalho, **Iniciar treino** (modo condução em campo), **Presenças** (toggle de 1 toque), **Exercícios** (com conteúdo real e linha expansível), **Carga da sessão (RPE)** e **Notas** editáveis inline. Especificação completa em **§8.8.2**.
+- **Novo/Editar:** **dois modos** — *Treino avulso* (sessão única, fluxo atual) ou *Plano semanal* (§8.8.1). No modo avulso: data/hora, escalão, duração, objetivo, local, notas, ligação a semana (opcional), criar a partir de template, **modalidade da actividade** (opcional) 🔁.
 - **🔁 Modalidade da actividade (v7):** o campo "Modalidade da actividade" é **opcional** e por defeito herda da secção do escalão. O treinador pode alterá-lo para actividades pontuais (ex: escalão de futebol que participa num torneio de futsal). Quando diferente da modalidade mãe, a sessão é sinalizada com badge de modalidade nos painéis de treino.
 - **Estado vazio:** "Sem sessões nesta época."
+
+#### 8.8.1 Plano semanal de treinos (`TREINOS_GERIR`) — 🔁 novo 2026-08-20
+Dois modos de criação de treinos. **Modo 1 — Treino avulso:** sessão única (§8.8), inalterado. **Modo 2 — Plano semanal:** agenda o horário recorrente do escalão e o sistema gera automaticamente as sessões da época.
+
+- **Rotas:** toggle "Treino avulso | Plano semanal" em **`/treinos/novo`**; gestão dos planos em **`/treinos/planos`** (lista por escalão).
+- **Criar plano:** escolher escalão + selecionar os **dias da semana** com treino; por **cada dia** definir **hora de início**, **hora de fim**, **local** e **tipo de sessão** (`TipoSessao`, default `NORMAL`). Nome do plano opcional (fallback = nome do escalão).
+- **Intervalo de geração:** de **`dataInicioGeracao`** (default: hoje, ou `época.dataInicio` se a época ainda não começou; editável) até **`época.dataFim`**. **Nunca gera sessões no passado** por defeito.
+- **Pré-visualização obrigatória:** antes de confirmar, `preverPlanoSemanal` mostra "**Vais gerar N treinos** entre DD/MM e DD/MM" e **quantos dias já têm treino** (serão ignorados). Confirmação explícita.
+- **Geração:** `criarPlanoSemanal` cria, numa transação, uma `Sessao` por cada data do intervalo cujo dia da semana está configurado — `data` = data @ `horaInicio`, `duracaoMin` = `horaFim − horaInicio`, `local`, `tipoSessao`, ligada ao plano (`planoSemanalId`) e ao dia (`planoSemanalDiaId`). **Sem** exercícios nem presenças (conteúdo é preenchido depois). **Deduplicação:** datas que já têm sessão para o escalão são **ignoradas** (não duplica). Sessões `NORMAL` geradas têm `planeamentoId = null` (a ligação à periodização mantém-se um passo separado, §8.9).
+- **Cada sessão gerada é individualmente editável** como qualquer treino.
+
+**Editar uma sessão gerada — escolha de alcance.** Ao guardar alterações de **agendamento** (hora, local, tipo, duração) numa sessão ligada a um plano, a UI pergunta:
+- **Só esta sessão** (default) — altera apenas esta e marca-a `personalizada = true` (fica protegida de futuras propagações).
+- **Esta e todas as futuras** — atualiza o **baseline** do dia (`PlanoSemanalDia`) e aplica os mesmos campos a **todas as sessões futuras** do mesmo dia ligadas ao plano, **exceto** as já `personalizada`; a sessão-âncora recebe sempre a alteração. **Nunca** altera sessões com `data < agora`. A UI reporta "N sessões atualizadas; M personalizadas mantidas".
+- Alterações de **conteúdo** (exercícios/presenças/notas/objetivo/RPE) são **sempre** "só esta" e nunca são tocadas pela propagação.
+
+**Gerir o plano (`/treinos/planos`):**
+- **Adicionar dia:** gera as sessões futuras (hoje→fim da época) desse novo dia (com deduplicação).
+- **Remover dia:** apaga as sessões **futuras e sem conteúdo** desse dia; as que já têm conteúdo são **desvinculadas** e preservadas; passadas intactas. Confirmação.
+- **Editar hora/local/tipo de um dia:** equivale a "esta e todas as futuras" a partir de hoje.
+- **Apagar plano:** modo **Desvincular** (`planoSemanalId = null`, mantém sessões) ou **Apagar futuras vazias** (apaga futuras sem conteúdo e desvincula as restantes). **Nunca apaga sessões com conteúdo em silêncio.**
+- **No máximo um plano `ativo` por (escalão, época).** Escalões diferentes têm planos diferentes.
+- **Sincronização Google Calendar:** cada sessão gerada sincroniza como treino individual (§8.16); a propagação de hora faz *update* do evento (idempotente via `googleEventId`), nunca delete+recreate.
+
+#### 8.8.2 Detalhe da sessão de treino — ecrã de condução (`TREINOS_GERIR`, `PRESENCAS_MARCAR`) — 🔁 novo 2026-08-20
+
+O ecrã `/treinos/[id]` é redesenhado para ser **mobile-first** e servir dois momentos: **preparar** o treino (antes) e **conduzi-lo em campo** (durante). Sem alteração ao modelo de dados — usa `Sessao`, `SessaoExercicio` (incl. campos `snap*`), `Presenca`, `Sessao.rpeSessao` e `RpeAtleta` (§3.5). Alvos de toque **≥44px** em toda a página; tipografia ampliada no modo condução.
+
+**Ordem das secções (de cima para baixo):**
+1. **Cabeçalho** — data/hora, local, duração e objetivo da sessão (badge de modalidade quando a actividade difere da modalidade mãe, §8.8).
+2. **Iniciar treino** — botão de arranque do modo condução.
+3. **Presenças** — marcação por toggle de 1 toque.
+4. **Exercícios** — lista com conteúdo real e linha expansível.
+5. **Carga da sessão (RPE)** — RPE da sessão (§8.20).
+6. **Notas** — campo editável inline (sem entrar em "Editar").
+
+**1. Exercícios com conteúdo real.** Cada linha da lista mostra:
+- **Miniatura do diagrama de campo** (`MiniaturaCampo`) quando o exercício tem diagrama; *placeholder* neutro quando não tem.
+- **Nome**, **categoria** (`CategoriaExercicioPrincipal` / subcategoria) e **duração** (min).
+- **Objetivo** em texto, apresentado **abaixo do nome**.
+- **Linha expansível:** um toque abre um **painel inline** com a **descrição/montagem completa** do exercício (sem navegar para fora). Novo toque recolhe.
+- **Linha clicável para o detalhe do exercício** (abre a ficha do exercício); a área de expandir/recolher e a de navegar são visualmente distintas para não colidirem no toque.
+- **Reordenar** só aparece em **modo "Editar ordem"** (toggle no topo da secção): fora desse modo, os controlos de arrastar/subir/descer estão **ocultos** para manter a lista limpa durante a leitura e a condução. A reordenação continua a persistir via `SessaoExercicio.ordem` (regras de reordenação de §9 inalteradas).
+- Fonte do conteúdo respeita o **snapshot** quando existe (`snapNome`/`snapDescricao`/`snapObjetivo`/`snapDiagrama` de exercício portátil usado em sessão do clube — §4.2.1); caso contrário, os campos do exercício mestre.
+
+**2. Presenças com toggle de 1 toque.** Substitui os dropdowns `Select` por um **controlo segmentado inline por atleta**, com os estados: **`Presente` · `Falta` · `Lesionado` · `Just.`** (mapeados a `EstadoPresenca`: `PRESENTE`, `FALTA`, `LESIONADO`, `FALTA_JUSTIFICADA`). Comportamento:
+- **Um toque** define o estado do atleta (sem abrir menu). O segmento ativo fica destacado com a **cor do clube** (`--cor-primaria`).
+- O **campo de motivo de falta** (`Presenca.motivo`, enum `MotivoFalta`; `justificacao` livre opcional) surge **contextualmente** apenas quando o estado o justifica (`FALTA`/`FALTA_JUSTIFICADA`/`LESIONADO`), com as opções já existentes (Lesão/Doença/Outro/Sem justificação, §2).
+- **Mantêm-se** as ações e indicadores atuais: **"Marcar todos presentes"**, **"Repor"**, **contador** (presentes/total) e **"Guardar presenças"** (upsert em lote, §8.8). O estado `ATRASADO` permanece válido no modelo, acessível pela edição do motivo/estado quando aplicável, mas fora dos quatro segmentos principais.
+- Persistência inalterada: `Presenca` com `@@unique([sessaoId, atletaId])`, cálculo por escalão (§3.5).
+
+**3. Modo treino (condução em campo).** Acionado pelo botão **"▶ Iniciar treino"** no topo (cor **laranja Mister**, **largura total em mobile**). Abre uma **vista em ecrã cheio** focada num exercício de cada vez:
+- **Exercício atual em grande:** diagrama ampliado, nome, objetivo e descrição, com tipografia grande e legível à distância.
+- **Cronómetro crescente** (conta desde o início do treino) e **barra de progresso** do percurso pelos exercícios (ex.: **"2/5"**).
+- Navegação com **"Anterior"** e **"Próximo"** (alvos ≥44px), percorrendo os exercícios pela `ordem`.
+- **Ao terminar** (concluir o último exercício ou sair do modo): **regressa ao detalhe** da sessão e **foca o bloco de Carga da sessão (RPE)** para registo imediato da perceção de esforço (§8.20).
+- O modo condução é **só de apresentação/navegação**: não altera exercícios nem presenças; a captura de dados acontece no detalhe (presenças) e no bloco de RPE (carga).
+
+**4. Notas editáveis inline.** O campo **`Sessao.notas`** passa a ser editável **diretamente no detalhe** (guardar inline), sem abrir o ecrã "Editar" da sessão. Restantes campos de agendamento continuam a editar-se no formulário de sessão (§8.8 / §8.8.1).
+
+**Casos-limite:** sessão **sem exercícios** → estado vazio na lista e **"Iniciar treino" desativado** (com dica "Adiciona exercícios para conduzir o treino"); sessão **sem atletas elegíveis** → estado vazio nas presenças; a condução respeita a ordem atual mesmo que a lista tenha sido reordenada momentos antes (lê a `ordem` persistida).
 
 ### 8.9 Periodização e semana de trabalho (`PERIODIZACAO_GERIR`)
 Conforme v6 §8.9 (sem alteração funcional na v7): grelha anual + planos semanais/mensais; UI usa **«Semana»** (nunca «Microciclo»); agrupamento automático por data; formalizar é opcional (nome livre + modo Estruturado MD-X / Texto livre); **Mesociclo** interno/avançado. Propriedade: instância concreta 🏛️ do clube; metodologia (semana-tipo) 🎒 portátil.
@@ -1537,14 +1701,39 @@ Conforme v6 §8.9 (sem alteração funcional na v7): grelha anual + planos seman
   - **Modo ao vivo:** eventos (golo, assistência, falta, cartão, substituição com bloco, defesa, timeout — **futsal**; + **remate, canto, fora-de-jogo, desarme** — **futebol** 🔁) por parte/minuto; agrega para estatísticas. Otimizado telemóvel + offline. **Sem bloqueio de substituições** (informativo — 1.6).
   - **Relatório** (texto) · **Vídeo** (YouTube) · **Quadro tático** (diagramas do jogo, campo da modalidade).
   - **Scouting** (`SCOUTING_GERIR`): observação do adversário criada no próprio jogo. Também avulso.
-- **Competições** (`COMPETICOES_GERIR`): criar (liga/torneio/taça); classificação por resultados **inseridos manualmente**; calendário. Uma competição pertence a um escalão (logo, a uma modalidade). **Sem integração automática** (API oficial = FUTURO).
+- **Competições** (`COMPETICOES_GERIR`): classificação por resultados + calendário/quadro. Uma competição pertence a um escalão (logo, a uma modalidade). **Sem integração automática** (API oficial = FUTURO).
+
+#### Criação de competição — **wizard de 3 passos** (🔁 2026-08-20 — substitui o form de 1 passo)
+> A criação avulsa de competição (nome/tipo/formato num único ecrã) é substituída por um **assistente de 3 passos**. O resultado é uma competição **já com as equipas participantes e o quadro de jogos agendado** numa única gravação transacional (`criarCompeticaoCompleta`). O fluxo manual de jogos avulsos **mantém-se** e pode complementar o quadro gerado.
+
+- **Passo 1 — Informação base** (existente, inalterado): `nome`, `tipo` (OFICIAL/AMIGAVEL), `formato` (LIGA/TORNEIO/TAÇA), `formatoJogo` (FUTSAL_5/FUTEBOL_*), escalão e época.
+- **Passo 2 — Equipas participantes** (novo): lista de equipas (`EquipaCompeticao`, nome texto livre com **trim**, **mínimo 2**), com **adicionar/remover inline**. A **equipa do próprio clube** é adicionada automaticamente com o **nome do escalão** (editável). A **ordem** de introdução define o `posicao`/seed usado no bracket.
+- **Passo 3 — Quadro competitivo** (novo): botão **"Gerar quadro"** (`gerarQuadroCompeticao`) cria os `ResultadoCompeticao` automaticamente conforme o formato:
+  - **LIGA:** todos-contra-todos, cada par **uma vez** (N×(N−1)/2 jogos por mão); a opção **"2 mãos"** (`duasMaos`) duplica cada confronto com casa/fora trocadas (N×(N−1) jogos). Cada jogo recebe a `ronda` = nº da jornada.
+  - **TORNEIO/TAÇA:** **bracket eliminatório** por rondas até à **potência de 2** mais próxima; **byes automáticos** quando o nº de equipas não é potência de 2 (byes = próxima potência de 2 − N, atribuídos aos primeiros seeds). A `ronda` codifica a fase (**1=final, 2=meias-finais, 4=quartos, 8=oitavos…**).
+  - A tabela de jogos gerados mostra **ronda, casa vs fora, data/hora** (campo editável ou **"por definir"**). O treinador pode **definir datas/horas antes de guardar** ou deixá-las em branco.
+- **Guardar** (`criarCompeticaoCompleta`): cria **competição + equipas + resultados agendados** numa **única transação**. Todos os jogos gerados nascem com `estado = AGENDADO` e sem golos.
+- **Pós-criação:** cada jogo gerado é **editável** (data/hora via `atualizarAgendamentoJogo`; resultado via `registarResultadoExterno`, que passa o jogo a `REALIZADO`). Podem **adicionar-se jogos avulsos** à competição mesmo após a geração (fluxo manual mantido). **Regenerar o quadro** exige **confirmação** (`gerarQuadroCompeticao` falha se já existirem resultados).
 - **Estado vazio:** "Sem jogos nesta época."
 
 ### 8.12 Comunicação com pais e equipa técnica (`COMUNICACOES_GERIR`)
 Conforme v6 §8.12: a app **não é canal**, é gerador de conteúdo para WhatsApp; 7 templates (convocatória, cancelamento, mudança de horário/local, resultado, aviso geral, calendário). Fluxo: gerar → "Partilhar no WhatsApp". **🔁 v7:** os placeholders são agnósticos à modalidade; o `nomeEquipa` já traz o escalão (que identifica a modalidade pela secção). Sem placeholders novos.
 
 ### 8.13 Reuniões e calendário (`REUNIOES_GERIR`)
-Conforme v6 §8.13: reuniões escalão/clube com ata exposta; sincronização Google Calendar (treinos/jogos/reuniões). Sem alteração na v7.
+Conforme v6 §8.13: reuniões escalão/clube com ata exposta; sincronização Google Calendar (treinos/jogos/reuniões).
+
+**🔁 v7 — cartão de reunião com acordeões:** o cartão de reunião expõe o conteúdo textual em **dois acordeões colapsáveis**:
+- **"Ordem de trabalhos"** — secção colapsável com o campo `ordemTrabalhos`.
+- **"Ata"** — secção colapsável com o campo `ata`.
+
+Cada acordeão está **aberto por defeito quando o respetivo campo tem conteúdo** e colapsado (ou omitido) quando está vazio.
+
+**🔁 v7 — afixar no Início:** o cartão de reunião passa a ter um **botão de toggle "Afixar no Início"** que alterna o campo `Reuniao.afixada` (ver §3.9). Regras de apresentação no **Dashboard/Início** (§8.16):
+- **Reuniões afixadas** aparecem **sempre** no dashboard, **independentemente da data** (passada ou futura).
+- **Reuniões futuras** (`data >= hoje`) aparecem **automaticamente** na secção **"Próximas reuniões"** do dashboard, mesmo sem estarem afixadas.
+- **Reuniões passadas não afixadas** ficam apenas visíveis na **lista de reuniões** (não surgem no dashboard).
+- O dashboard mostra **no máximo 5 reuniões**, **ordenadas por data**.
+- As **reuniões futuras** surgem também no **calendário mensal** (quando disponível no módulo de treinos), a par de treinos e jogos.
 
 ### 8.14 Caderneta (`CADERNETA_GERIR`)
 Habilidades por nível, com estado/data/notas. Progresso + celebração ao desbloquear. **🔁 v7:** as habilidades podem ser específicas de modalidade (`Habilidade.modalidade`); a caderneta de um atleta multi-desporto mostra as habilidades da modalidade em contexto (secção/escalão) e agrega por modalidade na vista conjunta.
@@ -1607,7 +1796,7 @@ Conforme v6 §8.21 (cenários A/B/C/D), com uma extensão multi-desporto:
 - **Transição a meio da época:** datas preservam o histórico; estatísticas anteriores ficam no escalão de origem.
 - **Lesões:** registadas como motivo de falta (`LESAO`); sem módulo clínico.
 - **Tempo de jogo por blocos:** registo por bloco; acumula ao longo da época.
-- **Classificação de competição:** por `ResultadoCompeticao` (inseridos manualmente) + jogos próprios.
+- **Classificação de competição:** por `ResultadoCompeticao` + jogos próprios; **só conta jogos `REALIZADO`** (jogos `AGENDADO`/sem golos são ignorados — §10.2/§10.9).
 - **Scouting no jogo:** liga-se ao `jogoId`; apagar o jogo faz `SetNull`.
 - **Comunicação:** a app gera texto, não envia; pais sem conta.
 - **Relatório partilhável:** `token` não-adivinhável + snapshot imutável; opcional `expiraEm`.
@@ -1638,6 +1827,27 @@ Conforme v6 §8.21 (cenários A/B/C/D), com uma extensão multi-desporto:
 - **Invariante do principal por modalidade (implementação):** o invariante "único PRINCIPAL por (atleta, época, modalidade)" **não é enforçável por índice BD** (modalidade não é coluna de `AtletaEscalao`; deriva de `escalao.seccao.modalidade`). É garantido exclusivamente por **lógica aplicacional dentro de transacção `Serializable`** que consulta todas as participações activas do atleta, atravessando `escalao → seccao`. O helper `modalidadeDoEscalao(escalaoId)` DEVE ser cacheável para evitar N+1 em listagens.
 - **Invariantes cross-entidade (validadas na aplicação, não pela BD):** (1) `escalao.clubeId == escalao.seccao.clubeId`; (2) `membroSeccao.membroClube.clubeId == membroSeccao.seccao.clubeId`; (3) `Convocatoria.posicaoPrevista ∈ configModalidade(jogo.seccao.modalidade).posicoes`.
 
+**Novos (equipas + quadro competitivo + agendamento — 2026-08-20):** 🔁
+- **Mínimo 2 equipas** para gerar o quadro; abaixo disso, `gerarQuadroCompeticao` devolve erro.
+- **Nome de equipa:** `trim` obrigatório; **unicidade por competição** — `@@unique([competicaoId, nome])` (case-sensitive no índice; o display compara case-insensitive para avisar de duplicados equivalentes).
+- **LIGA:** N×(N−1)/2 jogos por mão; "2 mãos" duplica com casa/fora trocadas. **TORNEIO/TAÇA:** bracket até à potência de 2 mais próxima; **byes = (próxima potência de 2) − N**, atribuídos aos primeiros seeds; a `ronda` codifica a fase (1=final, 2=meias, 4=quartos…).
+- **Estado do jogo:** `estado = AGENDADO` enquanto `golosCasa`/`golosFora` forem `null`; passa a `REALIZADO` ao inserir resultado. `atualizarAgendamentoJogo` altera só `dataHora` (não muda o estado).
+- **Classificação só de realizados:** `obterClassificacao` **ignora** jogos `AGENDADO`/sem golos (§10.9) — sem alteração da fórmula de pontos, apenas filtragem de entrada.
+- **Regeneração protegida:** `gerarQuadroCompeticao` **falha se já houver resultados**; regenerar exige confirmação explícita no UI (apaga o quadro anterior).
+- **Remover equipa:** `removerEquipaCompeticao` é **bloqueado** se a equipa já tiver jogos `REALIZADO` (com resultado); equipas só com jogos `AGENDADO` podem ser removidas.
+- **Jogos avulsos coexistem:** adicionar jogos manualmente à competição continua a ser possível após a geração do quadro; não colidem com os gerados.
+- **Transação única do wizard:** `criarCompeticaoCompleta` cria competição + equipas + resultados agendados atomicamente (tudo ou nada).
+- **Retrocompatibilidade:** competições/resultados legados têm `ronda=null`, `dataHora=null` e `estado=REALIZADO` (backfill — Apêndice C); a classificação e o calendário existentes continuam a funcionar sem alteração.
+
+**Novos (plano semanal de treinos — 2026-08-20):** 🔁
+- **Propagação só toca agendamento:** "esta e todas as futuras" altera apenas `data`(hora)/`local`/`tipoSessao`/`duracaoMin`; **nunca** exercícios, presenças, notas, objetivo ou RPE. O conteúdo das sessões geradas é sempre preservado.
+- **Sessões passadas imutáveis:** a propagação afeta apenas `data >= max(data da sessão-âncora, agora)`. Sessões já realizadas nunca são alteradas via plano.
+- **Sessão personalizada protegida:** uma sessão editada como "só esta" (`personalizada = true`) não é sobrescrita por propagações "esta e futuras" posteriores.
+- **Época sem datas válidas:** `Epoca.dataInicio`/`dataFim` são obrigatórias no modelo; se ausentes/invertidas, `criarPlanoSemanal` devolve `erro("A época precisa de datas de início e fim válidas para gerar o plano.")` e a UI encaminha para a edição da época.
+- **Deduplicação na geração:** datas que já têm sessão para o escalão (avulsa ou de plano anterior) são ignoradas — nunca duplica treinos no mesmo dia.
+- **Um plano ativo por (escalão, época):** validado na aplicação (não por índice, dado que planos `ativo=false` históricos coexistem). Escalões diferentes têm planos independentes.
+- **Apagar/desvincular:** apagar o plano faz `SetNull` em `Sessao.planoSemanalId`/`planoSemanalDiaId` (sessões preservadas). "Apagar futuras vazias" só remove sessões futuras sem exercícios nem presenças.
+
 ---
 
 ## 10. Estatísticas e agregações
@@ -1656,7 +1866,7 @@ sessoesTotais (desde dataIngresso), presencas (PRESENTE|ATRASADO), taxaPresenca
 - **Métricas configuráveis** (`metricas`) agregadas por `MetricaConfig` (total/média/jogos), incluindo desativadas com histórico; filtradas pela modalidade quando a métrica é específica.
 
 ### 10.2 Agregado da equipa (escalão + época)
-Conforme v6 §10.2: jogos/V/E/D, golos, taxa de presença média, melhores marcadores/assistentes (por `atletaId`), mais utilizados (blocos), distribuição de tipos de treino, rankings por métrica configurável, ranking de assiduidade (TOP 5), filtro por competição. **🔁 v7:** o escalão tem uma modalidade fixa (a da sua secção), logo o agregado da equipa é naturalmente monomodalidade; o **núcleo estatístico apresentado** é o da modalidade (10.8).
+Conforme v6 §10.2: jogos/V/E/D, golos, taxa de presença média, melhores marcadores/assistentes (por `atletaId`), mais utilizados (blocos), distribuição de tipos de treino, rankings por métrica configurável, ranking de assiduidade (TOP 5), filtro por competição. **🔁 v7:** o escalão tem uma modalidade fixa (a da sua secção), logo o agregado da equipa é naturalmente monomodalidade; o **núcleo estatístico apresentado** é o da modalidade (10.8). **🔁 2026-08-20:** o filtro por competição e a classificação associada consideram **só jogos `REALIZADO`** (jogos `AGENDADO` do quadro não contam — §10.9).
 
 > **🔁 Actividades cross-modalidade (v7):** `obterAnaliticosEscalao` expõe o breakdown de sessões e jogos por `modalidadeAtividade`. Inclui KPI "sessões de modalidade alternativa" e filtro por modalidade da actividade.
 
@@ -1701,6 +1911,9 @@ Perfil do atleta, Dashboard, Analytics/Relatórios, vista de clube (com filtro d
 - **Agregações de equipa/atleta** somam/mediam o núcleo relevante à modalidade (golos, assistências, remates, cantos, foras-de-jogo, desarmes para futebol) mais as métricas configuráveis.
 - **`tempoJogoAcumulado`:** os blocos (`BlocoTempo`) são a base do tempo de jogo nas duas modalidades. O valor de `JOGO_COMPLETO` em minutos é **parametrizável por formato** (Apêndice B: ex. FUTSAL_5=40; futebol varia por escalão/formato). **✅ Decidido (Fase 28):** os minutos por bloco passam a **depender do formato** via a tabela `MINUTOS_POR_PARTE: Record<FormatoJogo, number>` (minutos de UMA parte por formato — `FUTSAL_5=20`, `FUTEBOL_3_3=15`, `FUTEBOL_5_5=20`, `FUTEBOL_7=25`, `FUTEBOL_9=35`, `FUTEBOL_11=45`), da qual se deriva `JOGO_COMPLETO = 2×parte` e `MEIA_PARTE = parte` (`BLOCO_10MIN`/`BLOCO_5MIN`/`NAO_JOGOU` constantes). `blocoParaMinutos(bloco, formato?)` sem `formato` usa a tabela base de futsal `MINUTOS_POR_BLOCO` (40/20) — retrocompatível; `FUTSAL_5` explícito é idêntico. Manteve-se o nome `MINUTOS_POR_BLOCO` (tabela de futsal, testada) e introduziu-se `MINUTOS_POR_PARTE` para não colidir com o export existente.
 - **RGPD:** cards sociais e relatórios respeitam as mesmas regras de menores em ambas as modalidades (3.16).
+
+### 10.9 Classificação de competição — só jogos realizados (🔁 2026-08-20)
+`obterClassificacao(competicaoId)` **mantém-se sem alteração de fórmula** (pontos por V/E/D, golos marcados/sofridos, diferença, desempate). A única alteração é o **filtro de entrada**: com o quadro competitivo agendável (§8.11), a competição passa a conter jogos ainda **`AGENDADO`** (sem golos). A classificação **DEVE** considerar **apenas** os `ResultadoCompeticao` com `estado = REALIZADO` — equivalente, em termos práticos, a **ignorar os jogos cujo `golosCasa` é `null`**. Assim, um quadro recém-gerado mostra a tabela com **todos a zero** e vai-se preenchendo à medida que os resultados são inseridos. Resultados legados (`estado=REALIZADO` por backfill, com golos preenchidos) continuam a contar exatamente como antes.
 
 ## 11. Formato do diagrama de campo e animação
 
@@ -1812,7 +2025,14 @@ Gráficos SVG próprios (`GraficoBarrasH/V`, `GraficoLinhas`) com a cor do clube
 - pt-PT hardcoded (sem i18n). Contraste AA (superfícies escuras); foco visível; teclado; `label`/`aria-label`; não depender só de cor. **Respeitar `prefers-reduced-motion`**.
 
 ### 13.4 Requisitos não-funcionais
-- **Desempenho:** listagens < 1s; ações otimistas < 500ms; editor fluido em tablet (todos os campos). Índices do schema (incl. `Seccao(clubeId)`, `Escalao(seccaoId)`).
+- **Desempenho:** listagens < 1s; ações otimistas < 500ms; editor fluido em tablet (todos os campos). Índices do schema (incl. `Seccao(clubeId)`, `Escalao(seccaoId)`, `Presenca(escalaoId, estado)` e `Presenca(sessaoId, estado)`).
+- **Otimizações de desempenho aplicadas (2026-08-20):**
+  - **Deduplicação de resolvers de contexto por request:** os resolvers de contexto — `obterMembroAtual`, `obterUtilizadorAtual`, `obterClubeAtivo`, `escaloesLegiveis` (`lib/permissoes.ts`) e `obterClubeIdAtual`, `obterEpocaAtiva` (`lib/epoca-context.ts`) — estão embrulhados em **`React.cache()`**, memorizando o resultado dentro do mesmo *render*/request. Elimina ~8–10 queries duplicadas por *page load* (o mesmo membro/época era resolvido repetidamente pela mesma action e pelas verificações de permissão).
+  - **Paralelização de I/O no layout:** em `app/(app)/layout.tsx`, `temLicencaValida` corre em **`Promise.all`** com `listarEpocas`, `obterEpocaAtiva` e `obterSeccoes` (antes sequenciais).
+  - **Code-splitting de componentes pesados (`next/dynamic`, `ssr: false`):** `EditorCampo` (em `components/exercicios/ExercicioForm.tsx`) e os gráficos SVG (`GraficoLinhas`, `GraficoBarrasH`, `GraficoBarrasV`, `CurvaCargaSemanal`) usados em `components/analiticos/`, `components/plantel/EstatisticasAtleta.tsx`, `app/(app)/relatorios/page.tsx` e `app/(app)/escaloes/[id]/analiticos/page.tsx` são carregados dinamicamente, mantendo-os fora do *bundle* inicial.
+  - **`optimizePackageImports`:** `next.config.js` com `experimental.optimizePackageImports: ["lucide-react"]` (*tree-shaking* dos ícones importados).
+  - **`next/image` para o logótipo do clube:** substituído `<img>` por `<Image fill>` com `images.remotePatterns` configurados em `next.config.js` (otimização/responsividade do logótipo servido pelo Supabase Storage).
+  - **Agregação na base de dados:** `obterAnaliticoClubeEpoca` (`lib/actions/analise.ts`) usa `prisma.sessao.groupBy` e `prisma.presenca.groupBy` em vez de `findMany` + contagem em memória, reduzindo o volume de dados transferido.
 - **Segurança:** ver 5.6. Queries por clube + época + âmbito (+ secção).
 - **Integrações externas:** Google Calendar (OAuth, tokens encriptados) e, futuramente, Paddle — isoladas do login.
 - **Custo operacional mínimo:** sem IA no núcleo; só alojamento + BD + Storage.
@@ -1850,6 +2070,7 @@ Server Actions (`"use server"`); Zod em `lib/schemas/`; padrão de action (valid
 
 ### 15.4 Supabase / ligações
 - **Pooler obrigatório:** Transaction pooler (6543, `?pgbouncer=true`) para a app; Session pooler (5432) para migrações (`DIRECT_URL`). Segredos em `.env`.
+- **Co-localização de região (2026-08-20):** as *Functions* da Vercel correm em **`cdg1` (Paris, `eu-west-3`)**, alinhadas com a região do Supabase (`aws-0-eu-west-3`). Antes corriam em `iad1` (Washington DC), o que adicionava latência transatlântica a cada *round-trip* à base de dados. Configurado em `vercel.json`/definições do projeto.
 
 ### 15.5 Comandos
 `npm run dev` · `typecheck` · `lint` · `test` · `db:migrate` · `db:seed` · `db:studio`. **🔁 v7:** o seed passa a semear a **biblioteca curada por modalidade** (futsal e futebol) e a criar a secção correspondente.
@@ -1866,7 +2087,7 @@ Resumo: **1** Esqueleto · **2** Reconversão de módulos · **3** Periodizaçã
 
 ### Fases 11–24 — Evolução para o produto completo (v6) ✅ CONCLUÍDAS
 - **11** Refactor do plantel (Atleta ao nível do clube + `AtletaEscalao`). **12** Editor de exercícios (gate de qualidade). **13** Bibliotecas (pessoal+clube) + templates de sessão. **14** Modelo de jogo (documento vivo) + bolas paradas. **15** Jogos: dia de jogo + scouting + tempos por blocos. **16** Competições + classificação (inserção manual). **17** Comunicação (WhatsApp) + calendário. **18** Sincronização Google Calendar. **19** Analytics 3 níveis + relatório partilhável. **20** Onboarding com vitória rápida. **21** Licenciamento e multi-tenant. **22** Conformidade FPF (levantamento). **23** Polish transversal. **24** Design direction (tema escuro + motion) + Dashboard contextual + Lembretes.
-> (Ver changelog §19 e a `FutsalManager_Spec_v6.md` para o detalhe verbatim de cada fase.)
+> (Ver changelog §19 e a `Mister_Spec_v6.md` para o detalhe verbatim de cada fase.)
 
 ### Fases 25–30 — Expansão multi-desporto (v7 — decisão 2026-08-19)
 
@@ -1906,6 +2127,22 @@ Resumo: **1** Esqueleto · **2** Reconversão de módulos · **3** Periodizaçã
 - **Objetivo:** experiência de ponta a ponta multi-desporto e pricing por secção.
 - **Entidades/ficheiros:** onboarding (registo Individual = modalidade; setup de clube com secções); seletor de secção condicional em toda a navegação (barra de topo, plantel, treinos, jogos, exercícios, analytics); agrupamento por secção; analytics de clube com filtro/comparação por secção (§10.3/§10.8); wizard «Nova Época» a respeitar secções (§8.21); licenciamento (§17.1 — Individual uma modalidade; Clube escala por secção; `Licenca.modalidade` ⚠️); Coordenador de Secção end-to-end (atribuição, gating de UI).
 - **Critério de pronto:** clube com futsal **e** futebol totalmente utilizável; Individual bloqueia segunda modalidade com mensagem clara; pricing por secção documentado e refletido (aviso suave, enforcement de billing deferido); analytics transversal compara secções; **typecheck/lint/test limpos + bíblia atualizada (§8.1.1, §8.21, §10.3, §17)**; **não toca em auth**.
+
+### Fase 31 — Plano semanal de treinos (2026-08-20)
+
+- **Depende de:** produto base de treinos (Fases 1–10). Independente da expansão multi-desporto (25–30); as sessões geradas herdam a modalidade da secção do escalão (`modalidadeAtividade = null`).
+- **Objetivo:** substituir a criação avulsa (um-a-um) por um horário recorrente que gera todas as sessões da época, com edição pontual e propagação "esta e todas as futuras".
+- **Entidades/ficheiros:** `prisma/schema.prisma` (novos `PlanoSemanal`, `PlanoSemanalDia`; `Sessao.planoSemanalId`/`planoSemanalDiaId` `SetNull` + `personalizada`; migração **aditiva** `20260820134433_plano_semanal_treinos`, tudo nullable/default); `lib/schemas/planoSemanal.ts` (`criarPlanoSemanalSchema`: `escalaoId`, `nome?`, `dataInicioGeracao`, `dias[]` com `diaSemana` 1-7, `horaInicio`/`horaFim` "HH:MM" com refine `fim>inicio` e `diaSemana` único; `atualizarPlanoSemanalSchema`: `nome?`/`ativo?`/`dias?`; enum `alcanceSchema` `SO_ESTA`/`ESTA_E_FUTURAS`; enum `modoApagarSchema` `DESVINCULAR`/`APAGAR_FUTURAS_VAZIAS`); `lib/actions/planoSemanal.ts` (as 6 actions do plano: `preverPlanoSemanal`, `criarPlanoSemanal`, `listarPlanosSemanais`, `obterPlanoSemanal`, `atualizarPlanoSemanal`, `apagarPlanoSemanal`); `lib/actions/treinos.ts` (`atualizarSessao` ganha `alcance?`); `lib/plano-semanal.ts` (funções **puras** de geração de datas por intervalo+dias e helpers de hora, testáveis isoladamente); UI (`/treinos/novo` com toggle de modo, `components/treinos/PlanoSemanalForm.tsx` com pré-visualização; `/treinos/planos` + lista por escalão; `components/treinos/DialogoAlcance.tsx` integrado no `SessaoForm`; `EditarPlanoDialog`/`ApagarPlanoDialog`/`SeletorDiasPlano`).
+- **Critério de pronto:** gerar um plano de 2 dias/semana produz o nº correto de sessões no intervalo, com deduplicação; "esta e futuras" altera só agendamento e só futuras não-personalizadas; "só esta" isola a sessão; apagar plano preserva conteúdo; guarda de época sem datas; geração e propagação em transação; **um plano ativo por (escalão, época)**; testes da função pura de geração + das actions (propagação, deduplicação, imutabilidade do passado); **`typecheck`/`lint`/`test` limpos + bíblia atualizada (§3.5, §7.3, §8.8.1, §9)**; **não toca em auth**.
+- **Métrica de sucesso:** tempo para agendar a época completa de um escalão **< 2 min** (vs. dezenas de criações avulsas); **% de treinos criados via plano vs. avulso** (adoção); nº de propagações "esta e futuras" usadas (prova que a edição em massa resolve dor real).
+
+### Fase 32 — Equipas, quadro competitivo e agendamento na criação de competição (2026-08-20)
+
+- **Depende de:** competições + classificação (Fase 16). Independente da expansão multi-desporto (25–30) e do plano semanal (Fase 31); a competição herda a modalidade da secção do escalão.
+- **Objetivo:** substituir o form de criação de competição de 1 passo por um **wizard de 3 passos** que regista as **equipas participantes** (entidade `EquipaCompeticao`), **gera o quadro competitivo** (LIGA todos-contra-todos / TORNEIO-TAÇA bracket eliminatório) e permite **agendar** os jogos — tudo numa gravação transacional.
+- **Entidades/ficheiros:** `prisma/schema.prisma` (novo `EquipaCompeticao`; `Competicao.equipas`; `ResultadoCompeticao` ganha `ronda`/`dataHora`/`estado` e `golosCasa`/`golosFora` passam a nullable; enum `EstadoResultado`; migração **aditiva** com backfill — resultados legados `estado=REALIZADO`, `ronda=null`, `dataHora=null`, Apêndice C); `lib/schemas/competicao.ts` (schemas do wizard — equipas `min 2`, nome com `trim`, opções de geração `duasMaos`); `lib/quadro-competitivo.ts` (funções **puras** de geração: round-robin de LIGA com nº de jornada; bracket eliminatório com byes e codificação de ronda — testáveis isoladamente); `lib/actions/competicoes.ts` (`adicionarEquipaCompeticao`, `removerEquipaCompeticao`, `obterEquipasCompeticao`, `gerarQuadroCompeticao`, `criarCompeticaoCompleta`, `atualizarAgendamentoJogo`); `obterClassificacao` filtra `estado=REALIZADO` (§10.9); UI (wizard de 3 passos em `/competicoes/nova`, tabela de jogos gerados editável, edição de agendamento/resultado no detalhe da competição).
+- **Critério de pronto:** LIGA de N equipas gera N×(N−1)/2 jogos por mão (N×(N−1) com "2 mãos") com jornadas corretas; TORNEIO/TAÇA gera bracket até à potência de 2 com byes corretos e rondas codificadas (1=final…); mínimo 2 equipas validado; unicidade de nome por competição; `criarCompeticaoCompleta` atómica; classificação ignora jogos `AGENDADO`; regenerar quadro exige confirmação; remover equipa bloqueado se tem jogos realizados; jogos avulsos coexistem com o quadro; competições legadas inalteradas; testes das funções puras de geração (round-robin + bracket + byes) e das actions; **`typecheck`/`lint`/`test` limpos + bíblia atualizada (§3.7, §7.3, §8.11, §9, §10.2, §10.9)**; **não toca em auth**.
+- **Métrica de sucesso:** tempo para montar uma competição completa com calendário **< 3 min** (vs. inserção jogo-a-jogo); **% de competições criadas via wizard vs. resultado avulso**; nº de jogos agendados por competição (prova que o quadro gerado é usado).
 
 ---
 
@@ -1947,7 +2184,12 @@ Decidida pelo treinador na criação (toggle pessoal vs clube). O pagamento não
 
 ### 17.5 Billing
 - **Provider:** **Paddle** (Merchant of Record). **Implementação deferida.** `Licenca`/`Carteira` desenhadas para suportar webhooks, `paddleSubscriptionId`, `paddleCustomerId` — e o **cálculo multi-secção** (17.1).
-- **Fluxo de pagamento interino (enquanto o Paddle está deferido):** a ativação da subscrição faz-se por **transferência bancária manual** — o utilizador transfere para o IBAN indicado (referência = nome do clube + email do titular) e **envia o comprovativo por email**; a licença é criada/ativada manualmente. As instruções (planos, IBAN, email de comprovativo) são apresentadas no **paywall** `/sem-licenca` (§3.11). Este fluxo é **temporário** e será substituído pelo checkout automático do Paddle.
+- **Fluxo de pagamento interino (enquanto o Paddle está deferido) — completo:**
+  1. **Escolha de plano no onboarding.** No **wizard de onboarding** (§8.1), antes do submit final, o utilizador **escolhe o plano** (tier): Individual, ou Clube por tier de escalões (§17.1).
+  2. **Licença `PENDENTE` na criação do clube.** Ao criar o clube, `criarClube` cria uma `Licenca` com **`estado: PENDENTE`**, o **tier escolhido** e o `ciclo`/`precoCentimos` correspondentes. `PENDENTE` **não concede acesso** (§3.11), pelo que o utilizador é encaminhado para o paywall.
+  3. **Paywall com plano + valor exato.** O ecrã `/sem-licenca` mostra **o plano escolhido e o valor exato a transferir** (em vez da tabela completa de planos), com os **dados de transferência bancária** — IBAN, **referência** (nome do clube + email do titular) e **email para envio do comprovativo**.
+  4. **Ativação manual pelo admin.** O utilizador **transfere** e **envia o comprovativo por email**. O admin, ao receber o comprovativo, **ativa a licença no backoffice** (§21.2): estado **`PENDENTE → ATIVA`**. A partir daí a guarda de licença (§3.11) concede acesso.
+- **Integração Paddle: deferida.** `Licenca`/`Carteira` estão desenhadas para suportar webhooks, `paddleSubscriptionId`, `paddleCustomerId` e o **cálculo multi-secção** (17.1). Este fluxo interino por transferência bancária é **temporário** e será substituído pelo checkout automático do Paddle (que passará a criar/ativar/renovar licenças e a fazer a transição automática `ATIVA→EXPIRADA`).
 
 ### 17.6 Go-to-market
 - Sem trial. Vídeo demonstrativo público. Reunião de demonstração a pedido. Parceiros fundadores (patrocínio mútuo). Suporte via WhatsApp. **🔁** a mensagem passa a incluir "futsal **e** futebol" — atrai clubes com as duas modalidades.
@@ -1974,6 +2216,16 @@ Decidida pelo treinador na criação (toggle pessoal vs clube). O pagamento não
 
 Do mais recente para o mais antigo.
 
+- **2026-08-20** — **Plano semanal de treinos — implementação do backend (schema + migração + actions + testes) (§3.5, §7.3, §8.8.1, §9, §16, Fase 31).** Concretização da camada de servidor da Fase 31, previamente só desenhada (ver entrada "geração recorrente de sessões + propagação"). **Schema/migração aplicada:** migração **aditiva** `20260820134433_plano_semanal_treinos` cria `PlanoSemanal` (índices `@@index([epocaId, escalaoId])` e `@@index([clubeId])`) e `PlanoSemanalDia` (`@@unique([planoSemanalId, diaSemana])`, `@@index([planoSemanalId])`), e adiciona a `Sessao` os campos `planoSemanalId`/`planoSemanalDiaId` (FK `onDelete: SetNull`) e `personalizada Boolean @default(false)` — tudo nullable/default (sem impacto em dados existentes). **Schemas Zod (`lib/schemas/planoSemanal.ts`):** `planoSemanalDiaSchema` (`diaSemana` 1-7, `horaInicio`/`horaFim` "HH:MM" com refine `fim>inicio`), `criarPlanoSemanalSchema` (`escalaoId` cuid, `nome?`, `dataInicioGeracao`, `dias[]` ≥1 com `diaSemana` único), `atualizarPlanoSemanalSchema` (`nome?`/`ativo?`/`dias?`), `alcanceSchema` (`SO_ESTA`/`ESTA_E_FUTURAS`) e `modoApagarSchema` (`DESVINCULAR`/`APAGAR_FUTURAS_VAZIAS`). **Actions (`lib/actions/planoSemanal.ts` — ficheiro dedicado):** `preverPlanoSemanal` (dry-run: `geradas`/`ignoradas`/intervalo), `criarPlanoSemanal` (geração em **transação**, invariante de um plano `ativo` por (escalão, época), deduplicação por dia ocupado, `planeamentoId=null` nas geradas), `listarPlanosSemanais(escalaoId?)` (filtra por escalões legíveis), `obterPlanoSemanal(id)` (detalhe + sessões futuras), `atualizarPlanoSemanal` (add/remove/edita dias; propaga baseline às futuras não-personalizadas; desvincula/apaga futuras ao remover dia) e `apagarPlanoSemanal(id, modo)`. `atualizarSessao` (em `lib/actions/treinos.ts`) ganha o parâmetro `alcance?` — `SO_ESTA` marca `personalizada`, `ESTA_E_FUTURAS` propaga o agendamento e reporta "N atualizadas; M personalizadas mantidas". **Funções puras (`lib/plano-semanal.ts`):** `gerarDatasDePlano` (datas por intervalo+dias, excluindo o passado), `diaSemanaISO`, `combinarDataHora`, `duracaoEntreHoras`, `somarMinutos`, `chaveDia`, `inicioDoDia`. **Permissões:** todas as actions exigem `TREINOS_GERIR` no escalão. **Testes (`tests/plano-semanal.test.ts`):** função pura de geração (2 dias/semana, exclusão do passado, domingo ISO 7, vazios), helpers de hora, e actions (`criarPlanoSemanal` — nº correto + ligação; deduplicação; recusa 2.º plano ativo; guarda de época sem datas) e `atualizarSessao` (propagação só a futuras não-personalizadas; `SO_ESTA` isola e marca `personalizada`). **§16 (Fase 31) corrigida:** ficheiro real das 6 actions (`lib/actions/planoSemanal.ts`, não `treinos.ts`) e nomes reais dos schemas.
+- **2026-08-20** — **Registo com escolha de plano + licença `PENDENTE` (§3.11, §17.5, §21.2).** O fluxo de registo/onboarding passa a integrar a **escolha de plano** e a criação de uma licença por ativar. **(1) Wizard de onboarding (§8.1 / §3.11):** ganha um **passo de escolha de plano (tier)** **antes do submit final** — o utilizador seleciona Individual ou Clube (tier por nº de escalões, §17.1). **(2) `criarClube` cria `Licenca` `PENDENTE`:** ao criar o clube, é criada uma `Licenca` com **`estado: PENDENTE`** e o **tier escolhido** (+ `ciclo`/`precoCentimos`); o `@default(ATIVA)` do schema mantém-se (criação administrativa/absorção), mas o onboarding grava `PENDENTE` **explicitamente**. **(3) Enum `EstadoLicenca` (§3.11):** passa a `PENDENTE | ATIVA | EXPIRADA | CANCELADA | SUSPENSA` — `PENDENTE` = "licença criada aquando do registo, aguarda confirmação de pagamento"; **não concede acesso** (a guarda de licença trata-a como sem licença e redireciona para `/sem-licenca`). **(4) Paywall `/sem-licenca` (§3.11):** passa a mostrar **o plano escolhido e o valor exato a transferir** (em vez da tabela completa de planos), com IBAN, referência (nome do clube + email do titular) e email de comprovativo. **(5) Ativação manual (§17.5 / §21.2):** o admin recebe o comprovativo e **ativa a licença no backoffice** (`PENDENTE → ATIVA`). **(6) §17.5 Billing:** documentado o fluxo interino completo (escolha de plano → licença `PENDENTE` → paywall com plano+valor → ativação manual); **integração Paddle mantém-se deferida**. **Apenas documentação neste passo — a implementação de código segue este contrato.**
+- **2026-08-20** — **Otimizações de desempenho — deduplicação de contexto, code-splitting, agregação em BD, índices e co-localização de região (§13.4, §15.4).** Conjunto de otimizações de *performance* **sem alteração funcional** (apenas eficiência de execução e *bundle*). **(1) `React.cache()` nos resolvers de contexto:** `obterMembroAtual`, `obterUtilizadorAtual`, `obterClubeAtivo`, `escaloesLegiveis` (`lib/permissoes.ts`) e `obterClubeIdAtual`, `obterEpocaAtiva` (`lib/epoca-context.ts`) passam a memorizar o resultado por request — elimina ~8–10 queries duplicadas por *page load*. **(2) `Promise.all` no layout:** `app/(app)/layout.tsx` corre `temLicencaValida` em paralelo com `listarEpocas`, `obterEpocaAtiva` e `obterSeccoes` (antes sequenciais). **(3) `next/dynamic` (`ssr: false`) para componentes pesados:** `EditorCampo` (`components/exercicios/ExercicioForm.tsx`) e os gráficos SVG (`GraficoLinhas`, `GraficoBarrasH`, `GraficoBarrasV`, `CurvaCargaSemanal`) em `components/analiticos/`, `components/plantel/EstatisticasAtleta.tsx`, `app/(app)/relatorios/page.tsx` e `app/(app)/escaloes/[id]/analiticos/page.tsx` — mantidos fora do *bundle* inicial. **(4) `optimizePackageImports`:** `next.config.js` com `experimental.optimizePackageImports: ["lucide-react"]` (*tree-shaking* de ícones). **(5) `next/image` para o logótipo do clube:** `<img>` → `<Image fill>` com `images.remotePatterns` em `next.config.js`. **(6) Agregação em BD:** `obterAnaliticoClubeEpoca` (`lib/actions/analise.ts`) usa `prisma.sessao.groupBy` e `prisma.presenca.groupBy` em vez de `findMany` + contagem em memória. **(7) Índices na `Presenca`:** `@@index([escalaoId, estado])` e `@@index([sessaoId, estado])` em `prisma/schema.prisma` + migração aditiva `20260820150000_perf_presenca_indexes`. **(8) Co-localização de região:** *Functions* da Vercel movidas de `iad1` (Washington DC) para **`cdg1` (Paris, `eu-west-3`)**, alinhadas com o Supabase (`aws-0-eu-west-3`), eliminando latência transatlântica por *round-trip* à BD. Documentado em §13.4 (Desempenho) e §15.4 (Supabase / ligações). **Só otimização — sem alteração de comportamento nem de contratos de dados. Typecheck limpo (0 erros), 1223 testes verdes.**
+- **2026-08-20** — **Atleta — estado `ativo` (plantel vs saiu/experimental) (§3.2, §7.3, §8.5, §10.1).** Formalização do campo booleano **`ativo`** do `Atleta` (já existente no schema desde a migração `init`, `@default(true)`, com índice `@@index([clubeId, ativo])`) como distinção explícita entre atletas **no plantel** e atletas que **saíram** ou estão em **período experimental** (nos primeiros treinos aparecem atletas a experimentar, criados e com presenças registadas antes de se saber se ficam). **Schema Zod (`lib/schemas/atleta.ts`):** `atletaPessoalSchema` ganha `ativo: z.boolean().optional()` (opcional e **sem default** de propósito — a edição de dados pessoais não deve fazer reset do estado); novo `toggleAtivoAtletaSchema` (valida `atletaId` cuid). **Actions (`lib/actions/atletas.ts`):** `criarAtleta` escreve `ativo` com **default `true`** explícito (permite criar já como experimental); `atualizarAtleta` só escreve `ativo` quando **explicitamente fornecido** (sem reativação/desativação implícita); `listarAtletas` ganha o **4.º parâmetro `incluirInativos = false`** — por defeito filtra `ativo:true` (nas duas ramificações: por escalão via `atleta.ativo`, e global via `where.ativo`), e `incluirInativos=true` remove o filtro; nova action **`toggleAtivoAtleta(atletaId): Resultado<void>`** que alterna `ativo` (verifica `PLANTEL_GERIR` num escalão do atleta usando **todas** as participações, para permitir reativar um atleta sem participações ativas) e revalida `/plantel`, `/plantel/[id]` e `/dashboard`. **Queries de histórico não filtradas:** as contagens/leituras de estatísticas, presenças e convocatórias passadas em `obterEstatisticasAtleta` (§10.1) **deliberadamente não** filtram por `ativo` — um atleta inativo mantém o seu histórico desportivo válido. Sem alteração ao schema Prisma nem nova migração (o campo e o índice já existiam). **Testes:** `tests/atletas.test.ts` cobre `toggleAtivoAtleta` (cuid inválido, não autenticado, isolamento multi-tenant, sem permissão, desativar, reativar) e o filtro `incluirInativos` nas duas ramificações de `listarAtletas`. **typecheck/lint limpos, 1233 testes verdes.**
+- **2026-08-20** — **Plano semanal de treinos — implementação da UI (§8.8.1, Fase 31).** Implementada a camada de apresentação da Fase 31 sobre as actions/schema já existentes (sem alteração de dados, actions ou schema). **Novos componentes:** `components/treinos/PlanoSemanalForm.tsx` (criação com escalão, nome opcional, data de início de geração, dias da semana com hora início/fim, local e tipo por dia, **pré-visualização obrigatória** via `preverPlanoSemanal` — "Vais gerar N treinos entre DD/MM e DD/MM" + aviso de dias ignorados — e criação via `criarPlanoSemanal` só ativa após pré-visualizar); `components/treinos/SeletorDiasPlano.tsx` (seletor controlado de dias, partilhado entre criar e editar); `components/treinos/DialogoAlcance.tsx` (escolha **Só este treino** / **Este e todos os seguintes** ao guardar agendamento numa sessão ligada a plano); `components/treinos/EditarPlanoDialog.tsx` e `components/treinos/ApagarPlanoDialog.tsx` (editar nome/ativo/dias; apagar com modo **Desvincular** / **Apagar futuras vazias**). **Novas rotas/alterações:** `/treinos/novo` ganha **toggle de modo** (Treino avulso | Plano semanal) via `?modo=plano`; nova página `/treinos/planos` (lista agrupada por escalão com estado, dias configurados, contagem de sessões geradas e ações editar/apagar); `components/treinos/SessaoForm.tsx` integra o diálogo de alcance quando a sessão pertence a um plano e reporta "N atualizadas; M personalizadas mantidas"; `/treinos` ganha link "Planos semanais". UI 100% pt-PT, alvos de toque ≥44px, sem dark mode, estados de loading/erro. **typecheck e lint limpos.**
+- **2026-08-20 — Backoffice Interno (Admin) §21:** Nova secção que define o backoffice interno para gestão de licenças (Tab 1: listar/ativar/suspender/cancelar/editar `dataFim` cross-tenant) e monitorização técnica (Tab 2: embeds Vercel Analytics + Sentry). Autorização via `ADMIN_EMAILS` env var, independente da camada de auth (§5).
+- **2026-08-20** — **Detalhe da sessão de treino — ecrã de condução redesenhado (§8.8, §8.8.2).** Redesenho do ecrã `/treinos/[id]` orientado à condução do treino, **sem alteração ao modelo de dados** (usa `Sessao`, `SessaoExercicio` incl. `snap*`, `Presenca`, `Sessao.rpeSessao`, `RpeAtleta`). **Nova ordem das secções:** (1) cabeçalho, (2) **Iniciar treino**, (3) **Presenças**, (4) **Exercícios**, (5) **Carga da sessão (RPE)**, (6) **Notas** editáveis inline. **Exercícios com conteúdo real:** cada linha mostra miniatura do diagrama (quando existe), nome, categoria, duração e **objetivo em texto** abaixo do nome; **linha expansível** (toque abre painel inline com descrição/montagem completa); **linha clicável** para o detalhe do exercício; controlos de **reordenar só visíveis em modo "Editar ordem"** (toggle). **Presenças com toggle de 1 toque:** substitui os dropdowns `Select` por **controlo segmentado inline por atleta** — `Presente · Falta · Lesionado · Just.` (mapeados a `EstadoPresenca`); toque único altera o estado, **campo de motivo contextual** (`Presenca.motivo`/`justificacao`); mantêm-se "Marcar todos presentes", "Repor", contador e "Guardar presenças". **Modo treino (condução em campo):** botão **"▶ Iniciar treino"** (laranja, largura total em mobile) abre vista em ecrã cheio com exercício atual em grande (diagrama, nome, objetivo, descrição), **cronómetro crescente**, **barra de progresso** ("2/5") e botões "Anterior"/"Próximo"; ao terminar regressa ao detalhe e **foca o bloco de RPE**. **Notas editáveis inline** (`Sessao.notas`) sem entrar em "Editar". Mobile-first, alvos de toque ≥44px. Casos-limite documentados (sessão sem exercícios → "Iniciar treino" desativado; sem atletas → estado vazio nas presenças). **Só desenho/documentação neste passo — a implementação de código segue este contrato.**
+- **2026-08-20** — **Equipas + quadro competitivo + agendamento na criação de competição (§3.7, §7.3, §8.11, §9, §10.2, §10.9, Fase 32).** Nova funcionalidade que transforma a criação de competição de um form de 1 passo num **wizard de 3 passos**. **Modelo de dados:** novo modelo **`EquipaCompeticao`** (`id`, `competicaoId`, `nome` com trim, `posicao` seed para bracket, `criadoEm`; `@@unique([competicaoId, nome])`, `@@index([competicaoId])`, `onDelete: Cascade`) — as equipas deixam de ser texto livre disperso pelos resultados e passam a ser entidade com identidade estável e seed; `Competicao` ganha a relação `equipas`; `ResultadoCompeticao` ganha **`ronda Int?`** (jornada de LIGA / fase de TORNEIO-TAÇA — 1=final, 2=meias, 4=quartos…), **`dataHora DateTime?`** (agendamento; `null` = "por definir") e **`estado EstadoResultado @default(AGENDADO)`**, e `golosCasa`/`golosFora` passam a **nullable** (jogo agendado sem resultado); novo enum **`EstadoResultado { AGENDADO REALIZADO }`**. Migração **aditiva** com backfill (resultados legados: `estado=REALIZADO`, `ronda=null`, `dataHora=null`). **Wizard (§8.11):** Passo 1 informação base (inalterado); Passo 2 equipas participantes (mínimo 2, add/remove inline, equipa do clube pré-adicionada pelo nome do escalão, ordem = seed); Passo 3 **"Gerar quadro"** — **LIGA** todos-contra-todos (N×(N−1)/2 por mão; opção "2 mãos" duplica com casa/fora trocadas) e **TORNEIO/TAÇA** bracket eliminatório até à potência de 2 mais próxima com **byes automáticos** ((próxima potência de 2)−N); tabela de jogos com ronda/casa-fora/data-hora editável ou "por definir". Guardar cria competição + equipas + resultados agendados em **transação única**. **Actions (§7.3):** `adicionarEquipaCompeticao`, `removerEquipaCompeticao` (bloqueia se a equipa tem jogos `REALIZADO`), `obterEquipasCompeticao`, `gerarQuadroCompeticao({ duasMaos })` (falha se já há quadro — regeneração pede confirmação), `criarCompeticaoCompleta(dados, equipas, jogos)`, `atualizarAgendamentoJogo(resultadoId, dataHora|null)`. **Classificação (§10.9):** `obterClassificacao` **mantém a fórmula** e passa a **filtrar só jogos `REALIZADO`** (ignora `AGENDADO`/sem golos); §10.2 alinhada. **Regras de negócio (§9):** mínimo 2 equipas, unicidade de nome por competição, jogos avulsos coexistem com o quadro, retrocompatibilidade dos dados legados. Documentado como **Fase 32** (§16) com critério de pronto e métricas de sucesso. **Só desenho/documentação neste passo — sem alteração de código, sem migração aplicada.**
+- **2026-08-20** — **Reuniões — acordeões de conteúdo, afixar no Início e presença no dashboard/calendário (§3.9, §8.13).** Novos requisitos do módulo de reuniões: (1) o **cartão de reunião** passa a expor **dois acordeões colapsáveis** — *"Ordem de trabalhos"* (campo `ordemTrabalhos`) e *"Ata"* (campo `ata`) — **abertos por defeito quando têm conteúdo**; (2) **afixar no Início** — botão de toggle *"Afixar no Início"* que alterna o novo campo `Reuniao.afixada`; reuniões afixadas surgem **sempre** no dashboard, **independentemente da data**; (3) **reuniões futuras** (`data >= hoje`) surgem **automaticamente** na secção *"Próximas reuniões"* do dashboard e no **calendário mensal** (módulo de treinos), com **máximo de 5** reuniões no dashboard, **ordenadas por data**; reuniões passadas não afixadas ficam só na lista de reuniões. **Modelo de dados:** `Reuniao` ganha `afixada Boolean @default(false)` (§3.9) — alteração **aditiva** (default `false`). Requisitos em documentação para suportar a implementação em curso.
+- **2026-08-20** — **Plano semanal de treinos — geração recorrente de sessões + propagação (§3.5, §7.3, §8.8.1, §9, Fase 31).** Nova funcionalidade: a criação de treinos passa a ter **dois modos** — *Treino avulso* (fluxo atual, inalterado) e *Plano semanal*. No modo plano, o treinador seleciona os **dias da semana** e, por dia, **hora início/fim, local e tipo de sessão**; o sistema **gera automaticamente todas as sessões da época** (de `dataInicioGeracao`, default hoje, até `época.dataFim`), com pré-visualização e confirmação obrigatórias e **deduplicação** (datas já com treino são ignoradas). Cada sessão gerada é editável; ao alterar **agendamento** numa sessão de plano, a UI oferece **Só esta sessão** (marca `personalizada`) ou **Esta e todas as futuras** (atualiza o baseline do dia e propaga às futuras não-personalizadas, **nunca ao passado**); o **conteúdo** (exercícios/presenças/notas/RPE) nunca é propagado nem tocado. **Modelo de dados:** novos `PlanoSemanal` e `PlanoSemanalDia` (baseline por dia); `Sessao` ganha `planoSemanalId`/`planoSemanalDiaId` (`SetNull`) e `personalizada` — migração **aditiva** (tudo nullable/default). **Actions:** `preverPlanoSemanal`/`criarPlanoSemanal`/`listarPlanosSemanais`/`obterPlanoSemanal`/`atualizarPlanoSemanal`/`apagarPlanoSemanal` + `alcance?` em `atualizarSessao` (§7.3). **Regras:** um plano `ativo` por (escalão, época); vários escalões → vários planos; apagar plano preserva sessões (desvincula ou apaga só futuras vazias); guarda para época sem datas válidas (§9). Documentado como **Fase 31** (§16) com critério de pronto e métricas de sucesso. **Ainda por implementar** (só desenho/documentação neste passo — sem alteração de código, sem migração aplicada).
 - **2026-08-20** — **Pagamento interino por transferência bancária no paywall (§3.11 / §17.5).** Enquanto a integração **Paddle** permanece **deferida**, o fluxo de ativação da subscrição passa a ser por **transferência bancária manual**: o utilizador transfere para o IBAN indicado (referência = nome do clube + email do titular) e **envia o comprovativo por email**; a licença é ativada manualmente. O paywall `app/sem-licenca/page.tsx` passa a mostrar as **instruções de pagamento** — mensagem de ativação, **tabela de planos** (Individual €4,99/mês · €49/ano; Clube por tier de escalões — Pequeno €15/€149, Médio €19/€190, Grande €34/€340, Parceiro negociado; +50% por secção adicional, §17.1), **dados de transferência** (IBAN + referência) e **email para envio do comprovativo** —, mantendo os CTA "Ver planos" e "Terminar sessão". IBAN e email de comprovativo ficam como **placeholders** (`IBAN_PLACEHOLDER` / `EMAIL_PLACEHOLDER`) a preencher com os valores reais. Adicionada nota do fluxo interino em §17.5. **Alteração apenas de apresentação do paywall** (guardas de licença/auth intactas). **typecheck e 1181 testes verdes.**
 - **2026-08-20** — **Guarda de licença — exceção para o onboarding (§3.11 / §8.1).** Refinamento da guarda de licença: `/onboarding` (e sub-rotas `/onboarding/...`) passa a estar **sempre acessível mesmo sem licença válida**, para o utilizador poder **concluir o wizard de setup do clube antes de ser confrontado com o paywall** (`/sem-licenca`). Antes, a guarda aplicava-se a **todo** o grupo `(app)` — incluindo o onboarding —, bloqueando o setup de quem ainda não tinha subscrição. Implementação sem tocar em auth nem no `middleware.ts` (**intocáveis**): (1) `lib/guarda-licenca.ts` (novo) — função **pura** `deveBloquearPorLicenca(licencaOk, pathname)` (sem `prisma`/`server-only`, para poder ir para o bundle do cliente e ser testável), com match **exato** de `/onboarding` (não apanha falsos positivos como `/onboarding-extra`) e comportamento **fail-safe** (pathname `null`/`undefined` → bloqueia); (2) `components/layout/GuardaLicenca.tsx` (novo, client) — recebe `licencaOk` (avaliado server-side no layout) e decide **no cliente** com `usePathname()` (o pathname não está disponível de forma limpa num layout server-side sem alterar o middleware); ao bloquear, faz `router.replace('/sem-licenca')` e **não renderiza os filhos** (evita *flash* de conteúdo protegido); (3) `app/(app)/layout.tsx` — remove o `redirect('/sem-licenca')` server-side, mantém a avaliação `temLicencaValida(...)` e envolve a árvore em `<GuardaLicenca licencaOk={...}>`. **Não toca em auth (middleware, `lib/auth.ts`, cookies/sessão intactos).** `tests/licenca.test.ts` (+6 → 12) — **typecheck, lint e 1181 testes verdes.**
 - **2026-08-19** — **Guarda de licença — acesso à plataforma bloqueado sem subscrição válida (§3.11).** Correção de segurança de produto: qualquer utilizador que se registasse conseguia usar a app gratuitamente (não havia enforcement de acesso; só o *billing* estava deferido). Implementada uma **guarda de licença SEPARADA da autenticação** (Auth.js **intocável**): (1) `lib/licenca.ts` (novo) — função pura `licencaValida(licenca, agora)` (válida = `estado='ATIVA'` **e** sem `dataFim` ou `dataFim` ainda não passada; o enum não tem `TRIAL` — um trial é uma licença `ATIVA` com `dataFim` futura) + `temLicencaValida(clubeId, utilizadorId)` que aceita licença de **Clube** OU **Individual** (§3.1); (2) `app/(app)/layout.tsx` — após auth + adesão a clube, redireciona para `/sem-licenca` quem não tem licença válida; (3) `app/sem-licenca/page.tsx` (novo) — paywall **fora** do grupo `(app)` (sem ciclo de redirect), com CTA de contacto/planos e terminar sessão; redireciona de volta para `/dashboard` quem (entretanto) já tenha licença válida. O **billing Paddle** (checkout, webhooks, criação/renovação de licença e transição automática `ATIVA→EXPIRADA`) mantém-se deferido. **Não toca em auth (middleware, `lib/auth.ts`, cookies/sessão intactos).** `tests/licenca.test.ts` (6) — **typecheck e lint limpos; 1175 testes verdes.**
@@ -2068,7 +2320,7 @@ Do mais recente para o mais antigo.
   - **(M5)** Invariante do principal por modalidade: garantido por lógica aplicacional em transacção `Serializable` (não por índice BD); `modalidadeDoEscalao` cacheável — §9.
   - **(M6)** Invariantes cross-entidade validadas na aplicação (clube↔secção↔escalão; posição↔modalidade da convocatória) — §9.
   - **(M7)** `criarEscalao` bloqueia segunda modalidade em clube técnico Individual — §7.3.
-- **2026-08-19** — **Criação da bíblia v7 (`FutsalManager_Spec_v7.md`) — Mister passa a plataforma multi-desporto (futsal + futebol).** Novo ficheiro que sucede à `FutsalManager_Spec_v6.md` (**mantida intacta como histórico**, à semelhança do que a v6 fez à v5). Atualização **só de documentação** (nenhuma alteração de código; **não toca em auth**). A v7 expande o produto de dedicado ao futsal para **multi-desporto**, mantendo **um único código, um único modelo de dados multi-tenant e a mesma filosofia**. Todas as decisões de produto abaixo estão **fechadas**.
+- **2026-08-19** — **Criação da bíblia v7 (`Mister_Spec_v7.md`) — Mister passa a plataforma multi-desporto (futsal + futebol).** Novo ficheiro que sucede à `Mister_Spec_v6.md` (**mantida intacta como histórico**, à semelhança do que a v6 fez à v5). Atualização **só de documentação** (nenhuma alteração de código; **não toca em auth**). A v7 expande o produto de dedicado ao futsal para **multi-desporto**, mantendo **um único código, um único modelo de dados multi-tenant e a mesma filosofia**. Todas as decisões de produto abaixo estão **fechadas**.
   - **(A) Nota de versão v7 (§0):** resumo executivo das 12 adições e do princípio de compatibilidade **aditiva** (colunas/tabelas novas, nullable/default + backfill; dados existentes 100% futsal migram sem perda).
   - **(B) Nova entidade `Secção` (§3.1.1, §20.2):** camada entre `Clube` e `Escalão`, **âncora da modalidade**. `Seccao` = `clubeId` + `modalidade` (`Modalidade { FUTSAL FUTEBOL }`) + `nome?` + escalões + membros (coordenadores). **`@@unique([clubeId, modalidade])`** — **uma secção por modalidade por clube**. Novo `MembroSeccao` (vínculo membro↔secção, `PapelSeccao { COORDENADOR }`). `Escalao` ganha **`seccaoId`** + relação. Criação **automática/transparente** ao criar o primeiro escalão de uma modalidade (§8.1.1). Backfill: uma secção FUTSAL por clube existente, com todos os escalões ligados (Apêndice C).
   - **(C) Coordenador de Secção (§6.9, §6.6):** novo papel de arranque + novo valor de âmbito **`AmbitoPerfil.SECCAO`** (todos os escalões de uma secção) + nova capacidade **`CLUBE_SECCOES`**. Vê/gere todos os escalões da sua secção, não os das outras. `exigirCapacidade` (§6.7) e `obterMembroAtual` (§7.2) passam a resolver o âmbito de secção (`seccoesCoordenadas`).
@@ -2083,9 +2335,9 @@ Do mais recente para o mais antigo.
   - **(L) Fases 25–30 (§16):** roadmap de expansão com objetivo, entidades/ficheiros e **critério de pronto** por fase (25 Fundação · 26 Campo de futebol · 27 Posições/plantel · 28 Jogos/estatísticas · 29 Conteúdo curado · 30 Onboarding/navegação/billing). Fase 25 é pré-requisito das restantes; todas **aditivas** e **sem tocar em auth**.
   - **Compatibilidade:** nenhuma alteração é destrutiva; a modalidade deriva **sempre** da secção do escalão (nunca do cliente); um clube/treinador monomodalidade não vê complexidade nova. **A partir da v7, esta é a bíblia ativa do produto.**
 
-> **📌 Nota de preservação do histórico (v7):** seguindo a mesma convenção que a v6 usou para a v5, o **detalhe verbatim completo** de todas as entradas de changelog anteriores a 2026-08-19 permanece **intacto** em [`FutsalManager_Spec_v6.md`](./FutsalManager_Spec_v6.md) (mantida como histórico). Abaixo preserva-se o **índice completo** (data + título) de **todas** as entradas até 2026-08-18, para que a v7 continue auto-navegável. Nenhuma entrada foi omitida.
+> **📌 Nota de preservação do histórico (v7):** seguindo a mesma convenção que a v6 usou para a v5, o **detalhe verbatim completo** de todas as entradas de changelog anteriores a 2026-08-19 permanece **intacto** em [`Mister_Spec_v6.md`](./Mister_Spec_v6.md) (mantida como histórico). Abaixo preserva-se o **índice completo** (data + título) de **todas** as entradas até 2026-08-18, para que a v7 continue auto-navegável. Nenhuma entrada foi omitida.
 
-### 19.1 Histórico herdado da v6 (índice — detalhe verbatim em `FutsalManager_Spec_v6.md`)
+### 19.1 Histórico herdado da v6 (índice — detalhe verbatim em `Mister_Spec_v6.md`)
 
 - **2026-08-18** — Contacto na landing: formulário substituído por email direto (`app/page.tsx`).
 - **2026-08-17** — Implementação da UI «Semana de trabalho» (§8.9.1).
@@ -2158,10 +2410,10 @@ Do mais recente para o mais antigo.
 - **2026-08-06** — F8 FE — UI de integração Google Calendar (§3.12, §8.13).
 - **2026-08-05** — F2 — Editor de campo (gate de qualidade) (secção 11).
 - **2026-08-05** — F0 — Fundação de permissões (concluído).
-- **2026-08-05** — Criação da bíblia v6 (`FutsalManager_Spec_v6.md`).
+- **2026-08-05** — Criação da bíblia v6 (`Mister_Spec_v6.md`).
 - **2026-08-05** — Atualização maior: modelo de negócio, ecossistema e novas funcionalidades (pós-brainstorming).
 
-> **Nota:** as entradas abaixo (até 2026-07-31) foram herdadas da `FutsalManager_Spec_v5.md` e mantêm-se como histórico do MVP e do produto final v1.
+> **Nota:** as entradas abaixo (até 2026-07-31) foram herdadas da `Mister_Spec_v5.md` e mantêm-se como histórico do MVP e do produto final v1.
 
 - **2026-08-02** — Preparação para deploy (Vercel). `binaryTargets` do Prisma; `docs/DEPLOY.md`.
 - **2026-08-02** — Gráficos com a cor do clube + fluxo de entrada.
@@ -2261,6 +2513,52 @@ function configDaModalidade(m: Modalidade): ConfigModalidade { return CONFIG_MOD
 
 ---
 
+## 21. Backoffice Interno (Admin)
+
+### 21.1 Âmbito e acesso
+
+O backoffice interno é uma interface exclusiva para o criador da plataforma — não é acessível ao público nem a utilizadores regulares.
+
+**Rota:** `/admin` (grupo de rotas `(admin)`, separado do grupo `(app)`)
+
+**Autorização:** Camada server-side independente da autenticação (ver §5). O layout do grupo `(admin)` verifica se o email do utilizador autenticado está na variável de ambiente `ADMIN_EMAILS` (lista separada por vírgulas). Se não estiver, redireciona para `/dashboard`. Esta camada **não altera** `lib/auth.ts`, `middleware.ts`, nem o JWT/sessão — segue o mesmo padrão do guarda de licença (`lib/guarda-licenca.ts`).
+
+**Variável de ambiente:** `ADMIN_EMAILS` — lista de emails separados por vírgulas. Deve ser adicionada a `.env.example`.
+
+### 21.2 Tab 1 — Gestão de Licenças
+
+Lista todas as licenças da plataforma (cross-tenant), com as seguintes colunas:
+- Titular: nome do clube (licença Clube) ou email do utilizador (licença Individual)
+- Tipo: `INDIVIDUAL` / `CLUBE`
+- Tier: `PEQUENO` / `MEDIO` / `GRANDE` / `PARCEIRO` (apenas licenças Clube)
+- Estado: `PENDENTE` (aguarda confirmação de pagamento) / `ATIVA` / `SUSPENSA` / `CANCELADA` / `EXPIRADA`
+- Ciclo: `MENSAL` / `ANUAL`
+- `dataFim`
+- `precoCentimos`
+
+**Operações disponíveis por licença:**
+- **Ativar** → estado `ATIVA`
+- **Suspender** → estado `SUSPENSA`
+- **Cancelar** → estado `CANCELADA`
+- **Editar `dataFim`** → renovar ou reduzir o prazo
+
+**Nota:** O estado `EXPIRADA` é derivado automaticamente pelo sistema quando `dataFim` é ultrapassado — não é uma operação manual do admin.
+
+**Titular polimórfico:** cada `Licenca` tem `utilizadorId` (Individual) XOR `clubeId` (Clube), conforme §3.11. A listagem resolve e apresenta os dois tipos sem assumir que um deles está preenchido.
+
+**Integração com Paddle:** deferida (Fase 30). Todas as operações desta tab são administrativas manuais e não interagem com `paddleSubscriptionId` / `paddleCustomerId`.
+
+### 21.3 Tab 2 — Monitorização Técnica
+
+Embeds ou links diretos para ferramentas externas de observabilidade. Sem logging próprio na app.
+
+- **Vercel Analytics** — métricas de performance e tráfego (disponível no plano Vercel, zero custo adicional)
+- **Sentry** — erros client-side e server-side (setup pendente, ver `docs/DEPLOY.md §6`)
+
+A tab degrada graciosamente: se `SENTRY_DSN` ou as URLs relevantes não estiverem configurados, mostra mensagem "Por configurar" em vez de iframe partido.
+
+---
+
 ## Apêndice A — Configuração de Futsal ⚽
 
 Referência da entrada `CONFIG_MODALIDADE.FUTSAL` (registry — 20.3). Reflete o comportamento já existente (v6), agora explicitado como configuração.
@@ -2355,4 +2653,4 @@ Todas as alterações são **aditivas** (colunas/tabelas novas, nullable ou com 
 
 ---
 
-**Fim da `FutsalManager_Spec_v7.md`.** A `FutsalManager_Spec_v6.md` mantém-se **intacta** como histórico (detalhe verbatim do changelog anterior a 2026-08-19). Esta v7 é a **bíblia ativa** do produto a partir de 2026-08-19.
+**Fim da `Mister_Spec_v7.md`.** A `Mister_Spec_v6.md` mantém-se **intacta** como histórico (detalhe verbatim do changelog anterior a 2026-08-19). Esta v7 é a **bíblia ativa** do produto a partir de 2026-08-19.

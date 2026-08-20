@@ -139,6 +139,24 @@ export async function criarClube(dados: unknown): Promise<Resultado<{ clubeId: s
       },
     });
 
+    // 🔁 v7 (§8.1 / §17.1): plano escolhido no onboarding fica como licença
+    // PENDENTE (ainda por pagar). O paywall (/sem-licenca) usa-a para mostrar o
+    // valor exato a transferir. `INDIVIDUAL` → TipoLicenca.INDIVIDUAL (tier null);
+    // os restantes → CLUBE + TierClube. Guardada no `clubeId` (o clube foi agora
+    // criado) para que a guarda de licença e o paywall a resolvam pelo clube.
+    // `numSeccoes` fica no default (1); o preço é calculado on-read em
+    // obterLicencaPendente(). Sem `dataFim` (não é trial).
+    const tierEscolhido = parsed.data.tier;
+    await tx.licenca.create({
+      data: {
+        tipo: tierEscolhido === "INDIVIDUAL" ? "INDIVIDUAL" : "CLUBE",
+        tier: tierEscolhido === "INDIVIDUAL" ? null : tierEscolhido,
+        estado: "PENDENTE",
+        ciclo: "MENSAL",
+        clubeId: clube.id,
+      },
+    });
+
     return { clubeId: clube.id };
   });
 

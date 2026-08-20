@@ -14,7 +14,7 @@ vi.mock("@/lib/db", () => ({
     seccao: { create: vi.fn() },
     escalao: { create: vi.fn() },
     perfil: { create: vi.fn() },
-    licenca: { updateMany: vi.fn() },
+    licenca: { create: vi.fn(), updateMany: vi.fn() },
     $transaction: vi.fn(),
   },
 }));
@@ -58,7 +58,8 @@ beforeEach(() => {
     return Promise.resolve({ id: `perfil-${data.nome}` });
   });
   mocked(prisma.membroClube.create).mockResolvedValue({ id: "membro1" });
-  mocked(prisma.licenca.updateMany).mockResolvedValue({ count: 0 });
+  mocked(prisma.licenca.create).mockResolvedValue({ id: "licenca1" });
+  mocked(prisma.licenca.updateMany).mockResolvedValue({ count: 1 });
   mocked(instalarConteudoArranquePorModalidade).mockResolvedValue({
     subcategorias: 0,
     exercicios: 0,
@@ -76,7 +77,7 @@ beforeEach(() => {
 
 describe("criarClube — semeia época ativa + escalão (P1.6)", () => {
   it("cria uma época ativa para o novo clube", async () => {
-    const r = await criarClube({ nome: "Juventude SC" });
+    const r = await criarClube({ nome: "Juventude SC", tier: "PEQUENO" });
 
     expect(r.sucesso).toBe(true);
     expect(prisma.epoca.create).toHaveBeenCalledOnce();
@@ -100,7 +101,7 @@ describe("criarClube — semeia época ativa + escalão (P1.6)", () => {
   });
 
   it("cria o escalão-semente 'Seniores' editável e visível", async () => {
-    const r = await criarClube({ nome: "Juventude SC" });
+    const r = await criarClube({ nome: "Juventude SC", tier: "PEQUENO" });
 
     expect(r.sucesso).toBe(true);
     expect(prisma.escalao.create).toHaveBeenCalledOnce();
@@ -122,7 +123,7 @@ describe("criarClube — semeia época ativa + escalão (P1.6)", () => {
   });
 
   it("semeia época e escalão dentro da mesma transação do clube", async () => {
-    await criarClube({ nome: "Juventude SC" });
+    await criarClube({ nome: "Juventude SC", tier: "PEQUENO" });
 
     expect(prisma.$transaction).toHaveBeenCalledOnce();
     expect(prisma.clube.create).toHaveBeenCalledOnce();
@@ -133,7 +134,7 @@ describe("criarClube — semeia época ativa + escalão (P1.6)", () => {
   });
 
   it("devolve o id do clube criado", async () => {
-    const r = await criarClube({ nome: "Juventude SC" });
+    const r = await criarClube({ nome: "Juventude SC", tier: "PEQUENO" });
     expect(r.sucesso).toBe(true);
     if (r.sucesso) expect(r.dados.clubeId).toBe("clube1");
   });
@@ -141,7 +142,7 @@ describe("criarClube — semeia época ativa + escalão (P1.6)", () => {
   it("não semeia nada quando a sessão é inválida", async () => {
     mocked(auth).mockResolvedValue(null);
 
-    const r = await criarClube({ nome: "Juventude SC" });
+    const r = await criarClube({ nome: "Juventude SC", tier: "PEQUENO" });
     expect(r.sucesso).toBe(false);
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(prisma.epoca.create).not.toHaveBeenCalled();
@@ -151,7 +152,7 @@ describe("criarClube — semeia época ativa + escalão (P1.6)", () => {
   it("não semeia nada quando já existe uma adesão ativa", async () => {
     mocked(prisma.membroClube.findFirst).mockResolvedValue({ id: "membro-existente" });
 
-    const r = await criarClube({ nome: "Juventude SC" });
+    const r = await criarClube({ nome: "Juventude SC", tier: "PEQUENO" });
     expect(r.sucesso).toBe(false);
     if (!r.sucesso) expect(r.erro).toMatch(/adesão ativa/i);
     expect(prisma.$transaction).not.toHaveBeenCalled();
@@ -165,7 +166,7 @@ describe("criarClube — semeia época ativa + escalão (P1.6)", () => {
   });
 
   it("cria a secção inicial da modalidade e liga-lhe o escalão-semente (§8.1.1)", async () => {
-    const r = await criarClube({ nome: "Juventude SC", modalidade: "FUTEBOL" });
+    const r = await criarClube({ nome: "Juventude SC", modalidade: "FUTEBOL", tier: "MEDIO" });
     expect(r.sucesso).toBe(true);
 
     expect(prisma.seccao.create).toHaveBeenCalledOnce();
@@ -180,20 +181,20 @@ describe("criarClube — semeia época ativa + escalão (P1.6)", () => {
   });
 
   it("por defeito (sem modalidade) cria secção FUTSAL", async () => {
-    const r = await criarClube({ nome: "Juventude SC" });
+    const r = await criarClube({ nome: "Juventude SC", tier: "PEQUENO" });
     expect(r.sucesso).toBe(true);
     const secArg = calls(prisma.seccao.create)[0][0] as { data: { modalidade: string } };
     expect(secArg.data.modalidade).toBe("FUTSAL");
   });
 
   it("instala o conteúdo curado da modalidade escolhida após criar o clube", async () => {
-    const r = await criarClube({ nome: "Juventude SC", modalidade: "FUTEBOL" });
+    const r = await criarClube({ nome: "Juventude SC", modalidade: "FUTEBOL", tier: "MEDIO" });
     expect(r.sucesso).toBe(true);
     expect(instalarConteudoArranquePorModalidade).toHaveBeenCalledWith("clube1", "FUTEBOL");
   });
 
   it("regista a modalidade contratada na licença (se existir)", async () => {
-    await criarClube({ nome: "Juventude SC", modalidade: "FUTEBOL" });
+    await criarClube({ nome: "Juventude SC", modalidade: "FUTEBOL", tier: "MEDIO" });
     const arg = calls(prisma.licenca.updateMany)[0][0] as {
       where: { clubeId: string };
       data: { modalidade: string };
@@ -202,11 +203,50 @@ describe("criarClube — semeia época ativa + escalão (P1.6)", () => {
     expect(arg.data.modalidade).toBe("FUTEBOL");
   });
 
+  it("cria a licença PENDENTE com o tier escolhido no onboarding (§8.1 / §17.1)", async () => {
+    const r = await criarClube({ nome: "Juventude SC", tier: "GRANDE" });
+    expect(r.sucesso).toBe(true);
+
+    expect(prisma.licenca.create).toHaveBeenCalledOnce();
+    const arg = calls(prisma.licenca.create)[0][0] as {
+      data: { tipo: string; tier: string; estado: string; ciclo: string; clubeId: string };
+    };
+    expect(arg.data).toMatchObject({
+      tipo: "CLUBE",
+      tier: "GRANDE",
+      estado: "PENDENTE",
+      ciclo: "MENSAL",
+      clubeId: "clube1",
+    });
+    // Sem dataFim (não é trial) e sem numSeccoes explícito (usa o default do schema).
+    expect(arg.data).not.toHaveProperty("dataFim");
+    expect(arg.data).not.toHaveProperty("numSeccoes");
+  });
+
+  it("mapeia o plano INDIVIDUAL para TipoLicenca.INDIVIDUAL (tier null)", async () => {
+    const r = await criarClube({ nome: "Juventude SC", tier: "INDIVIDUAL" });
+    expect(r.sucesso).toBe(true);
+
+    expect(prisma.licenca.create).toHaveBeenCalledOnce();
+    const arg = calls(prisma.licenca.create)[0][0] as {
+      data: { tipo: string; tier: string | null; estado: string };
+    };
+    expect(arg.data.tipo).toBe("INDIVIDUAL");
+    expect(arg.data.tier).toBeNull();
+    expect(arg.data.estado).toBe("PENDENTE");
+  });
+
+  it("rejeita quando falta o tier (plano obrigatório no onboarding)", async () => {
+    const r = await criarClube({ nome: "Juventude SC" });
+    expect(r.sucesso).toBe(false);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it("uma falha na instalação de conteúdo não aborta a criação do clube", async () => {
     mocked(instalarConteudoArranquePorModalidade).mockImplementation(() => {
       throw new Error("falha de biblioteca");
     });
-    const r = await criarClube({ nome: "Juventude SC" });
+    const r = await criarClube({ nome: "Juventude SC", tier: "PEQUENO" });
     expect(r.sucesso).toBe(true);
     if (r.sucesso) expect(r.dados.clubeId).toBe("clube1");
   });

@@ -1,6 +1,6 @@
 # Mister — Especificação do Produto Final (v6)
 
-> **Estatuto:** Bíblia do produto. Fonte única de verdade. **v6 (2026-08-05)** — sucede à `FutsalManager_Spec_v5.md` (mantida intacta como histórico) e ao `FutsalManager_Spec_v4_MVP_historico.md` (arquivado).
+> **Estatuto:** Bíblia do produto. Fonte única de verdade. **v6 (2026-08-05)** — sucede à `Mister_Spec_v5.md` (mantida intacta como histórico) e ao `Mister_Spec_v4_MVP_historico.md` (arquivado).
 > **Marca comercial:** o produto é distribuído sob a marca **Mister** (guia visual em `docs/BRAND.md`); "Mister" mantém-se como nome técnico/histórico do projeto.
 > **Regra de ouro:** nenhuma alteração de código sem a atualização correspondente neste documento, no mesmo passo. Toda a modificação é registada no **changelog (secção 19)** com data e descrição. Se o código se perder, este documento tem de permitir recriar tudo do zero a 100%.
 > **Convenções:** **DEVE** = obrigatório · **DEVERIA** = recomendado · **FUTURO** = fora do âmbito da v1 do produto final.
@@ -2498,7 +2498,7 @@ Do mais recente para o mais antigo.
   - **`lib/actions/utilizadores.ts` (fix):** `ficariaSemAdmin` atualizado para usar `capacidadesEfetivas` em vez de capacidades base — fecha dois furos: admin só via `capacidadesExtra` era ignorado; admin revogado via `capacidadesRevogadas` continuava a contar.
   - **Testes:** 16 novos em `tests/permissoes-overrides.test.ts` (67/67 total).
 
-- **2026-08-05** — **Criação da bíblia v6** (`FutsalManager_Spec_v6.md`). Novo ficheiro que sucede à v5 (mantida intacta como histórico) e incorpora todas as decisões do brainstorming descritas na entrada seguinte (licenciamento/ecossistema, refactor do plantel, bibliotecas + templates, modelo de jogo + bolas paradas, jogos/scouting/blocos, competições/classificação manual, comunicação WhatsApp, Google Calendar, analytics 3 níveis + relatório partilhável, onboarding, conformidade FPF, design direction/tema escuro/motion, dashboard contextual, lembretes/to-dos). A partir da v6, esta é a bíblia ativa do produto.
+- **2026-08-05** — **Criação da bíblia v6** (`Mister_Spec_v6.md`). Novo ficheiro que sucede à v5 (mantida intacta como histórico) e incorpora todas as decisões do brainstorming descritas na entrada seguinte (licenciamento/ecossistema, refactor do plantel, bibliotecas + templates, modelo de jogo + bolas paradas, jogos/scouting/blocos, competições/classificação manual, comunicação WhatsApp, Google Calendar, analytics 3 níveis + relatório partilhável, onboarding, conformidade FPF, design direction/tema escuro/motion, dashboard contextual, lembretes/to-dos). A partir da v6, esta é a bíblia ativa do produto.
 
 - **2026-08-05** — **Atualização maior: modelo de negócio, ecossistema e novas funcionalidades (pós-brainstorming).**
   - **Licenciamento (§17, §3.11, §16 fase 21):** duas licenças (Individual €4,99/mês·€49/ano; Clube por tiers de escalões: Pequeno ≤2 €15/€149, Médio ≤4 €19/€190, Grande ≤8 €34/€340, Parceiro negociado). Multi-tenant único com **clube técnico invisível** para o modo Individual (§1.2.1, §5.2). Entidades `Licenca`, `Carteira`, `MovimentoCarteira`. **Absorção** com crédito proporcional para carteira; reembolso só manual; clube paga preço normal. **Billing Paddle deferido** (arquitetura pronta). Go-to-market (sem trial, vídeo público, demo a pedido, parceiros fundadores, suporte WhatsApp).
@@ -2535,7 +2535,7 @@ Do mais recente para o mais antigo.
   - **`app/(app)/definicoes/page.tsx`:** nova secção "Integrações" (ícone `Plug`).
   - **Verificação:** `typecheck` 0 erros, `lint` 0 erros, **597 testes** a passar. TypeScript strict, sem `any`, PT-PT. Não toca em `middleware.ts` nem `lib/auth.ts`.
 
-> **Nota:** as entradas abaixo (até 2026-07-31) foram herdadas da `FutsalManager_Spec_v5.md` e mantêm-se como histórico do MVP e do produto final v1.
+> **Nota:** as entradas abaixo (até 2026-07-31) foram herdadas da `Mister_Spec_v5.md` e mantêm-se como histórico do MVP e do produto final v1.
 
 - **2026-08-02** — **Preparação para deploy (Vercel).** `binaryTargets` do Prisma; `docs/DEPLOY.md`.
 - **2026-08-02** — **Gráficos com a cor do clube + fluxo de entrada.** Séries com `--cor-primaria`; sessão inválida → `/login`.

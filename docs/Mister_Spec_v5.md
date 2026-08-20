@@ -1,6 +1,6 @@
 # Mister — Especificação do Produto Final (v5)
 
-> **Estatuto:** Bíblia do produto. Fonte única de verdade. Substitui o `FutsalManager_Spec_v4_MVP_historico.md` (arquivado).
+> **Estatuto:** Bíblia do produto. Fonte única de verdade. Substitui o `Mister_Spec_v4_MVP_historico.md` (arquivado).
 > **Regra de ouro:** nenhuma alteração de código sem a atualização correspondente neste documento, no mesmo passo. Toda a modificação é registada no **changelog (secção 19)** com data e descrição. Se o código se perder, este documento tem de permitir recriar tudo do zero a 100%.
 > **Convenções:** **DEVE** = obrigatório · **DEVERIA** = recomendado · **FUTURO** = fora do âmbito da v1 do produto final.
 > **Marcas de propriedade de dados:** 🏛️ = dado do **clube** (fica no clube) · 🎒 = **portátil** (pertence ao treinador e viaja com ele) — ver secção 4.
@@ -1364,4 +1364,4 @@ Toda a alteração a este documento é registada aqui, com data e descrição. D
   - **Uma adesão de clube ativa de cada vez** por utilizador (não multi-clube simultâneo); dentro do clube, vários escalões. `MembroClube` passa a ter a regra de "máximo uma adesão ATIVA" (secção 3.1, 4.3).
   - **Propriedade do conteúdo metodológico segue a licença:** adicionado `proprietario: PropriedadeConteudo (CLUBE|TREINADOR)` + `clubeProprietarioId` a `Exercicio` e `ModeloJogo`; conteúdo `TREINADOR` usado em sessões do clube fica como **snapshot só-de-leitura** no clube (secção 3.3, 3.5, 4.2).
   - **Histórico de carreira** confirmado: `RegistoCarreira` preenchido automaticamente + editável manualmente (secção 3.9).
-- **2026-07-31** — Criação da bíblia v5. Índice completo; secção 1 (Visão, âmbito, princípios, modelo 2-em-1) e secção 3 (modelo de dados completo do produto final) redigidas; restantes secções com âmbito definido e conteúdo por redigir. `Spec_v4` renomeado para `FutsalManager_Spec_v4_MVP_historico.md` (arquivado). Regra de documentação adicionada ao CLAUDE.md.
+- **2026-07-31** — Criação da bíblia v5. Índice completo; secção 1 (Visão, âmbito, princípios, modelo 2-em-1) e secção 3 (modelo de dados completo do produto final) redigidas; restantes secções com âmbito definido e conteúdo por redigir. `Spec_v4` renomeado para `Mister_Spec_v4_MVP_historico.md` (arquivado). Regra de documentação adicionada ao CLAUDE.md.

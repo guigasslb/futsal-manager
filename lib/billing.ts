@@ -28,6 +28,16 @@ export const PRECO_BASE_CENTIMOS: Record<TierClube, Record<CicloFaturacao, numbe
 export const ACRESCIMO_POR_SECCAO_ADICIONAL = 0.5;
 
 /**
+ * Preço da licença Individual, em cêntimos (§3.11 / §17.1) — uma modalidade,
+ * preço fixo (não usa `calcularPrecoLicenca`, que é multi-secção de Clube).
+ * €4,99/mês ou €49/ano.
+ */
+export const PRECO_INDIVIDUAL_CENTIMOS: Record<CicloFaturacao, number> = {
+  MENSAL: 499,
+  ANUAL: 4900,
+} as const;
+
+/**
  * Preço praticado de uma licença de Clube, em cêntimos, já com o acréscimo
  * multi-secção (§17.1).
  *

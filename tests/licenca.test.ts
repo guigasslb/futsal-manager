@@ -31,9 +31,13 @@ describe("licencaValida (§3.11)", () => {
   });
 
   it("estados não-ATIVA → inválida (mesmo sem dataFim)", () => {
-    for (const estado of ["EXPIRADA", "CANCELADA", "SUSPENSA"] as const) {
+    for (const estado of ["EXPIRADA", "CANCELADA", "SUSPENSA", "PENDENTE"] as const) {
       expect(licencaValida(lic({ estado, dataFim: null }), AGORA)).toBe(false);
     }
+  });
+
+  it("PENDENTE (plano escolhido, por pagar) → inválida (§8.1 / §17.1)", () => {
+    expect(licencaValida(lic({ estado: "PENDENTE", dataFim: null }), AGORA)).toBe(false);
   });
 
   it("dataFim exatamente == agora → ainda válida (só inválida quando passa)", () => {

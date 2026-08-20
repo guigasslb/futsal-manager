@@ -14,6 +14,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { obterMembroAtual } from "@/lib/permissoes";
 import { temLicencaValida } from "@/lib/licenca";
+import { obterLicencaPendente } from "@/lib/actions/licenciamento";
 import { terminarSessao } from "@/lib/actions/auth-actions";
 import { Logo } from "@/components/layout/Logo";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,24 @@ const TIERS_CLUBE = [
   { tier: "Parceiro", escaloes: "sob medida", mensal: "negociado", anual: "" },
 ] as const;
 
+// Nome pt-PT por plano escolhido (o enum vem em maiúsculas do Prisma; INDIVIDUAL
+// é o produto Individual, não um TierClube).
+const NOME_PLANO: Record<string, string> = {
+  INDIVIDUAL: "Individual",
+  PEQUENO: "Clube Pequeno",
+  MEDIO: "Clube Médio",
+  GRANDE: "Clube Grande",
+  PARCEIRO: "Clube Parceiro",
+};
+
+/** Cêntimos → "€15,00" (pt-PT). */
+function formatarEuros(centimos: number): string {
+  return `€${(centimos / 100).toLocaleString("pt-PT", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
 /**
  * Paywall (§3.11). Vive FORA do grupo de rotas (app), pelo que não passa pela
  * guarda de licença do layout (evita ciclo de redirect). Continua protegida por
@@ -78,6 +97,11 @@ export default async function SemLicencaPage() {
   const emailTitular = session.user.email ?? "o teu email";
   const referencia = `${nomeClube} + ${emailTitular}`;
 
+  // Plano escolhido no onboarding (licença PENDENTE). Se existir, o paywall
+  // mostra só esse plano com o valor exato; caso contrário, a tabela completa.
+  const planoPendente = await obterLicencaPendente(membro.clube.id);
+  const planoNegociado = planoPendente?.tier === "PARCEIRO";
+
   return (
     <div className="flex min-h-screen items-start justify-center bg-cinza-50 px-4 py-8 sm:items-center">
       <Card className="w-full max-w-lg">
@@ -103,11 +127,48 @@ export default async function SemLicencaPage() {
             o comprovativo.
           </p>
 
-          {/* Planos */}
-          <section className="space-y-3">
-            <h2 className="text-titulo-seccao text-cinza-900">Planos</h2>
+          {/* Plano escolhido no onboarding (licença PENDENTE) */}
+          {planoPendente ? (
+            <section className="space-y-3">
+              <h2 className="text-titulo-seccao text-cinza-900">Plano escolhido</h2>
+              <div className="rounded-md border border-cinza-200 p-4">
+                <div className="flex items-center gap-2">
+                  {planoPendente.tier === "INDIVIDUAL" ? (
+                    <User className="h-5 w-5 text-laranja-600" aria-hidden />
+                  ) : (
+                    <Building2 className="h-5 w-5 text-laranja-600" aria-hidden />
+                  )}
+                  <h3 className="text-subtitulo text-cinza-900">
+                    {NOME_PLANO[planoPendente.tier] ?? planoPendente.tier}
+                  </h3>
+                </div>
+                <p className="mt-2 text-corpo-sec text-cinza-600">Valor a transferir</p>
+                {planoNegociado ? (
+                  <p className="mt-0.5 text-corpo text-cinza-900">
+                    <span className="font-semibold">Preço negociado</span> — fala com a
+                    equipa para definir o valor.
+                  </p>
+                ) : (
+                  <p className="mt-0.5 text-corpo text-cinza-900">
+                    <span className="font-semibold">
+                      {formatarEuros(planoPendente.precoCentimos)}
+                    </span>
+                    /mês
+                    <span className="text-cinza-400"> ou </span>
+                    <span className="font-semibold">
+                      {formatarEuros(planoPendente.precoAnualCentimos)}
+                    </span>
+                    /ano
+                  </p>
+                )}
+              </div>
+            </section>
+          ) : (
+            /* Sem plano escolhido → tabela completa de planos */
+            <section className="space-y-3">
+              <h2 className="text-titulo-seccao text-cinza-900">Planos</h2>
 
-            {/* Individual */}
+              {/* Individual */}
             <div className="rounded-md border border-cinza-200 p-4">
               <div className="flex items-center gap-2">
                 <User className="h-5 w-5 text-laranja-600" aria-hidden />
@@ -164,7 +225,8 @@ export default async function SemLicencaPage() {
                 por cada secção adicional.
               </p>
             </div>
-          </section>
+            </section>
+          )}
 
           {/* Dados para transferência */}
           <section className="space-y-3">

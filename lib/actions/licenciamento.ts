@@ -5,8 +5,9 @@ import { prisma } from "@/lib/db";
 import { obterMembroAtual } from "@/lib/permissoes";
 import type { Capacidade } from "@/lib/permissoes-catalogo";
 import { utilizadorIdSchema } from "@/lib/schemas/licenciamento";
+import { calcularPrecoLicenca, PRECO_INDIVIDUAL_CENTIMOS } from "@/lib/billing";
 import { ok, erro, type Resultado } from "@/lib/utils";
-import type { Carteira, Licenca, MovimentoCarteira } from "@prisma/client";
+import type { Carteira, Licenca, MovimentoCarteira, TierClube } from "@prisma/client";
 
 // F11 — Licenciamento, subscrição e carteira (§3.11 / §17).
 // Billing (Paddle) DEFERIDO: estas actions preparam a arquitetura de dados;
@@ -16,6 +17,23 @@ const PATH = "/definicoes/licenca";
 
 /** Licença do clube com os dados da carteira do utilizador autenticado. */
 export type LicencaComCarteira = Licenca & { carteira: Carteira | null };
+
+/**
+ * Plano escolhido no onboarding, incluindo o Individual (§3.11 / §17.1). `INDIVIDUAL`
+ * não é um TierClube — é o produto Individual (TipoLicenca.INDIVIDUAL).
+ */
+export type TierEscolhido = TierClube | "INDIVIDUAL";
+
+/**
+ * Plano escolhido no onboarding e ainda por pagar (§8.1 / §17.1). O preço é
+ * calculado on-read (Clube: tier + nº de secções faturadas; Individual: preço
+ * fixo), para ambos os ciclos, para o paywall mostrar "€X/mês ou €Y/ano".
+ */
+export type LicencaPendente = {
+  tier: TierEscolhido;
+  precoCentimos: number; // ciclo MENSAL
+  precoAnualCentimos: number; // ciclo ANUAL
+};
 
 /**
  * Um membro é administrador se as suas capacidades efetivas incluírem a gestão
@@ -61,6 +79,44 @@ export async function obterLicenca(): Promise<Resultado<LicencaComCarteira | nul
   });
 
   return ok({ ...licenca, carteira });
+}
+
+/**
+ * Plano PENDENTE do clube (escolhido no onboarding, ainda por pagar) com o preço
+ * já calculado para os dois ciclos (§8.1 / §17.1). Usado pelo paywall
+ * (/sem-licenca) para mostrar o valor exato a transferir.
+ *
+ * Devolve `null` quando o clube não tem licença PENDENTE (ex.: clubes criados
+ * antes desta funcionalidade, ou licença já ATIVA) — o paywall cai então na
+ * tabela completa de planos. Só considera licenças de tier de Clube (PARCEIRO
+ * devolve preço 0, por ser negociado — ver calcularPrecoLicenca).
+ */
+export async function obterLicencaPendente(
+  clubeId: string,
+): Promise<LicencaPendente | null> {
+  const licenca = await prisma.licenca.findUnique({
+    where: { clubeId },
+    select: { estado: true, tipo: true, tier: true, numSeccoes: true },
+  });
+
+  if (!licenca || licenca.estado !== "PENDENTE") return null;
+
+  // Individual: preço fixo (uma modalidade), não usa o cálculo multi-secção.
+  if (licenca.tipo === "INDIVIDUAL") {
+    return {
+      tier: "INDIVIDUAL",
+      precoCentimos: PRECO_INDIVIDUAL_CENTIMOS.MENSAL,
+      precoAnualCentimos: PRECO_INDIVIDUAL_CENTIMOS.ANUAL,
+    };
+  }
+
+  // Clube: preço do tier já com acréscimo por secção adicional.
+  if (!licenca.tier) return null;
+  return {
+    tier: licenca.tier,
+    precoCentimos: calcularPrecoLicenca(licenca.tier, licenca.numSeccoes, "MENSAL"),
+    precoAnualCentimos: calcularPrecoLicenca(licenca.tier, licenca.numSeccoes, "ANUAL"),
+  };
 }
 
 /**

@@ -27,7 +27,7 @@ export default async function CriarClubePage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-cinza-50 p-4">
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-lg">
         <CardHeader>
           <CardTitle className="text-titulo-pagina">Cria o teu clube</CardTitle>
           <CardDescription>

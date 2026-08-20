@@ -18,6 +18,12 @@ export const criarClubeSchema = z.object({
   // inicial do clube e o conteúdo curado instalado. Default FUTSAL (retro-compat).
   // Literal (não `z.nativeEnum`) para não puxar @prisma/client ao bundle cliente.
   modalidade: z.enum(["FUTSAL", "FUTEBOL"]).default("FUTSAL"),
+  // 🔁 v7 (§8.1 / §17.1): plano escolhido no onboarding. Guardado como licença
+  // PENDENTE para o paywall mostrar o valor exato a transferir. `INDIVIDUAL`
+  // mapeia para TipoLicenca.INDIVIDUAL (tier null); os restantes para
+  // TipoLicenca.CLUBE + TierClube. Literal (não `z.nativeEnum`) para não puxar
+  // @prisma/client ao bundle cliente (o wizard é um Client Component).
+  tier: z.enum(["INDIVIDUAL", "PEQUENO", "MEDIO", "GRANDE"]),
 });
 
 export const brandingSchema = z.object({
